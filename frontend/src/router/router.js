@@ -101,6 +101,20 @@ const routes = [
     }
     ,
     {
+        path: '/AutoPlan/Cultivation',
+        name: 'CultivationPlan',
+        component: () => import('@views/CultivationPlanView.vue'),
+        meta: {
+            group: 'JS扩展功能',
+            isRoot: true,
+            title: '养成一条龙',
+            desc: '材料导入、账本、脚本设置与 BetterGI 启动',
+            asSubParentTitle: '养成一条龙',
+            icon: 'Domain'
+        },
+    }
+    ,
+    {
         name: 'SyntaxKey',
         path: '/SyntaxKey',
         component: () => import('@views/SyntaxKeyView.vue'),

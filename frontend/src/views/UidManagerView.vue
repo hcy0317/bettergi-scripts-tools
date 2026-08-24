@@ -1,11 +1,14 @@
 <script setup>
 import {onMounted, reactive, ref} from "vue"
 import {ElMessage, ElMessageBox} from "element-plus"
-import {getAllUid, saveUid, removeUidList, getUid} from "@api/uid/uid.js"
+import {getUidMappings, saveUid, removeUidList, getUid, setDefaultUid} from "@api/uid/uid.js"
 import {goBack, toHomePage} from "@api/web/web.js"
 import router from "@router/router.js";
 import {CopyDocument} from '@element-plus/icons-vue'
 import {CopyToClipboard} from "@utils/local.js";
+import {useUidSelection} from '@/composables/useUidSelection.js'
+
+const {loadUidOptions} = useUidSelection()
 
 const currentRoute = ref(router.currentRoute)
 // 表单数据
@@ -40,7 +43,7 @@ const loadData = async () => {
   loading.value = true
   try {
     Object.keys(passwordMap).forEach(key => delete passwordMap[key]);
-    const response = await getAllUid()
+    const response = await getUidMappings()
     tableData.value = response || []
   } catch (error) {
     console.error('获取 UID 列表失败:', error)
@@ -100,6 +103,7 @@ const handleSubmit = async () => {
     // ElMessage.success(`${action}成功`)
     formData.show = false
     await loadData()
+    await loadUidOptions(true)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('操作失败:', error)
@@ -130,6 +134,7 @@ const handleDelete = async (row) => {
     await removeUidList(row.uid)
     // ElMessage.success('删除成功')
     await loadData()
+    await loadUidOptions(true)
     await localCacheDelete([row.uid])
   } catch (error) {
     if (error !== 'cancel') {
@@ -157,6 +162,7 @@ const handleBatchDelete = async () => {
     // ElMessage.success('批量删除成功')
     multipleSelection.value.clear()
     await loadData()
+    await loadUidOptions(true)
     await localCacheDelete(Array.from(multipleSelection.value))
   } catch (error) {
     if (error !== 'cancel') {
@@ -172,6 +178,12 @@ const handleSelectionChange = (selection) => {
   selection.forEach(item => {
     multipleSelection.value.add(item.uid)
   })
+}
+
+const handleSetDefault = async row => {
+  await setDefaultUid(row.uid)
+  await loadData()
+  await loadUidOptions(true)
 }
 
 
@@ -257,7 +269,12 @@ onMounted(() => {
                 style="width: 100%"
             >
               <el-table-column type="selection"/>
-              <el-table-column prop="uid" label="UID"/>
+              <el-table-column label="UID" min-width="170">
+                <template #default="{row}">
+                  <span>{{ row.uid }}</span>
+                  <el-tag v-if="row.defaultUid" size="small" type="success" effect="plain" class="default-tag">默认</el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="as" label="别称"/>
               <el-table-column prop="username" label="用户名"/>
 
@@ -287,6 +304,14 @@ onMounted(() => {
               </el-table-column>
               <el-table-column label="操作" fixed="right">
                 <template #default="{ row }">
+                  <el-button
+                      v-if="!row.defaultUid"
+                      size="small"
+                      @click="handleSetDefault(row)"
+                      class="table-button"
+                  >
+                    设为默认
+                  </el-button>
                   <el-button
                       type="primary"
                       size="small"
@@ -456,6 +481,10 @@ onMounted(() => {
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 13px;
+}
+
+.default-tag {
+  margin-left: 8px;
 }
 
 .empty-tip {
