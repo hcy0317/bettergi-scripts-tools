@@ -164,6 +164,36 @@ auth:
       password: bgi_tools
 ```
 
+### 养成计划 OCR
+
+养成计算器图片导入使用 RapidOCR PP-OCRv6。先准备独立 Python 环境：
+
+```powershell
+py -3.12 -m venv .venv-ocr
+.\.venv-ocr\Scripts\python.exe -m pip install -r ocr-requirements.txt
+```
+
+在 `application-prod.yml` 中指定 Python 与 BetterGI 根目录：
+
+```yaml
+cultivation:
+  ocr:
+    python-command: C:/path/to/.venv-ocr/Scripts/python.exe
+    bettergi-root: C:/path/to/BetterGI
+    timeout: 2m
+```
+
+也可以使用环境变量 `CULTIVATION_OCR_PYTHON`、`BETTERGI_ROOT` 和
+`CULTIVATION_OCR_TIMEOUT`。未指定 `bettergi-root` 时，服务会从当前工作目录向上查找
+BetterGI 的 PP-OCRv6 det/rec 资产；找不到时使用 RapidOCR 自带的 V6 模型。
+
+管理界面的“养成计划导入”提供图片识别、逐行校正和账本版本确认。确认后可在“一条龙执行”或
+“自动体力计划”中查看同一份行动投影。脚本设置由按 UID 的模块代管中心统一保存；当前注册自动体力计划、
+`CD-Aware-AutoGather` 和 `FullyAutoAndSemiAutoTools`，后续模块通过统一适配接口增加或替换。
+
+执行投影只生成秘境/地脉的下一步来源、采集脚本设置和待接入材料，不把缺口机械换算为固定总次数。
+逐轮执行租约、结果回写和战后库存复核接通前，账本状态仍不代表养成完成。
+
 **重要提示**：
 - `context-path` 在 **0.0.4 版本** 中**不允许修改**为其他值，否则内嵌 UI 将无法正常加载。
 - 多实例部署时，建议将 `spring.redis.mode` 切换为远程缓存（如 `single` 或 `cluster`），避免本地 SQLite 数据不一致。

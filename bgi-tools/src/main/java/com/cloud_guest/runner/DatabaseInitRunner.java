@@ -142,6 +142,14 @@ public class DatabaseInitRunner {
                                         new DbSqlType(MySQL, "VARCHAR(255)", "NULL"),
                                         new DbSqlType(PostgreSQL, "VARCHAR(255)", "NULL")
                                 )
+                        ),
+                        new SqlColumn(
+                                UidInfoConfig.COL_DEFAULT_UID, UidInfoConfig.REMARK_COL_DEFAULT_UID,
+                                List.of(
+                                        new DbSqlType(SQLite, "INTEGER", "0"),
+                                        new DbSqlType(MySQL, "TINYINT(1)", "0"),
+                                        new DbSqlType(PostgreSQL, "BOOLEAN", "false")
+                                )
                         )
                 )
         ),

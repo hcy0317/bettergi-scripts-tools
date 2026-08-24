@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS uid_info_config (
     username VARCHAR(255),
     password  VARCHAR(255),
     salt      VARCHAR(255),
+    is_default BOOLEAN DEFAULT false,
 -- 通用审计字段
     create_by   VARCHAR(64),
     create_time TIMESTAMP,
@@ -127,6 +128,7 @@ COMMENT ON COLUMN uid_info_config.col_as     IS 'AS字段';
 COMMENT ON COLUMN uid_info_config.username  IS '用户名';
 COMMENT ON COLUMN uid_info_config.password   IS '密码';
 COMMENT ON COLUMN uid_info_config.salt       IS '盐值';
+COMMENT ON COLUMN uid_info_config.is_default IS '是否为默认UID';
 COMMENT ON COLUMN uid_info_config.create_by   IS '创建者';
 COMMENT ON COLUMN uid_info_config.create_time IS '创建时间';
 COMMENT ON COLUMN uid_info_config.update_by   IS '更新者';
@@ -235,3 +237,63 @@ COMMENT ON COLUMN backup_info.create_time  IS '创建时间';
 COMMENT ON COLUMN backup_info.update_by    IS '更新者';
 COMMENT ON COLUMN backup_info.update_time  IS '更新时间';
 COMMENT ON COLUMN backup_info.remark       IS '备注';
+
+CREATE TABLE IF NOT EXISTS cultivation_import_preview (
+    id BIGINT PRIMARY KEY,
+    uid VARCHAR(64) NOT NULL,
+    image_sha256 CHAR(64) NOT NULL,
+    engine_version VARCHAR(128) NOT NULL,
+    model_source VARCHAR(128) NOT NULL,
+    image_width INTEGER NOT NULL,
+    image_height INTEGER NOT NULL,
+    raw_ocr_json TEXT NOT NULL,
+    parsed_json TEXT NOT NULL,
+    warnings_json TEXT NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    plan_revision_id BIGINT,
+    create_by VARCHAR(64),
+    create_time TIMESTAMP,
+    update_by VARCHAR(64),
+    update_time TIMESTAMP,
+    remark TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultivation_preview_uid_status
+    ON cultivation_import_preview (uid, status);
+
+CREATE TABLE IF NOT EXISTS cultivation_plan_revision (
+    id BIGINT PRIMARY KEY,
+    uid VARCHAR(64) NOT NULL,
+    revision INTEGER NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    catalog_version VARCHAR(64) NOT NULL,
+    preview_id BIGINT NOT NULL,
+    source_image_sha256 CHAR(64) NOT NULL,
+    engine_version VARCHAR(128) NOT NULL,
+    model_source VARCHAR(128) NOT NULL,
+    requirements_json TEXT NOT NULL,
+    create_by VARCHAR(64),
+    create_time TIMESTAMP,
+    update_by VARCHAR(64),
+    update_time TIMESTAMP,
+    remark TEXT,
+    CONSTRAINT uk_cultivation_revision_uid UNIQUE (uid, revision)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultivation_revision_uid
+    ON cultivation_plan_revision (uid, revision);
+
+CREATE TABLE IF NOT EXISTS cultivation_module_config (
+    id BIGINT PRIMARY KEY,
+    uid VARCHAR(64) NOT NULL,
+    module_id VARCHAR(128) NOT NULL,
+    adapter_version VARCHAR(32) NOT NULL,
+    enabled BOOLEAN DEFAULT true,
+    settings_json TEXT NOT NULL,
+    create_by VARCHAR(64),
+    create_time TIMESTAMP,
+    update_by VARCHAR(64),
+    update_time TIMESTAMP,
+    remark TEXT,
+    CONSTRAINT uk_cultivation_module_uid UNIQUE (uid, module_id)
+);

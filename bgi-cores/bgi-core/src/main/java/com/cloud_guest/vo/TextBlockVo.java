@@ -42,13 +42,26 @@ public class TextBlockVo {
         this.text = textBlock.getText();
         this.charScores = textBlock.getCharScores();
         this.crnnTime = textBlock.getCrnnTime();
+        this.blockTime = textBlock.getBlockTime();
 
-        this.boxPoint.forEach(point -> {
-            this.x = Math.min(this.x, point.getX());
-            this.y = Math.min(this.y, point.getY());
-        });
+        if (this.boxPoint == null || this.boxPoint.isEmpty()) {
+            return;
+        }
 
-        this.width = Math.abs(this.boxPoint.get(0).getX() - this.boxPoint.get(1).getX());
-        this.height = Math.abs(this.boxPoint.get(0).getY() - this.boxPoint.get(1).getY());
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (Point point : this.boxPoint) {
+            minX = Math.min(minX, point.getX());
+            minY = Math.min(minY, point.getY());
+            maxX = Math.max(maxX, point.getX());
+            maxY = Math.max(maxY, point.getY());
+        }
+
+        this.x = minX;
+        this.y = minY;
+        this.width = maxX - minX;
+        this.height = maxY - minY;
     }
 }

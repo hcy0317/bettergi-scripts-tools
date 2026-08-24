@@ -202,6 +202,12 @@ bgi-tools:
   version: 0.1.8
 config:
   backup-path: backup
+cultivation:
+  bettergi-api-base-url: ${BETTERGI_API_BASE_URL:http://127.0.0.1:18081/bgi}
+  ocr:
+    python-command: ${CULTIVATION_OCR_PYTHON:python}
+    bettergi-root: ${BETTERGI_ROOT:}
+    timeout: ${CULTIVATION_OCR_TIMEOUT:2m}
 #设置默认账号密码
 auth:
   enabled: true

@@ -5,11 +5,19 @@ import {ElMessage} from "element-plus";
  * 查询全部 uid 映射
  */
 export async function getAllUid() {
-    const {code,data} = await service.get('/jwt/uid/all')
-    if (code === 200) {
-        ElMessage.success("加载成功");
-    }
+    const {data} = await service.get('/jwt/uid/selection/all')
     return data;
+}
+
+export async function getUidMappings() {
+    const {data} = await service.get('/jwt/uid/all')
+    return data
+}
+
+export async function setDefaultUid(uid) {
+    const {code, data} = await service.put('/jwt/uid/default', null, {params: {uid}})
+    if (code === 200) ElMessage.success('默认 UID 已更新')
+    return data
 }
 
 /**

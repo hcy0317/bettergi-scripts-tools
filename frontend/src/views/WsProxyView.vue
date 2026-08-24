@@ -92,10 +92,8 @@
           <div class="modal-body">
             <div class="form-group">
               <label class="label">UID <span class="required">*</span></label>
-              <input
+              <UidSelector
                 v-model="formData.uid"
-                class="input"
-                placeholder="请输入 UID"
                 :disabled="isEditMode"
               />
             </div>
@@ -185,6 +183,7 @@ import {
   deleteAccess
 } from '@api/ws/wsProxy.js';
 import {getHostPrefix} from "@utils/ApiRequest.js";
+import UidSelector from '@/components/UidSelector.vue'
 const actionMap=new Map([
     ['send_private_msg','私聊'],
     ['send_group_msg','群聊']

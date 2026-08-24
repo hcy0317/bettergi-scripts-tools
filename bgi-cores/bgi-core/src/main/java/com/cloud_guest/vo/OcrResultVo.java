@@ -34,15 +34,15 @@ public class OcrResultVo {
         this.detectTime = ocrResult.getDetectTime();
         this.strRes = ocrResult.getStrRes();
 
-        ArrayList<TextBlockVo> textBlocksList = CollUtil.newArrayList();
-        ocrResult.getTextBlocks()
-                .stream()
-                .map(TextBlockVo::new)
-                .forEach(textBlockVo -> textBlocks.add(textBlockVo));
+        if (CollUtil.isNotEmpty(ocrResult.getTextBlocks())) {
+            this.textBlocks = ocrResult.getTextBlocks().stream()
+                    .map(TextBlockVo::new)
+                    .collect(Collectors.toCollection(ArrayList::new));
+        }
 
-        this.textBlocks = textBlocksList;
-
-        this.resList = Arrays.stream(ocrResult.getStrRes().split("\n"))
-                .collect(Collectors.toList());
+        if (this.strRes != null) {
+            this.resList = Arrays.stream(this.strRes.split("\n"))
+                    .collect(Collectors.toList());
+        }
     }
 }

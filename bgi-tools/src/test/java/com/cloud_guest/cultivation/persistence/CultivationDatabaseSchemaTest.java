@@ -1,0 +1,68 @@
+package com.cloud_guest.cultivation.persistence;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class CultivationDatabaseSchemaTest {
+
+    @Test
+    void sqliteInitializationIsIdempotentAndRevisionIsUniquePerUid() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            ClassPathResource script = new ClassPathResource("sql/sqlite.sql");
+            ScriptUtils.executeSqlScript(connection, script);
+            ScriptUtils.executeSqlScript(connection, script);
+
+            assertThat(tableExists(connection, "cultivation_import_preview")).isTrue();
+            assertThat(tableExists(connection, "cultivation_plan_revision")).isTrue();
+            assertThat(tableExists(connection, "cultivation_module_config")).isTrue();
+            assertThat(columnExists(connection, "uid_info_config", "is_default")).isTrue();
+
+            String insert = """
+                    INSERT INTO cultivation_plan_revision
+                    (id, uid, revision, state, catalog_version, preview_id,
+                     source_image_sha256, engine_version, model_source, requirements_json)
+                    VALUES (%d, '123456789', 1, 'IMPORTED', 'name-only-v1', 42,
+                            'hash', 'PP-OCRv6', 'bettergi-installed-assets', '[]')
+                    """;
+            connection.createStatement().executeUpdate(insert.formatted(1));
+            assertThatThrownBy(() -> connection.createStatement().executeUpdate(insert.formatted(2)))
+                    .isInstanceOf(SQLException.class);
+
+            String moduleInsert = """
+                    INSERT INTO cultivation_module_config
+                    (id, uid, module_id, adapter_version, enabled, settings_json)
+                    VALUES (%d, '123456789', 'auto-plan-resin', '1.0', 1, '{}')
+                    """;
+            connection.createStatement().executeUpdate(moduleInsert.formatted(10));
+            assertThatThrownBy(() -> connection.createStatement().executeUpdate(moduleInsert.formatted(11)))
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
+    private static boolean tableExists(Connection connection, String tableName) throws SQLException {
+        try (ResultSet result = connection.createStatement().executeQuery(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='" + tableName + "'")) {
+            return result.next() && result.getInt(1) == 1;
+        }
+    }
+
+    private static boolean columnExists(Connection connection, String tableName, String columnName)
+            throws SQLException {
+        try (ResultSet result = connection.createStatement().executeQuery(
+                "PRAGMA table_info('" + tableName + "')")) {
+            while (result.next()) {
+                if (columnName.equals(result.getString("name"))) return true;
+            }
+            return false;
+        }
+    }
+}

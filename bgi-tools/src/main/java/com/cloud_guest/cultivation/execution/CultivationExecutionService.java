@@ -1,0 +1,422 @@
+package com.cloud_guest.cultivation.execution;
+
+import cn.hutool.core.util.StrUtil;
+import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
+import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
+import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
+import com.cloud_guest.cultivation.execution.module.WeeklyBossExecutionModule;
+import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
+import com.cloud_guest.cultivation.plan.CultivationPlanApplicationService;
+import com.cloud_guest.cultivation.plan.CultivationPlanRevisionResponse;
+import com.cloud_guest.entitys.common.auto_plan.AutoPlan;
+import com.cloud_guest.service.AutoPlanService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+@Service
+public class CultivationExecutionService {
+    private static final String EXECUTION_MODE = "单轮执行，执行后重新确认缺口";
+    private static final Map<String, String> SPECIALTY_COUNTRIES = specialtyCountries();
+    private static final Map<String, String> MANUAL_MATERIALS = Map.of(
+            "智识之冕", "人工来源：活动、版本奖励等限量渠道；系统持续保留缺口，取得后重新导入确认");
+
+    private final CultivationPlanApplicationService planService;
+    private final AutoPlanService autoPlanService;
+    private final CultivationModuleConfigurationService configurationService;
+    private final CultivationMaterialSourceCatalog materialSourceCatalog;
+
+    public CultivationExecutionService(CultivationPlanApplicationService planService,
+                                       AutoPlanService autoPlanService,
+                                       CultivationModuleConfigurationService configurationService,
+                                       CultivationMaterialSourceCatalog materialSourceCatalog) {
+        this.planService = planService;
+        this.autoPlanService = autoPlanService;
+        this.configurationService = configurationService;
+        this.materialSourceCatalog = materialSourceCatalog;
+    }
+
+    public CultivationExecutionProjection projection(String uid) {
+        String normalizedUid = requireUid(uid);
+        CultivationPlanRevisionResponse revision = planService.latest(normalizedUid);
+        if (revision == null) {
+            return null;
+        }
+
+        CultivationExecutionPreferences preferences = preferences(normalizedUid);
+        CultivationModuleConfiguration autoPlanConfiguration = configurationService.find(
+                normalizedUid, AutoPlanResinExecutionModule.ID);
+        CultivationModuleConfiguration gatherConfiguration = configurationService.find(
+                normalizedUid, CdAwareAutoGatherExecutionModule.ID);
+        CultivationModuleConfiguration monsterConfiguration = configurationService.find(
+                normalizedUid, FullyAutoToolsExecutionModule.ID);
+        CultivationModuleConfiguration weeklyBossConfiguration = configurationService.find(
+                normalizedUid, WeeklyBossExecutionModule.ID);
+        List<Map<String, Object>> domains = effectiveDomains(autoPlanService.findDomainAll());
+        List<CultivationExecutionProjection.ResinAction> resinActions = new ArrayList<>();
+        List<CultivationExecutionProjection.BossAction> bossActions = new ArrayList<>();
+        List<CultivationExecutionProjection.WeeklyBossAction> weeklyBossActions = new ArrayList<>();
+        List<CultivationExecutionProjection.GatherTarget> gatherTargets = new ArrayList<>();
+        List<CultivationExecutionProjection.MonsterTarget> monsterTargets = new ArrayList<>();
+        List<CultivationExecutionProjection.PendingMaterial> pending = new ArrayList<>();
+
+        for (CultivationLedgerEntry entry : revision.requirements()) {
+            if (entry.remaining() <= 0) {
+                continue;
+            }
+            if ("摩拉".equals(entry.materialName()) || "大英雄的经验".equals(entry.materialName())) {
+                resinActions.add(new CultivationExecutionProjection.ResinAction(
+                        entry.materialName(), entry.remaining(), "地脉",
+                        "摩拉".equals(entry.materialName()) ? "藏金之花" : "启示之花",
+                        "经验与摩拉", preferences.domainParty(),
+                        autoPlanConfiguration.enabled() ? "可生成下一步行动" : "已暂停",
+                        null, entry.materialName(), List.of()));
+                continue;
+            }
+
+            Optional<DomainMatch> domain = findDomain(entry.materialName(), domains);
+            if (domain.isPresent()) {
+                DomainMatch match = domain.get();
+                resinActions.add(new CultivationExecutionProjection.ResinAction(
+                        entry.materialName(), entry.remaining(), "秘境", match.name(), match.type(),
+                        preferences.domainParty(),
+                        autoPlanConfiguration.enabled() ? "可生成下一步行动" : "已暂停",
+                        match.materialIndex(), match.materialName(), daysForMaterialIndex(match.materialIndex())));
+                continue;
+            }
+
+            Optional<CultivationMaterialSourceCatalog.BossSource> boss =
+                    materialSourceCatalog.findBoss(entry.materialName());
+            if (boss.isPresent()) {
+                CultivationMaterialSourceCatalog.BossSource source = boss.get();
+                bossActions.add(new CultivationExecutionProjection.BossAction(
+                        entry.materialName(), entry.remaining(), source.bossName(), source.country(),
+                        bossParty(autoPlanConfiguration, preferences), bossSettings(autoPlanConfiguration),
+                        autoPlanConfiguration.enabled() ? "待 AutoPlan 首领任务执行" : "已暂停"));
+                continue;
+            }
+
+            String country = SPECIALTY_COUNTRIES.get(entry.materialName());
+            if (country != null) {
+                gatherTargets.add(new CultivationExecutionProjection.GatherTarget(
+                        entry.materialName(), entry.required(), entry.baselineOwned(), entry.remaining(),
+                        country, "selectLocalSpecialty_" + country));
+                continue;
+            }
+
+            Optional<String> weeklyBoss = materialSourceCatalog.findWeeklyBoss(entry.materialName());
+            if (weeklyBoss.isPresent()) {
+                weeklyBossActions.add(new CultivationExecutionProjection.WeeklyBossAction(
+                        entry.materialName(), entry.remaining(), weeklyBoss.get(),
+                        weeklyBossSettings(weeklyBossConfiguration, weeklyBoss.get()),
+                        weeklyBossState(weeklyBossConfiguration)));
+                continue;
+            }
+
+            Optional<CultivationMaterialSourceCatalog.MonsterSource> monster =
+                    materialSourceCatalog.findMonster(entry.materialName());
+            if (monster.isPresent()) {
+                CultivationMaterialSourceCatalog.MonsterSource source = monster.get();
+                monsterTargets.add(new CultivationExecutionProjection.MonsterTarget(
+                        entry.materialName(), entry.required(), entry.baselineOwned(), entry.remaining(),
+                        source.routeFamily(), source.monsters()));
+                continue;
+            }
+
+            String manualReason = MANUAL_MATERIALS.get(entry.materialName());
+            if (manualReason != null) {
+                pending.add(new CultivationExecutionProjection.PendingMaterial(
+                        entry.materialName(), entry.remaining(), manualReason));
+                continue;
+            }
+
+            pending.add(new CultivationExecutionProjection.PendingMaterial(
+                    entry.materialName(), entry.remaining(), "尚未接入可验证的自动执行适配器"));
+        }
+
+        CultivationExecutionProjection.GatherAction gatherAction = buildGatherAction(
+                normalizedUid, preferences, gatherConfiguration, gatherTargets);
+        CultivationExecutionProjection.MonsterAction monsterAction = buildMonsterAction(
+                monsterConfiguration, monsterTargets);
+        return new CultivationExecutionProjection(
+                normalizedUid, revision.revision(), revision.state(), EXECUTION_MODE,
+                resinActions, bossActions, weeklyBossActions, gatherAction, monsterAction,
+                pending, preferences, partyOptions(normalizedUid));
+    }
+
+    public CultivationExecutionPreferences preferences(String uid) {
+        String normalizedUid = requireUid(uid);
+        CultivationModuleConfiguration autoPlan = configurationService.find(
+                normalizedUid, AutoPlanResinExecutionModule.ID);
+        CultivationModuleConfiguration gather = configurationService.find(
+                normalizedUid, CdAwareAutoGatherExecutionModule.ID);
+        return new CultivationExecutionPreferences(
+                normalizedUid,
+                setting(autoPlan, "partyName"),
+                setting(gather, "partyName"),
+                setting(gather, "partyName2nd"),
+                gather.enabled());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public CultivationExecutionPreferences savePreferences(CultivationExecutionPreferences request) {
+        String uid = requireUid(request.uid());
+        CultivationModuleConfiguration currentAutoPlan = configurationService.find(
+                uid, AutoPlanResinExecutionModule.ID);
+        Map<String, Object> autoPlanSettings = new LinkedHashMap<>(currentAutoPlan.settings());
+        autoPlanSettings.put("partyName", trim(request.domainParty()));
+        configurationService.save(uid, AutoPlanResinExecutionModule.ID,
+                new CultivationModuleConfigurationRequest(currentAutoPlan.enabled(), autoPlanSettings));
+        CultivationModuleConfiguration currentGather = configurationService.find(
+                uid, CdAwareAutoGatherExecutionModule.ID);
+        Map<String, Object> gatherSettings = new LinkedHashMap<>(currentGather.settings());
+        gatherSettings.put("partyName", trim(request.gatherParty()));
+        gatherSettings.put("partyName2nd", trim(request.gatherFallbackParty()));
+        configurationService.save(uid, CdAwareAutoGatherExecutionModule.ID,
+                new CultivationModuleConfigurationRequest(request.gatherEnabled(), gatherSettings));
+        return preferences(uid);
+    }
+
+    private List<String> partyOptions(String uid) {
+        Set<String> names = new LinkedHashSet<>();
+        CultivationExecutionPreferences preferences = preferences(uid);
+        addParty(names, preferences.domainParty());
+        addParty(names, preferences.gatherParty());
+        addParty(names, preferences.gatherFallbackParty());
+        configurationService.findAll(uid).stream()
+                .flatMap(configuration -> configuration.settings().entrySet().stream())
+                .filter(entry -> entry.getKey().toLowerCase().contains("party"))
+                .map(entry -> String.valueOf(entry.getValue()))
+                .forEach(name -> addParty(names, name));
+        autoPlanService.find(uid, null).stream()
+                .map(config -> config.toVo())
+                .forEach(plan -> collectParties(plan, names));
+        return List.copyOf(names);
+    }
+
+    private static void collectParties(AutoPlan plan, Set<String> names) {
+        if (plan.getAutoDomain() != null) addParty(names, plan.getAutoDomain().getPartyName());
+        if (plan.getAutoLeyLineOutcrop() != null) {
+            addParty(names, plan.getAutoLeyLineOutcrop().getTeam());
+            addParty(names, plan.getAutoLeyLineOutcrop().getFriendshipTeam());
+        }
+        if (plan.getAutoStygianOnslaught() != null) {
+            addParty(names, plan.getAutoStygianOnslaught().getFightTeamName());
+        }
+        if (plan.getAutoBoss() != null) addParty(names, plan.getAutoBoss().getTeamName());
+    }
+
+    private static CultivationExecutionProjection.GatherAction buildGatherAction(
+            String uid,
+            CultivationExecutionPreferences preferences,
+            CultivationModuleConfiguration configuration,
+            List<CultivationExecutionProjection.GatherTarget> targets) {
+        Map<String, Object> settings = new LinkedHashMap<>(configuration.settings());
+        settings.put("runMode", "采集选中的材料");
+        settings.put("partyName", preferences.gatherParty());
+        settings.put("partyName2nd", preferences.gatherFallbackParty());
+        settings.put("targetCountOfSelected", "csv");
+        settings.put("manualSetAccountName", uid);
+
+        Map<String, List<String>> selections = new LinkedHashMap<>();
+        targets.forEach(target -> selections
+                .computeIfAbsent(target.selectionKey(), ignored -> new ArrayList<>())
+                .add(target.materialName()));
+        settings.putAll(selections);
+
+        String state;
+        if (targets.isEmpty()) {
+            state = "当前无地方特产缺口";
+        } else if (!preferences.gatherEnabled()) {
+            state = "已暂停";
+        } else {
+            state = "待 CD-Aware-AutoGather 执行";
+        }
+        return new CultivationExecutionProjection.GatherAction(
+                "CD-Aware-AutoGather", state, settings, List.copyOf(targets));
+    }
+
+    private CultivationExecutionProjection.MonsterAction buildMonsterAction(
+            CultivationModuleConfiguration configuration,
+            List<CultivationExecutionProjection.MonsterTarget> targets) {
+        Map<String, Object> settings = new LinkedHashMap<>(configuration.settings());
+        Set<String> routeFamilies = new LinkedHashSet<>(stringList(settings.get("routeFamilies")));
+        targets.stream().map(CultivationExecutionProjection.MonsterTarget::routeFamily)
+                .forEach(routeFamilies::add);
+        settings.put("routeFamilies", List.copyOf(routeFamilies));
+        settings.put("key", "PGCSBY37NJA");
+        settings.put("config_run", "执行");
+
+        String state;
+        if (targets.isEmpty()) {
+            state = "当前无怪物材料缺口";
+        } else if (!configuration.enabled()) {
+            state = "已暂停";
+        } else {
+            state = "待 FullyAutoAndSemiAutoTools 执行";
+        }
+        return new CultivationExecutionProjection.MonsterAction(
+                "FullyAutoAndSemiAutoTools", state, settings, List.copyOf(targets),
+                materialSourceCatalog.availableMonsterRouteFamilies());
+    }
+
+    private static String bossParty(CultivationModuleConfiguration configuration,
+                                    CultivationExecutionPreferences preferences) {
+        String party = setting(configuration, "bossPartyName");
+        return StrUtil.isBlank(party) ? preferences.domainParty() : party;
+    }
+
+    private static Map<String, Object> bossSettings(CultivationModuleConfiguration configuration) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        List.of("bossStrategyName", "bossReviveRetryCount", "bossReturnToStatueAfterEachRound",
+                        "bossRewardRecognitionEnabled", "bossTimeoutSeconds")
+                .forEach(key -> result.put(key, configuration.settings().get(key)));
+        return result;
+    }
+
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof Collection<?> collection)) return List.of();
+        return collection.stream().map(String::valueOf).filter(item -> !item.isBlank()).toList();
+    }
+
+    private static Map<String, Object> weeklyBossSettings(
+            CultivationModuleConfiguration configuration, String bossName) {
+        Map<String, Object> settings = new LinkedHashMap<>(configuration.settings());
+        settings.put("monsterName", bossName);
+        return settings;
+    }
+
+    private static String weeklyBossState(CultivationModuleConfiguration configuration) {
+        if (!configuration.enabled()) return "已暂停";
+        if (!Boolean.TRUE.equals(configuration.settings().get("unfairContractTerms"))) {
+            return "需确认周本脚本风险条款";
+        }
+        return "待 WeeklyBoss 单轮执行";
+    }
+
+    private static List<Integer> daysForMaterialIndex(int index) {
+        return switch (index) {
+            case 1 -> List.of(0, 1, 4);
+            case 2 -> List.of(0, 2, 5);
+            case 3 -> List.of(0, 3, 6);
+            default -> List.of();
+        };
+    }
+
+    private static Optional<DomainMatch> findDomain(String materialName,
+                                                    List<Map<String, Object>> domains) {
+        String comparableName = normalizeTalentMaterial(materialName);
+        String materialFamily = materialFamily(materialName);
+        for (Map<String, Object> domain : domains) {
+            Object rewards = domain.get("list");
+            if (!(rewards instanceof Collection<?> collection)) {
+                continue;
+            }
+            List<String> rewardNames = collection.stream().map(String::valueOf).toList();
+            for (int index = 0; index < rewardNames.size(); index++) {
+                String item = rewardNames.get(index);
+                if (item.equals(materialName)
+                        || item.equals(comparableName)
+                        || materialFamily.equals(materialFamily(item))) {
+                    return Optional.of(new DomainMatch(
+                            String.valueOf(domain.get("name")), String.valueOf(domain.get("type")),
+                            index + 1, item));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static List<Map<String, Object>> effectiveDomains(List<Map<String, Object>> configured) {
+        Map<String, Map<String, Object>> merged = new LinkedHashMap<>();
+        defaultDomains().forEach(domain -> merged.put(String.valueOf(domain.get("name")), domain));
+        if (configured != null) {
+            configured.forEach(domain -> merged.put(String.valueOf(domain.get("name")), domain));
+        }
+        return List.copyOf(merged.values());
+    }
+
+    private static List<Map<String, Object>> defaultDomains() {
+        return List.of(
+                domain("无光的深都", "天赋", "「月光」的哲学", "「乐园」的哲学", "「浪迹」的哲学"),
+                domain("蕴火的幽墟", "天赋", "「角逐」的哲学", "「焚燔」的哲学", "「纷争」的哲学"),
+                domain("苍白的遗荣", "天赋", "「公平」的哲学", "「正义」的哲学", "「秩序」的哲学"),
+                domain("昏识塔", "天赋", "「诤言」的哲学", "「巧思」的哲学", "「笃行」的哲学"),
+                domain("董色之庭", "天赋", "「浮世」的哲学", "「风雅」的哲学", "「天光」的哲学"),
+                domain("太山府", "天赋", "「繁荣」的哲学", "「勤劳」的哲学", "「黄金」的哲学"),
+                domain("忘却之峡", "天赋", "「自由」的哲学", "「抗争」的哲学", "「诗文」的哲学"),
+                domain("失落的月庭", "武器", "奇巧秘器的真愿", "长夜燧火的烈辉", "终北遗嗣的煌熠"),
+                domain("深古瞭望所", "武器", "贡祭炽心的荣膺", "谚妄圣主的神面", "神合秘烟的启示"),
+                domain("深潮的余响", "武器", "悠古弦音的回响", "纯圣露滴的真粹", "无垢之海的金杯"),
+                domain("有顶塔", "武器", "谧林涓露的金符", "绿洲花园的真谛", "烈日威权的旧日"),
+                domain("砂流之庭", "武器", "远海夷地的金枝", "鸣神御灵的勇武", "今昔剧画之鬼人"),
+                domain("震雷连山密宫", "武器", "孤云寒林的神体", "雾海云间的转还", "漆黑陨铁的一块"),
+                domain("塞西莉亚苗圃", "武器", "高塔孤王的碎梦", "凛风奔狼的怀乡", "狮牙斗士的理想"));
+    }
+
+    private static Map<String, Object> domain(String name, String type, String... rewards) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("name", name);
+        result.put("type", type);
+        result.put("list", List.of(rewards));
+        return result;
+    }
+
+    private static String normalizeTalentMaterial(String materialName) {
+        return materialName
+                .replace("的教导", "的哲学")
+                .replace("的指引", "的哲学");
+    }
+
+    private static String materialFamily(String materialName) {
+        int separator = materialName.lastIndexOf('的');
+        return separator > 0 ? materialName.substring(0, separator) : materialName;
+    }
+
+    private static void addParty(Set<String> names, String name) {
+        if (StrUtil.isNotBlank(name)) names.add(name.trim());
+    }
+
+    private static String requireUid(String uid) {
+        if (uid == null || uid.isBlank()) throw new IllegalArgumentException("UID 不能为空");
+        return uid.trim();
+    }
+
+    private static String trim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String setting(CultivationModuleConfiguration configuration, String key) {
+        Object value = configuration.settings().get(key);
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private static Map<String, String> specialtyCountries() {
+        Map<String, String> result = new LinkedHashMap<>();
+        addSpecialties(result, "蒙德", "嘟嘟莲", "风车菊", "钩钩果", "落落莓", "慕风蘑菇", "蒲公英籽", "塞西莉亚花", "小灯草");
+        addSpecialties(result, "璃月", "琉璃袋", "清水玉", "夜泊石");
+        addSpecialties(result, "稻妻", "绯樱绣球", "鬼兜虫", "海灵芝", "珊瑚真珠", "天云草实", "血斛");
+        addSpecialties(result, "须弥", "幽灯蕈", "悼灵花", "劫波莲", "沙脂蛹", "树王圣体菇");
+        addSpecialties(result, "枫丹", "海露花", "子探测单元", "幽光星星");
+        addSpecialties(result, "纳塔", "青蜜莓", "微光角菌", "灼灼彩菊", "冬凌草");
+        return Map.copyOf(result);
+    }
+
+    private static void addSpecialties(Map<String, String> target, String country, String... names) {
+        for (String name : names) target.put(name, country);
+    }
+
+    private record DomainMatch(String name, String type, int materialIndex, String materialName) {
+    }
+}

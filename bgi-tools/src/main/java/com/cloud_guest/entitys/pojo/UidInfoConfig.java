@@ -43,22 +43,26 @@ public class UidInfoConfig extends BaseEntity {
     private String password;
     @TableField(COL_SALT)
     private String salt = StrUtil.EMPTY;
+    @TableField(COL_DEFAULT_UID)
+    private Boolean defaultUid = Boolean.FALSE;
     public static final String TABLE_NAME = "uid_info_config";
     public static final String COL_UID = "uid";
     public static final String COL_USERNAME = "username";
     public static final String COL_PASSWORD = "password";
     public static final String COL_SALT = "salt";
     public static final String COL_AS = "col_as";
+    public static final String COL_DEFAULT_UID = "is_default";
 
     public static final String REMARK_COL_USERNAME = "用户名";
     public static final String REMARK_COL_PASSWORD = "密码";
     public static final String REMARK_COL_SALT = "盐值";
+    public static final String REMARK_COL_DEFAULT_UID = "是否为默认UID";
 
 
     @SneakyThrows
     public UidInfo toUidInfo() {
         String decryptedPassword = StrUtil.isBlankIfStr(password) ? password : decryptPassword(password, salt);
-        return new UidInfo(uid, asName, username, decryptedPassword);
+        return new UidInfo(uid, asName, username, decryptedPassword, defaultUid);
     }
 
     @SneakyThrows

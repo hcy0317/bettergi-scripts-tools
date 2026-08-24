@@ -7,8 +7,9 @@ import {
   getUidJson,
   postUidPlan,
   removeUidList,
-  getAllUid, getBaseBossListJsonAll, getUidGlobalInfo, postUidGlobalInfo
+  getBaseBossListJsonAll, getUidGlobalInfo, postUidGlobalInfo
 } from "@api/auto_plan/autoPlan";
+import UidSelector from '@/components/UidSelector.vue'
 import {CopyToClipboard} from "@utils/local.js";
 import {
   bossListDefault,
@@ -26,14 +27,6 @@ import {getLocalToken, getLocalTokenName, goBack, toHomePage} from "@api/web/web
 import {getTokenInfo} from "@api/auth/token.js";
 import router from "@router/router.js";
 import {getHostPrefix} from "@utils/ApiRequest.js";
-
-const cloud = ref({
-  UidList: [],
-  LoadingUidList: false,
-  lastRequestTime: 0,
-  // 設定冷卻時間（單位：毫秒），例如每 1 秒最多請求 1 次
-  cooldownMs: 1000,
-})
 
 const showDialogApi = ref(false)
 const ApiList = ref([])
@@ -117,55 +110,9 @@ const handleApi = async () => {
   ApiList.value = list
   showDialogApi.value = true
 }
-const querySearchAsync = (queryString, cb) => {
-  if (queryString?.trim() === "" || !queryString) {
-    cb(cloud.value.UidList)
-  } else {
-    cb([])
-  }
-}
-const findAllUid = async () => {
-  const res = await getAllUid()
-  cloud.value.UidList = res
-  cloud.value.lastRequestTime = Date.now()
-}
-const initAllUid = async () => {
-  try {
-    await findAllUid()
-  } catch (e) {
-  }
-}
-const loadCloudUidListIfNeeded = async () => {
-  const now = Date.now()
-
-  // 正在冷卻中 → 直接返回
-  if (now - cloud.value.lastRequestTime < cloud.value.cooldownMs) {
-    // 可選：console.log(`請求太頻繁，距離上次還剩 ${COOLDOWN_MS - (now - lastRequestTime.value)}ms`)
-    return
-  }
-  //  正在加载中 → 直接返回
-  if (cloud.value.LoadingUidList) return
-
-  cloud.value.LoadingUidList = true
-
-  try {
-    await findAllUid()
-    // console.log("获取云端UID列表成功:", cloud.value)
-  } catch (e) {
-    console.error("获取云端UID列表失败", e)
-    // 这里**不弹 ElMessage**，保持安静
-  } finally {
-    cloud.value.LoadingUidList = false
-  }
-}
-// 计算属性：是否有云端数据
-const hasCloudUidList = computed(() => {
-  return cloud.value.UidList.length > 0
-})
 const handleUidSelect = (item) => {
   uid.value = item?.uid ? item.uid : item
-  ElMessage.success(`已选择云端 UID：${uid.value}`)
-  findDomains()
+  if (uid.value) findDomains(false)
 }
 // 配置列表 → 核心数据结构改为 array
 const configs = ref([])
@@ -354,8 +301,6 @@ onMounted(() => {
   initRunTypes()
   initLeyLineOutcropTypes()
   initCountryList()
-  initAllUid()
-
 })
 // 在 script 中添加跳转逻辑
 const goToHome = async () => {
@@ -1170,25 +1115,7 @@ const dialogWidth = computed(() => {
       <div class="config-header">
         <!-- template 部分保持基本相同，但增加 v-if 判断 -->
         <div class="control-card">
-          <el-autocomplete
-              v-model="uid"
-              :fetch-suggestions="querySearchAsync"
-              placeholder="设置UID/点击云端配置"
-              :trigger-on-focus="hasCloudUidList"
-              :clearable="true"
-              :show-loading="cloud.LoadingUidList"
-              @select="handleUidSelect"
-              @focus="loadCloudUidListIfNeeded"
-              style="width: 180px;"
-          >
-            <template #default="{ item }">
-              <div class="uid-item">
-                <span class="uid-text">{{ item?.uid ? item.uid : item }}</span>
-                <span v-if="item.as" class="uid-as"> : {{ item.as }}</span>
-              </div>
-            </template>
-
-          </el-autocomplete>
+          <UidSelector v-model="uid" @change="handleUidSelect"/>
         </div>
 
         <!--          <div class="control-card">
@@ -2244,6 +2171,7 @@ const dialogWidth = computed(() => {
 </template>
 <style scoped>
 @import '@css/auto_plan_config.css';
+
 </style>
 <style>
 /* 抽屉自定义样式 */

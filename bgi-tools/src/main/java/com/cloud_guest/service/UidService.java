@@ -2,6 +2,7 @@ package com.cloud_guest.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.cloud_guest.constants.KeyConstants;
+import com.cloud_guest.entitys.domain.UidInfo;
 import com.cloud_guest.entitys.pojo.UidInfoConfig;
 
 import java.util.List;
@@ -17,6 +18,8 @@ public interface UidService extends IService<UidInfoConfig>, BaseService {
     }
 
     boolean removeList(List<String> ids);
+    boolean saveInfo(UidInfo uidInfo);
+    boolean setDefault(String uid);
     //boolean save(UidInfo uidInfo);
     List<UidInfoConfig> findUidAll();
 
