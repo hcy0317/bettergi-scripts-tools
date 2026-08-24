@@ -145,6 +145,23 @@ class CultivationOneStopServiceTest {
                 .map(field -> field.path("name").asText()).toList())
                 .contains("treeLevel_2_9");
 
+        Path backupRoot = temporaryRoot.resolve(Path.of("User", "backup", "cultivation-one-stop"));
+        byte[] groupBeforeRepeat = Files.readAllBytes(Path.of(result.scriptGroupFile()));
+        byte[] gatherSettingsBeforeRepeat = Files.readAllBytes(gatherScript.resolve("settings.json"));
+        Path monsterSettingsFile = uidSettings.getParent().getParent().resolve("settings.json");
+        byte[] monsterSettingsBeforeRepeat = Files.readAllBytes(monsterSettingsFile);
+        long backupFilesBeforeRepeat = regularFileCount(backupRoot);
+
+        service.prepare("102550550");
+
+        assertThat(Files.readAllBytes(Path.of(result.scriptGroupFile())))
+                .isEqualTo(groupBeforeRepeat);
+        assertThat(Files.readAllBytes(gatherScript.resolve("settings.json")))
+                .isEqualTo(gatherSettingsBeforeRepeat);
+        assertThat(Files.readAllBytes(monsterSettingsFile))
+                .isEqualTo(monsterSettingsBeforeRepeat);
+        assertThat(regularFileCount(backupRoot)).isEqualTo(backupFilesBeforeRepeat);
+
         Files.delete(source);
         Path duplicate = source.getParent().resolve("养成一条龙-102550550-R0-旧副本.json");
         Files.copy(Path.of(result.scriptGroupFile()), duplicate);
@@ -175,6 +192,13 @@ class CultivationOneStopServiceTest {
         assertThat(request.path("uid").asText()).isEqualTo("102550550");
         assertThat(request.path("scriptGroupName").asText()).isEqualTo("养成一条龙-102550550");
         assertThat(Instant.parse(request.path("expiresAtUtc").asText())).isAfter(Instant.now());
+    }
+
+    private static long regularFileCount(Path root) throws Exception {
+        if (!Files.isDirectory(root)) return 0;
+        try (var files = Files.walk(root)) {
+            return files.filter(Files::isRegularFile).count();
+        }
     }
 
     private static CultivationExecutionProjection projection() {
