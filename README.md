@@ -95,6 +95,21 @@ networks:
 docker-compose up -d
 ```
 
+### Windows：计划任务与 LocalOps 管理
+
+本机部署建议使用无自动触发器的 Windows 计划任务，避免让 LocalOps 直接承担构建、制品校验和部署编排。首次安装或更新任务：
+
+```powershell
+.\scripts\windows\Register-BetterGIScriptsToolsDeploymentTask.ps1
+```
+
+注册后 LocalOps 会保留两个独立入口：
+
+- `BetterGI · AutoPlan 工具集`：只控制已经部署的 Docker Compose 服务。
+- `BetterGI · AutoPlan 部署`：通过 `\BetterGI-ScriptsTools-Deploy` 计划任务构建、校验并部署干净的 `master`。
+
+部署任务没有定时触发器，只能由 LocalOps 或 Task Scheduler 显式启动；`IgnoreNew` 阻止并发部署。Docker `build` 和 `up` 使用最多三次的有界指数退避重试，最终失败仍以非零任务结果和部署日志暴露。
+
 ---
 
 ## 配置文件详解

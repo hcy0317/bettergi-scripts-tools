@@ -128,14 +128,14 @@ public class CultivationOneStopService {
         Path backupDirectory = root.resolve(Path.of("User", "backup", "cultivation-one-stop",
                 BACKUP_TIME.format(LocalDateTime.now())));
         try {
-            if (Files.isRegularFile(groupFile)) {
-                backup(groupFile, backupDirectory.resolve("ScriptGroup").resolve(groupFile.getFileName()));
-            }
             for (Path duplicate : duplicateGroupFiles) {
                 backup(duplicate, backupDirectory.resolve("ScriptGroup").resolve(duplicate.getFileName()));
             }
             synchronizeScriptSettingsUi(root, uid, projection, backupDirectory, warnings);
-            writeJsonAtomically(groupFile, managedGroup);
+            writeJsonIfChanged(
+                    groupFile,
+                    managedGroup,
+                    backupDirectory.resolve("ScriptGroup").resolve(groupFile.getFileName()));
             for (Path duplicate : duplicateGroupFiles) Files.deleteIfExists(duplicate);
         } catch (IOException exception) {
             throw new IllegalStateException("无法生成 BetterGI 养成一条龙脚本组", exception);
@@ -549,9 +549,11 @@ public class CultivationOneStopService {
                         target.materialName() + "具体路线", allRoutes));
             }
         }
-        backup(settingsFile, backupDirectory.resolve(Path.of(
-                "ScriptSettings", "CD-Aware-AutoGather", "settings.json")));
-        writeJsonAtomically(settingsFile, settingsUi);
+        writeJsonIfChanged(
+                settingsFile,
+                settingsUi,
+                backupDirectory.resolve(Path.of(
+                        "ScriptSettings", "CD-Aware-AutoGather", "settings.json")));
     }
 
     private void synchronizeMonsterSettingsUi(
@@ -566,9 +568,11 @@ public class CultivationOneStopService {
             if (!Files.isRegularFile(uidSettingsFile) || !Files.isRegularFile(settingsFile)) continue;
             ArrayNode definitions = uidSettingsDefinitions(uidSettingsFile, uid);
             if (definitions == null) continue;
-            backup(settingsFile, backupDirectory.resolve(Path.of(
-                    "ScriptSettings", alias, "settings.json")));
-            writeJsonAtomically(settingsFile, definitions);
+            writeJsonIfChanged(
+                    settingsFile,
+                    definitions,
+                    backupDirectory.resolve(Path.of(
+                            "ScriptSettings", alias, "settings.json")));
             return;
         }
         warnings.add("未找到 FullyAutoAndSemiAutoTools 当前 UID 动态设置表，BetterGI 配置页可能暂不显示怪物路线");
@@ -804,6 +808,15 @@ public class CultivationOneStopService {
     private static void backup(Path source, Path target) throws IOException {
         Files.createDirectories(target.getParent());
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private void writeJsonIfChanged(Path target, JsonNode value, Path backupTarget) throws IOException {
+        if (Files.isRegularFile(target)) {
+            JsonNode current = objectMapper.readTree(target.toFile());
+            if (current.equals(value)) return;
+            backup(target, backupTarget);
+        }
+        writeJsonAtomically(target, value);
     }
 
     private void writeJsonAtomically(Path target, JsonNode value) throws IOException {
