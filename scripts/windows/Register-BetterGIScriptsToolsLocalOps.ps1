@@ -23,7 +23,7 @@ if ([string]::IsNullOrWhiteSpace([string]$credential.token)) {
     throw 'LocalOps control credential does not contain a CLI bearer.'
 }
 $headers = @{ Authorization = "Bearer $($credential.token)" }
-$state = Invoke-RestMethod -Uri "$LocalOpsUri/api/state" -Headers $headers -TimeoutSec 10
+$state = Invoke-RestMethod -Uri "$LocalOpsUri/api/state" -Headers $headers -TimeoutSec 30
 
 function Assert-UniqueCard {
     param(
@@ -89,7 +89,7 @@ elseif ($deploymentCards[0].scheduledTaskPath -ne $ScheduledTaskPath) {
     throw 'The existing BetterGI deployment card targets another scheduled task.'
 }
 
-$verifiedState = Invoke-RestMethod -Uri "$LocalOpsUri/api/state" -Headers $headers -TimeoutSec 10
+$verifiedState = Invoke-RestMethod -Uri "$LocalOpsUri/api/state" -Headers $headers -TimeoutSec 30
 $verifiedTask = @($verifiedState.apps | Where-Object { $_.name -eq $deploymentName })
 if ($verifiedTask.Count -ne 1 -or $verifiedTask[0].scheduledTaskPath -ne $ScheduledTaskPath) {
     throw 'LocalOps did not persist the BetterGI deployment scheduled-task card.'

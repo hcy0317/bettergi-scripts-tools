@@ -70,5 +70,7 @@ $localOpsSource = Get-Content -LiteralPath $localOpsRegistrationPath -Raw -Encod
 Assert-True ($localOpsSource.Contains('control-credential.json')) 'LocalOps registration must use the protected CLI bearer'
 Assert-True ($localOpsSource.Contains('scheduledTaskPath')) 'LocalOps registration must create a scheduled-task card'
 Assert-True ($localOpsSource.Contains('BetterGI · AutoPlan 部署')) 'LocalOps registration must use a dedicated deployment card'
+Assert-True (($localOpsSource | Select-String -Pattern 'TimeoutSec 30' -AllMatches).Matches.Count -eq 2) `
+    'LocalOps state reads must tolerate bounded slow Windows inventory refreshes'
 
 Write-Host 'bettergi-scripts-tools deployment control tests passed.'
