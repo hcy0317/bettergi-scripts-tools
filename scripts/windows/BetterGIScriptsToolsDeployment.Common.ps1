@@ -7,17 +7,39 @@ function Invoke-BetterGIScriptsToolsNativeCommand {
         [object[]]$ArgumentList = @()
     )
 
-    $previousErrorActionPreference = $ErrorActionPreference
+    $command = Get-Command $FilePath -ErrorAction Stop
+    $processStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $processStartInfo.FileName = $command.Source
+    $processStartInfo.UseShellExecute = $false
+    $processStartInfo.CreateNoWindow = $true
+    $processStartInfo.RedirectStandardOutput = $true
+    $processStartInfo.RedirectStandardError = $true
+    foreach ($argument in $ArgumentList) {
+        $processStartInfo.ArgumentList.Add([string]$argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $processStartInfo
     try {
-        $ErrorActionPreference = 'Continue'
-        $output = @(& $FilePath @ArgumentList 2>&1)
-        $exitCode = $LASTEXITCODE
+        if (-not $process.Start()) {
+            throw "Unable to start native command: $FilePath"
+        }
+        $standardOutput = $process.StandardOutput.ReadToEndAsync()
+        $standardError = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        foreach ($line in @(
+            $standardOutput.GetAwaiter().GetResult(),
+            $standardError.GetAwaiter().GetResult()
+        )) {
+            if (-not [string]::IsNullOrWhiteSpace($line)) {
+                Write-Host $line.TrimEnd()
+            }
+        }
+        return $process.ExitCode
     }
     finally {
-        $ErrorActionPreference = $previousErrorActionPreference
+        $process.Dispose()
     }
-    $output | ForEach-Object { Write-Host $_ }
-    return [int]$exitCode
 }
 
 function Invoke-BetterGIScriptsToolsRetry {
