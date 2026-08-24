@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS uid_info_config (
     username   TEXT,
     password    TEXT,
     salt        TEXT,
+    is_default  INTEGER DEFAULT 0,
     create_by   TEXT,
     create_time TEXT DEFAULT (datetime('now','localtime')),
     update_by   TEXT,
@@ -117,4 +118,64 @@ CREATE TABLE IF NOT EXISTS backup_info (
                                            update_by     TEXT,
                                            update_time   TEXT DEFAULT (datetime('now','localtime')),
                                            remark        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cultivation_import_preview (
+    id INTEGER PRIMARY KEY,
+    uid TEXT NOT NULL,
+    image_sha256 TEXT NOT NULL,
+    engine_version TEXT NOT NULL,
+    model_source TEXT NOT NULL,
+    image_width INTEGER NOT NULL,
+    image_height INTEGER NOT NULL,
+    raw_ocr_json TEXT NOT NULL,
+    parsed_json TEXT NOT NULL,
+    warnings_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    plan_revision_id INTEGER,
+    create_by TEXT,
+    create_time TEXT,
+    update_by TEXT,
+    update_time TEXT,
+    remark TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultivation_preview_uid_status
+    ON cultivation_import_preview (uid, status);
+
+CREATE TABLE IF NOT EXISTS cultivation_plan_revision (
+    id INTEGER PRIMARY KEY,
+    uid TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    catalog_version TEXT NOT NULL,
+    preview_id INTEGER NOT NULL,
+    source_image_sha256 TEXT NOT NULL,
+    engine_version TEXT NOT NULL,
+    model_source TEXT NOT NULL,
+    requirements_json TEXT NOT NULL,
+    create_by TEXT,
+    create_time TEXT,
+    update_by TEXT,
+    update_time TEXT,
+    remark TEXT,
+    UNIQUE (uid, revision)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultivation_revision_uid
+    ON cultivation_plan_revision (uid, revision);
+
+CREATE TABLE IF NOT EXISTS cultivation_module_config (
+    id INTEGER PRIMARY KEY,
+    uid TEXT NOT NULL,
+    module_id TEXT NOT NULL,
+    adapter_version TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    settings_json TEXT NOT NULL,
+    create_by TEXT,
+    create_time TEXT,
+    update_by TEXT,
+    update_time TEXT,
+    remark TEXT,
+    UNIQUE (uid, module_id)
 );

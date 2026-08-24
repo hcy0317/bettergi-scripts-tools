@@ -1,0 +1,106 @@
+package com.cloud_guest.cultivation.execution;
+
+import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
+import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleDefinition;
+import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
+import com.cloud_guest.cultivation.execution.module.WeeklyBossExecutionModule;
+import com.cloud_guest.cultivation.ocr.RemainingEvidence;
+import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
+import com.cloud_guest.cultivation.plan.CultivationPlanApplicationService;
+import com.cloud_guest.cultivation.plan.CultivationPlanRevisionResponse;
+import com.cloud_guest.service.AutoPlanService;
+import org.junit.jupiter.api.Test;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class CultivationExecutionServiceTest {
+    @Test
+    void projectsLedgerThroughResinGatherAndPendingAdapters() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        AutoPlanService autoPlanService = mock(AutoPlanService.class);
+        CultivationModuleConfigurationService configurationService = mock(CultivationModuleConfigurationService.class);
+        CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+
+        when(planService.latest("123456789")).thenReturn(new CultivationPlanRevisionResponse(
+                1, "123456789", 3, "IMPORTED", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(
+                entry("「浪迹」的指引", 63, 3, 60),
+                entry("摩拉", 1_000_000, 250_000, 750_000),
+                entry("沙脂蛹", 168, 4, 164),
+                entry("谜土的护符", 46, 1, 45),
+                entry("史莱姆凝液", 18, 2, 16)), LocalDateTime.now()));
+        when(autoPlanService.findDomainAll()).thenReturn(List.of());
+        when(autoPlanService.find("123456789", null)).thenReturn(List.of());
+
+        CultivationModuleConfiguration autoPlan = configuration(
+                AutoPlanResinExecutionModule.ID, true, Map.of("partyName", "速通"));
+        CultivationModuleConfiguration gather = configuration(
+                CdAwareAutoGatherExecutionModule.ID, true,
+                Map.of("partyName", "钟纳久万", "partyName2nd", "钟纳久万"));
+        CultivationModuleConfiguration monster = configuration(
+                FullyAutoToolsExecutionModule.ID, true, Map.of("routeFamilies", List.of()));
+        CultivationModuleConfiguration weekly = configuration(
+                WeeklyBossExecutionModule.ID, true, Map.of("unfairContractTerms", true));
+        when(configurationService.find("123456789", AutoPlanResinExecutionModule.ID)).thenReturn(autoPlan);
+        when(configurationService.find("123456789", CdAwareAutoGatherExecutionModule.ID)).thenReturn(gather);
+        when(configurationService.find("123456789", FullyAutoToolsExecutionModule.ID)).thenReturn(monster);
+        when(configurationService.find("123456789", WeeklyBossExecutionModule.ID)).thenReturn(weekly);
+        when(configurationService.findAll(anyString())).thenReturn(List.of(autoPlan, gather, monster, weekly));
+        when(materialSourceCatalog.findBoss(anyString())).thenReturn(Optional.empty());
+        when(materialSourceCatalog.findMonster(anyString())).thenReturn(Optional.empty());
+        when(materialSourceCatalog.findWeeklyBoss(anyString())).thenReturn(Optional.empty());
+        when(materialSourceCatalog.findBoss("谜土的护符")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.BossSource("灵觉隐修的迷者", "纳塔")));
+        when(materialSourceCatalog.findMonster("史莱姆凝液")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.MonsterSource(
+                        "史莱姆", List.of("火史莱姆"), List.of("史莱姆"))));
+        when(materialSourceCatalog.availableMonsterRouteFamilies()).thenReturn(List.of("史莱姆"));
+
+        CultivationExecutionProjection result = new CultivationExecutionService(
+                planService, autoPlanService, configurationService, materialSourceCatalog)
+                .projection("123456789");
+
+        assertThat(result.resinActions()).extracting(CultivationExecutionProjection.ResinAction::sourceName)
+                .containsExactly("无光的深都", "藏金之花");
+        assertThat(result.gatherAction().settings())
+                .containsEntry("targetCountOfSelected", "csv")
+                .containsEntry("manualSetAccountName", "123456789")
+                .containsEntry("selectLocalSpecialty_须弥", List.of("沙脂蛹"));
+        assertThat(result.gatherAction().csvTargets()).singleElement()
+                .extracting(CultivationExecutionProjection.GatherTarget::required)
+                .isEqualTo(168L);
+        assertThat(result.bossActions()).singleElement()
+                .extracting(CultivationExecutionProjection.BossAction::bossName)
+                .isEqualTo("灵觉隐修的迷者");
+        assertThat(result.monsterAction().targets()).singleElement()
+                .extracting(CultivationExecutionProjection.MonsterTarget::routeFamily)
+                .isEqualTo("史莱姆");
+        assertThat(result.monsterAction().settings()).containsEntry("routeFamilies", List.of("史莱姆"));
+        assertThat(result.pendingMaterials()).isEmpty();
+    }
+
+    private static CultivationLedgerEntry entry(String name, long required, long owned, long remaining) {
+        return new CultivationLedgerEntry(
+                null, name, required, owned, remaining, RemainingEvidence.OCR,
+                0.99, false, List.of());
+    }
+
+    private static CultivationModuleConfiguration configuration(String id,
+                                                                boolean enabled,
+                                                                Map<String, Object> settings) {
+        return new CultivationModuleConfiguration(
+                new CultivationModuleDefinition(id, id, "1.0", "", "", List.of(), List.of()),
+                enabled, settings);
+    }
+}

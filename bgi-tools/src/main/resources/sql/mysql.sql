@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS `uid_info_config`
     `username`       varchar(255) DEFAULT NULL COMMENT '用户名',
     `password`       varchar(255) DEFAULT NULL COMMENT '密码',
     `salt`       varchar(255) DEFAULT NULL COMMENT '盐值',
+    `is_default` tinyint(1) DEFAULT 0 COMMENT '是否为默认UID',
     -- 通用审计字段
     `create_by`   VARCHAR(64) DEFAULT NULL COMMENT '创建者',
     `create_time` TIMESTAMP   DEFAULT NULL COMMENT '创建时间',
@@ -122,3 +123,60 @@ CREATE TABLE IF NOT EXISTS `backup_info` (
                                              `remark`        TEXT         DEFAULT NULL COMMENT '备注',
                                              PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='备份信息表';
+
+CREATE TABLE IF NOT EXISTS `cultivation_import_preview` (
+    `id` BIGINT NOT NULL PRIMARY KEY,
+    `uid` VARCHAR(64) NOT NULL,
+    `image_sha256` CHAR(64) NOT NULL,
+    `engine_version` VARCHAR(128) NOT NULL,
+    `model_source` VARCHAR(128) NOT NULL,
+    `image_width` INT NOT NULL,
+    `image_height` INT NOT NULL,
+    `raw_ocr_json` LONGTEXT NOT NULL,
+    `parsed_json` LONGTEXT NOT NULL,
+    `warnings_json` TEXT NOT NULL,
+    `status` VARCHAR(32) NOT NULL,
+    `plan_revision_id` BIGINT NULL,
+    `create_by` VARCHAR(64),
+    `create_time` DATETIME,
+    `update_by` VARCHAR(64),
+    `update_time` DATETIME,
+    `remark` TEXT,
+    INDEX `idx_cultivation_preview_uid_status` (`uid`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='养成计算器导入预览';
+
+CREATE TABLE IF NOT EXISTS `cultivation_plan_revision` (
+    `id` BIGINT NOT NULL PRIMARY KEY,
+    `uid` VARCHAR(64) NOT NULL,
+    `revision` INT NOT NULL,
+    `state` VARCHAR(32) NOT NULL,
+    `catalog_version` VARCHAR(64) NOT NULL,
+    `preview_id` BIGINT NOT NULL,
+    `source_image_sha256` CHAR(64) NOT NULL,
+    `engine_version` VARCHAR(128) NOT NULL,
+    `model_source` VARCHAR(128) NOT NULL,
+    `requirements_json` LONGTEXT NOT NULL,
+    `create_by` VARCHAR(64),
+    `create_time` DATETIME,
+    `update_by` VARCHAR(64),
+    `update_time` DATETIME,
+    `remark` TEXT,
+    UNIQUE KEY `uk_cultivation_revision_uid` (`uid`, `revision`),
+    INDEX `idx_cultivation_revision_uid` (`uid`, `revision`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='养成材料账本版本';
+
+CREATE TABLE IF NOT EXISTS `cultivation_module_config` (
+    `id` bigint NOT NULL,
+    `uid` varchar(64) NOT NULL,
+    `module_id` varchar(128) NOT NULL,
+    `adapter_version` varchar(32) NOT NULL,
+    `enabled` tinyint(1) DEFAULT 1,
+    `settings_json` text NOT NULL,
+    `create_by` varchar(64) DEFAULT NULL,
+    `create_time` timestamp DEFAULT NULL,
+    `update_by` varchar(64) DEFAULT NULL,
+    `update_time` timestamp DEFAULT NULL,
+    `remark` text DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_cultivation_module_uid` (`uid`, `module_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='养成脚本模块设置';
