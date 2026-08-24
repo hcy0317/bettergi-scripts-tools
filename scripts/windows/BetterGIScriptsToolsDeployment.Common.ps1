@@ -1,3 +1,23 @@
+function Invoke-BetterGIScriptsToolsNativeCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [scriptblock]$Action
+    )
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = @(& $Action 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    $output | ForEach-Object { Write-Host $_ }
+    return [int]$exitCode
+}
+
 function Invoke-BetterGIScriptsToolsRetry {
     [CmdletBinding()]
     param(

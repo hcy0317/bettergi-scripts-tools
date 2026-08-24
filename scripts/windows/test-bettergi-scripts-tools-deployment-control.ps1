@@ -29,6 +29,12 @@ foreach ($requiredPath in @(
 
 . $commonPath
 
+$nativeExitCode = Invoke-BetterGIScriptsToolsNativeCommand -Action {
+    & "$env:SystemRoot\System32\cmd.exe" /d /c 'echo build-progress 1>&2 & exit /b 0'
+}
+Assert-True ($nativeExitCode -eq 0) `
+    'Native command wrapper must use the process exit code when progress is written to stderr'
+
 $attempts = 0
 $delays = [System.Collections.Generic.List[int]]::new()
 Invoke-BetterGIScriptsToolsRetry -Operation 'transient test' -MaxAttempts 3 `
