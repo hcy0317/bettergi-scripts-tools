@@ -2,13 +2,15 @@ function Invoke-BetterGIScriptsToolsNativeCommand {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [scriptblock]$Action
+        [string]$FilePath,
+
+        [object[]]$ArgumentList = @()
     )
 
     $previousErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $output = @(& $Action 2>&1)
+        $output = @(& $FilePath @ArgumentList 2>&1)
         $exitCode = $LASTEXITCODE
     }
     finally {
