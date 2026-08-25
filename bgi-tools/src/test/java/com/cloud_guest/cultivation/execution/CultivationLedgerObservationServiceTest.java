@@ -98,6 +98,32 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
+    void keepsUnobservedMaterialsAtBaselineWhenAnotherMaterialTriggersReconcile() {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity newest = observation("newest", 6);
+        CultivationExecutionActionEntity older = observation("older", 8);
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(newest, older));
+        CultivationPlanRevisionResponse imported = new CultivationPlanRevisionResponse(
+                1L, "102550550", 3, "IMPORTED", "name-only-v1", 2L,
+                "sha", "engine", "model",
+                List.of(
+                        new CultivationLedgerEntry(
+                                0, "「公平」的哲学", 10, 4, 6,
+                                RemainingEvidence.OCR, 1.0, false, List.of()),
+                        new CultivationLedgerEntry(
+                                1, "沙脂蛹", 168, 4, 164,
+                                RemainingEvidence.OCR, 1.0, false, List.of())),
+                LocalDateTime.of(2026, 8, 23, 20, 0));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
+
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.requirements().get(1).currentOwned()).isEqualTo(4);
+        assertThat(effective.requirements().get(1).remaining()).isEqualTo(164);
+    }
+
+    @Test
     void countsOnlyWholeThreeToOneTalentConversionsFromActualRewards() throws Exception {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity action = observation("action-5", 4);

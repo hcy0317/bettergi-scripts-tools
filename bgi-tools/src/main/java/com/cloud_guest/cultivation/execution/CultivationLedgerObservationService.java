@@ -96,9 +96,10 @@ public class CultivationLedgerObservationService {
                                        Long historicalMaximum,
                                        Map<String, Long> actualRewards,
                                        boolean unexplainedDecrease) {
-        Long confirmedOwned = unexplainedDecrease && historicalMaximum != null
-                ? Math.max(historicalMaximum, entry.baselineOwned())
-                : observedOwned;
+        Long confirmedOwned = observedOwned;
+        if (unexplainedDecrease && historicalMaximum != null) {
+            confirmedOwned = Math.max(historicalMaximum, entry.baselineOwned());
+        }
         long observedGain = confirmedOwned == null
                 ? 0 : Math.max(confirmedOwned - entry.baselineOwned(), 0);
         long exactRewards = actualRewards.getOrDefault(entry.materialName(), 0L);
