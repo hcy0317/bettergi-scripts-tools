@@ -135,7 +135,7 @@ COMMENT ON COLUMN uid_info_config.update_by   IS '更新者';
 COMMENT ON COLUMN uid_info_config.update_time IS '更新时间';
 COMMENT ON COLUMN uid_info_config.remark      IS '备注';
 
-ALTER TABLE uid_info_config ADD COLUMN is_delete BOOLEAN  DEFAULT false
+ALTER TABLE uid_info_config ADD COLUMN IF NOT EXISTS is_delete BOOLEAN DEFAULT false;
 -- =========================================================
 -- 表 4: db_kv
 -- =========================================================
@@ -297,3 +297,31 @@ CREATE TABLE IF NOT EXISTS cultivation_module_config (
     remark TEXT,
     CONSTRAINT uk_cultivation_module_uid UNIQUE (uid, module_id)
 );
+
+CREATE TABLE IF NOT EXISTS cultivation_execution_action (
+    id VARCHAR(36) PRIMARY KEY,
+    uid VARCHAR(64) NOT NULL,
+    plan_revision INTEGER NOT NULL,
+    executor_id VARCHAR(128) NOT NULL,
+    lease_key VARCHAR(128),
+    lease_expires_at TIMESTAMP,
+    status VARCHAR(32) NOT NULL,
+    action_type VARCHAR(32) NOT NULL,
+    material_name VARCHAR(128) NOT NULL,
+    remaining_before BIGINT NOT NULL,
+    plan_json TEXT NOT NULL,
+    observed_owned BIGINT,
+    rewards_json TEXT,
+    termination_reason TEXT,
+    result_idempotency_key VARCHAR(128),
+    create_by VARCHAR(64),
+    create_time TIMESTAMP,
+    update_by VARCHAR(64),
+    update_time TIMESTAMP,
+    remark TEXT,
+    CONSTRAINT uk_cultivation_action_lease UNIQUE (lease_key),
+    CONSTRAINT uk_cultivation_action_result UNIQUE (result_idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultivation_action_uid_revision
+    ON cultivation_execution_action (uid, plan_revision, status);

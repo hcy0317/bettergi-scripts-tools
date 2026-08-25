@@ -1,5 +1,5 @@
 <script setup>
-import {computed, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {Connection, MagicStick, Refresh, Setting, VideoPlay} from '@element-plus/icons-vue'
 import router from '@router/router.js'
@@ -28,6 +28,10 @@ const projection = ref(null)
 const modules = ref([])
 const loadError = ref('')
 const GROUP_SETTINGS_MODULE_ID = 'script-group-settings'
+const AUTO_SYNC_INTERVAL_MS = 5000
+let autoSyncTimer = null
+let autoSyncing = false
+let loadGeneration = 0
 
 const partyOptions = computed(() => {
   const result = new Set(projection.value?.partyOptions || [])
@@ -53,24 +57,41 @@ const displayModules = computed(() => [...modules.value].sort((left, right) => {
 const isGroupSettings = module => module.module.moduleId === GROUP_SETTINGS_MODULE_ID
 const isAutoPlan = module => module.module.moduleId === 'auto-plan-resin'
 
-const load = async () => {
+const load = async (silent = false) => {
+  const generation = ++loadGeneration
   const uid = props.uid.trim()
-  projection.value = null
-  modules.value = []
-  loadError.value = ''
+  if (!silent) {
+    projection.value = null
+    modules.value = []
+    loadError.value = ''
+  }
   if (!uid) return
-  loading.value = true
+  if (!silent) loading.value = true
   try {
     const [nextProjection, moduleConfigurations] = await Promise.all([
       getCultivationExecutionProjection(uid),
       getCultivationExecutionModules(uid)
     ])
+    if (generation !== loadGeneration) return
     projection.value = nextProjection
     modules.value = Array.isArray(moduleConfigurations) ? moduleConfigurations : []
   } catch (error) {
-    loadError.value = error?.message || '无法读取养成执行计划'
+    if (!silent && generation === loadGeneration) {
+      loadError.value = error?.message || '无法读取养成执行计划'
+    }
   } finally {
-    loading.value = false
+    if (!silent && generation === loadGeneration) loading.value = false
+  }
+}
+
+const autoSync = async () => {
+  if (document.hidden || loading.value || settingsDialogOpen.value || savingModuleId.value
+      || syncingModuleId.value || preparing.value || starting.value || autoSyncing) return
+  autoSyncing = true
+  try {
+    await load(true)
+  } finally {
+    autoSyncing = false
   }
 }
 
@@ -192,7 +213,15 @@ const startOneStop = async () => {
   }
 }
 
-watch(() => props.uid, load, {immediate: true})
+onMounted(() => {
+  autoSyncTimer = window.setInterval(() => void autoSync(), AUTO_SYNC_INTERVAL_MS)
+})
+
+onBeforeUnmount(() => {
+  if (autoSyncTimer !== null) window.clearInterval(autoSyncTimer)
+})
+
+watch(() => props.uid, () => load(), {immediate: true})
 </script>
 
 <template>
@@ -405,7 +434,7 @@ watch(() => props.uid, load, {immediate: true})
             <div v-for="target in gatherTargets" :key="target.materialName" class="target-row">
               <span>{{ target.country }} · {{ target.materialName }}</span>
               <strong>目标库存 {{ target.required.toLocaleString() }}</strong>
-              <small>当前 {{ target.baselineOwned.toLocaleString() }}，还需 {{ target.remaining.toLocaleString() }}</small>
+              <small>当前 {{ target.currentOwned.toLocaleString() }}，还需 {{ target.remaining.toLocaleString() }}</small>
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有地方特产缺口"/>

@@ -24,6 +24,9 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +41,12 @@ import java.util.stream.Collectors;
 @DependsOn("dataSource")       // 保证 DataSource 已初始化
 @ConditionalOnProperty(prefix = "spring.datasource.init", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DatabaseInitRunner {
+    private static final String CULTIVATION_ACTION_TABLE = "cultivation_execution_action";
+    private static final Set<String> CULTIVATION_ACTION_COLUMNS = Set.of(
+            "id", "uid", "plan_revision", "executor_id", "lease_key", "lease_expires_at",
+            "status", "action_type", "material_name", "remaining_before", "plan_json",
+            "observed_owned", "rewards_json", "termination_reason", "result_idempotency_key",
+            "create_by", "create_time", "update_by", "update_time", "remark");
 
     private final DataSource dataSource;
     private final ResourceLoader resourceLoader;
@@ -352,6 +361,7 @@ public class DatabaseInitRunner {
                 }
                 errorList.stream().forEach(sql -> log.warn("[字段存在] `{}.{}`字段已存在，跳过添加 {}", sql.table, sql.column,sql.remark));
                 log.info("====================================");
+                verifyCultivationExecutionSchema();
             } else {
                 log.info("数据库类型 {} 未配置对应脚本，跳过", dbType);
             }
@@ -398,6 +408,75 @@ public class DatabaseInitRunner {
             page++;
         } while (CollUtil.isNotEmpty(pageRecords));
         log.info("数据兼容性迁移耗时: {} ms，更新记录数: {}", System.currentTimeMillis() - start, totalUpdated);
+    }
+
+    void verifyCultivationExecutionSchema() {
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metadata = connection.getMetaData();
+            String tableName = findTableName(metadata, CULTIVATION_ACTION_TABLE);
+            if (tableName == null) {
+                throw new IllegalStateException("缺少表 " + CULTIVATION_ACTION_TABLE);
+            }
+
+            Set<String> columns = new HashSet<>();
+            try (ResultSet result = metadata.getColumns(connection.getCatalog(), null, tableName, "%")) {
+                while (result.next()) columns.add(result.getString("COLUMN_NAME").toLowerCase(Locale.ROOT));
+            }
+            Set<String> missingColumns = new TreeSet<>(CULTIVATION_ACTION_COLUMNS);
+            missingColumns.removeAll(columns);
+            if (!missingColumns.isEmpty()) {
+                throw new IllegalStateException("缺少必要列 " + missingColumns);
+            }
+
+            Map<String, Set<String>> uniqueIndexes = new HashMap<>();
+            Map<String, Set<String>> allIndexes = new HashMap<>();
+            try (ResultSet result = metadata.getIndexInfo(connection.getCatalog(), null, tableName, false, false)) {
+                while (result.next()) {
+                    String indexName = result.getString("INDEX_NAME");
+                    String columnName = result.getString("COLUMN_NAME");
+                    if (indexName == null || columnName == null) continue;
+                    String normalizedColumn = columnName.toLowerCase(Locale.ROOT);
+                    allIndexes.computeIfAbsent(indexName, ignored -> new HashSet<>()).add(normalizedColumn);
+                    if (!result.getBoolean("NON_UNIQUE")) {
+                        uniqueIndexes.computeIfAbsent(indexName, ignored -> new HashSet<>()).add(normalizedColumn);
+                    }
+                }
+            }
+            requireExactIndex(uniqueIndexes, Set.of("lease_key"), "lease_key 单列唯一约束");
+            requireExactIndex(uniqueIndexes, Set.of("result_idempotency_key"),
+                    "result_idempotency_key 单列唯一约束");
+            requireIndex(allIndexes, Set.of("uid", "plan_revision", "status"),
+                    "uid/plan_revision/status 查询索引");
+        } catch (Exception exception) {
+            throw new IllegalStateException(
+                    "养成执行行动表或约束不完整，拒绝在不完整数据库结构上启动", exception);
+        }
+    }
+
+    private static String findTableName(DatabaseMetaData metadata, String expected) throws SQLException {
+        try (ResultSet result = metadata.getTables(null, null, "%", new String[]{"TABLE"})) {
+            while (result.next()) {
+                String tableName = result.getString("TABLE_NAME");
+                if (expected.equalsIgnoreCase(tableName)) return tableName;
+            }
+        }
+        return null;
+    }
+
+    private static void requireIndex(Map<String, Set<String>> indexes,
+                                     Set<String> requiredColumns,
+                                     String description) {
+        if (indexes.values().stream().noneMatch(columns -> columns.containsAll(requiredColumns))) {
+            throw new IllegalStateException("缺少 " + description);
+        }
+    }
+
+    private static void requireExactIndex(Map<String, Set<String>> indexes,
+                                          Set<String> requiredColumns,
+                                          String description) {
+        if (indexes.values().stream().noneMatch(requiredColumns::equals)) {
+            throw new IllegalStateException("缺少 " + description);
+        }
     }
 
 

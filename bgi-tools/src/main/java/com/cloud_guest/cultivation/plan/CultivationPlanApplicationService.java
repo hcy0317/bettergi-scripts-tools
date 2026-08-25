@@ -1,5 +1,6 @@
 package com.cloud_guest.cultivation.plan;
 
+import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.ocr.CultivationCalculatorParser;
 import com.cloud_guest.cultivation.ocr.CultivationOcrEngine;
 import com.cloud_guest.cultivation.ocr.CultivationOcrResult;
@@ -57,7 +58,8 @@ public class CultivationPlanApplicationService {
     }
 
     public CultivationImportPreviewResponse preview(String uid, MultipartFile file) {
-        validateUpload(uid, file);
+        String normalizedUid = CultivationUid.normalize(uid);
+        validateUpload(file);
         Path temporaryImage = null;
         try {
             temporaryImage = Files.createTempFile("cultivation-calculator-", suffix(file.getOriginalFilename()));
@@ -72,7 +74,7 @@ public class CultivationPlanApplicationService {
             String imageSha256 = HexFormat.of().formatHex(digest.digest());
 
             CultivationImportPreviewEntity entity = new CultivationImportPreviewEntity();
-            entity.setUid(uid.trim());
+            entity.setUid(normalizedUid);
             entity.setImageSha256(imageSha256);
             entity.setEngineVersion(ocrResult.engineVersion());
             entity.setModelSource(ocrResult.modelSource());
@@ -103,11 +105,12 @@ public class CultivationPlanApplicationService {
 
     @Transactional(rollbackFor = Exception.class)
     public CultivationPlanRevisionResponse confirm(ConfirmCultivationImportRequest request) {
+        String normalizedUid = CultivationUid.normalize(request.uid());
         CultivationImportPreviewEntity preview = previewMapper.selectById(request.previewId());
         if (preview == null) {
             throw new IllegalArgumentException("导入预览不存在或已失效");
         }
-        if (!preview.getUid().equals(request.uid().trim())) {
+        if (!preview.getUid().equals(normalizedUid)) {
             throw new IllegalArgumentException("导入预览与 UID 不匹配");
         }
         if (CONFIRMED.equals(preview.getStatus()) && preview.getPlanRevisionId() != null) {
@@ -150,10 +153,7 @@ public class CultivationPlanApplicationService {
     }
 
     public CultivationPlanRevisionResponse latest(String uid) {
-        if (uid == null || uid.isBlank()) {
-            throw new IllegalArgumentException("UID 不能为空");
-        }
-        CultivationPlanRevisionEntity entity = revisionMapper.findLatest(uid.trim());
+        CultivationPlanRevisionEntity entity = revisionMapper.findLatest(CultivationUid.normalize(uid));
         return entity == null ? null : toRevisionResponse(entity);
     }
 
@@ -187,10 +187,7 @@ public class CultivationPlanApplicationService {
                 entity.getEngineVersion(), entity.getModelSource(), ledger, entity.getCreateTime());
     }
 
-    private static void validateUpload(String uid, MultipartFile file) {
-        if (uid == null || uid.isBlank()) {
-            throw new IllegalArgumentException("UID 不能为空");
-        }
+    private static void validateUpload(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("请选择养成计算器导出的图片");
         }

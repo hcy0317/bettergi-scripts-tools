@@ -180,3 +180,30 @@ CREATE TABLE IF NOT EXISTS `cultivation_module_config` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_cultivation_module_uid` (`uid`, `module_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='养成脚本模块设置';
+
+CREATE TABLE IF NOT EXISTS `cultivation_execution_action` (
+    `id` varchar(36) NOT NULL,
+    `uid` varchar(64) NOT NULL,
+    `plan_revision` int NOT NULL,
+    `executor_id` varchar(128) NOT NULL,
+    `lease_key` varchar(128) DEFAULT NULL,
+    `lease_expires_at` datetime DEFAULT NULL,
+    `status` varchar(32) NOT NULL,
+    `action_type` varchar(32) NOT NULL,
+    `material_name` varchar(128) NOT NULL,
+    `remaining_before` bigint NOT NULL,
+    `plan_json` longtext NOT NULL,
+    `observed_owned` bigint DEFAULT NULL,
+    `rewards_json` longtext,
+    `termination_reason` text,
+    `result_idempotency_key` varchar(128) DEFAULT NULL,
+    `create_by` varchar(64) DEFAULT NULL,
+    `create_time` datetime DEFAULT NULL,
+    `update_by` varchar(64) DEFAULT NULL,
+    `update_time` datetime DEFAULT NULL,
+    `remark` text,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_cultivation_action_lease` (`lease_key`),
+    UNIQUE KEY `uk_cultivation_action_result` (`result_idempotency_key`),
+    KEY `idx_cultivation_action_uid_revision` (`uid`, `plan_revision`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='养成计划驱动行动与权威库存观察';

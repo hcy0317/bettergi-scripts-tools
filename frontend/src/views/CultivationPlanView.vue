@@ -210,6 +210,8 @@ const engineLabel = version => version?.includes('PP-OCRv6')
 const planStateLabel = state => ({
   IMPORTED: '已导入',
   ACTIVE: '执行中',
+  NEEDS_RECONCILE: '需要重新对账',
+  NEEDS_CRAFT: '需要合成',
   COMPLETED: '已完成'
 })[state] || '状态未知'
 
@@ -444,6 +446,9 @@ const goToExecution = () => { activeTab.value = 'execution' }
             </el-table-column>
             <el-table-column label="基线拥有" width="150" align="right">
               <template #default="{row}">{{ row.baselineOwned.toLocaleString() }}</template>
+            </el-table-column>
+            <el-table-column label="当前拥有" width="150" align="right">
+              <template #default="{row}">{{ row.currentOwned.toLocaleString() }}</template>
             </el-table-column>
             <el-table-column label="还需" width="150" align="right">
               <template #default="{row}">{{ row.remaining.toLocaleString() }}</template>

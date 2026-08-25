@@ -23,7 +23,9 @@ import java.util.Map;
 import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CultivationOneStopServiceTest {
@@ -31,11 +33,31 @@ class CultivationOneStopServiceTest {
     Path temporaryRoot;
 
     @Test
+    void rejectsPathTraversalUidBeforeResolvingOrWritingTheScriptGroup() throws Exception {
+        CultivationExecutionService executionService = mock(CultivationExecutionService.class);
+        CultivationOneStopService service = new CultivationOneStopService(
+                executionService, mock(CultivationModuleConfigurationService.class),
+                mock(CultivationMaterialSourceCatalog.class), mock(AutoPlanService.class), new ObjectMapper());
+
+        assertThatThrownBy(() -> service.prepare("..\\..\\outside"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("数字");
+        verifyNoInteractions(executionService);
+        assertThat(regularFileCount(temporaryRoot)).isZero();
+    }
+
+    @Test
+    void doesNotFallBackToKnownUnsafeGatherRoutes() {
+        assertThat(CultivationOneStopService.safeGatherRouteNames(List.of(
+                "低成功率路线", "2. 低效", "暂不可用"))).isEmpty();
+    }
+
+    @Test
     void generatesDedicatedGroupFromOnlyNeededModules() throws Exception {
         Path source = temporaryRoot.resolve(Path.of("User", "ScriptGroup", "来源组.json"));
         Files.createDirectories(source.getParent());
         Files.writeString(source, """
-                {"index":1,"name":"来源组","config":{"pathingConfig":{"partyName":"通用队伍"}},"projects":[
+                {"index":1,"name":"来源组","config":{"pathingConfig":{"partyName":"通用队伍","autoFightConfig":{"guardianAvatar":"4","burstEnabled":true}}},"projects":[
                   {"name":"体力","folderName":"AutoPlan","type":"Javascript","jsScriptSettingsObject":{}},
                   {"name":"采集","folderName":"CD-Aware-AutoGather","type":"Javascript","jsScriptSettingsObject":{}},
                   {"name":"怪物","folderName":"HCY-FullyAutoAndSemiAutoTools","type":"Javascript","jsScriptSettingsObject":{}}
@@ -51,9 +73,49 @@ class CultivationOneStopServiceTest {
                 ]]]
                 """);
         Files.writeString(uidSettings.getParent().getParent().resolve("settings.json"), "[]");
+        Path routeA = temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "镀金旅团",
+                "镀金旅团路线甲", "路线甲.json"));
+        Path routeB = temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "镀金旅团",
+                "镀金旅团路线乙", "路线乙.json"));
+        Files.createDirectories(routeA.getParent());
+        Files.createDirectories(routeB.getParent());
+        Files.writeString(routeA, "{\"positions\":[{\"action\":\"fight\"}]}");
+        Files.writeString(routeB, "{\"positions\":[{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"}]}");
+        Path directFamilyRoute = temporaryRoot.resolve(Path.of(
+                "User", "AutoPathing", "敌人与魔物", "盗宝团", "璃月路线.json"));
+        Files.createDirectories(directFamilyRoute.getParent());
+        Files.writeString(directFamilyRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
+        Path mixedSafeRoute = temporaryRoot.resolve(Path.of(
+                "User", "AutoPathing", "敌人与魔物", "混合族", "安全路线.json"));
+        Path mixedUnsafeRoute = mixedSafeRoute.getParent().resolve("9. 低效路线.json");
+        Files.createDirectories(mixedSafeRoute.getParent());
+        Files.writeString(mixedSafeRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
+        Files.writeString(mixedUnsafeRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
         Path gatherScript = temporaryRoot.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather"));
         Files.createDirectories(gatherScript);
         Files.writeString(gatherScript.resolve("settings.json"), "[]");
+        Path autoPlanScript = temporaryRoot.resolve(Path.of("User", "JsScript", "AutoPlan"));
+        Files.createDirectories(autoPlanScript.resolve("utils"));
+        Files.writeString(autoPlanScript.resolve("main.js"), """
+                import {buildInitConfigSettings, config, initConfig, initSettings} from './config/config';
+                async function main() {
+                    // 初始化配置
+                    await init();
+                    let runConfig = config.run.config;
+                }
+                await main();
+                """);
+        Path betterGiConfig = temporaryRoot.resolve(Path.of("User", "config.json"));
+        Files.createDirectories(betterGiConfig.getParent());
+        Files.writeString(betterGiConfig, "{\"autoFightConfig\":{\"burstEnabled\":false,\"pickDropsAfterFightSeconds\":60}}");
+        Files.writeString(autoPlanScript.resolve("utils").resolve("load_check_run.js"), """
+                async function runDomain(domainParam) {
+                    await dispatcher.RunAutoDomainTask(domainParam);
+                }
+                async function runBoss(param) {
+                    await dispatcher.RunAutoBossTask(param)
+                }
+                """);
         Path safeGatherRoute = temporaryRoot.resolve(Path.of("User", "AutoPathing", "地方特产", "须弥",
                 "沙脂蛹", "1. 高成功率路线", "沙脂蛹-神的棋盘.json"));
         Path unsafeGatherRoute = temporaryRoot.resolve(Path.of("User", "AutoPathing", "地方特产", "须弥",
@@ -72,6 +134,7 @@ class CultivationOneStopServiceTest {
         when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID)).thenReturn(
                 configuration(AutoPlanResinExecutionModule.ID, Map.of(
                         "auto_load", List.of("bgi_tools加载"),
+                        "bgi_tools_token", "Authorization= ",
                         "leyLineCountry", "挪德卡莱",
                         "talentDomainEnabled", false,
                         "moraLeyLineEnabled", true,
@@ -96,22 +159,44 @@ class CultivationOneStopServiceTest {
                 executionService, configurationService, catalog, autoPlanService, new ObjectMapper());
         CultivationOneStopResult result = service.prepare("102550550");
 
-        assertThat(result.autoPlanActions()).isEqualTo(2);
-        assertThat(result.scriptTasks()).isEqualTo(4);
+        assertThat(result.autoPlanActions()).isEqualTo(1);
+        assertThat(result.message()).contains("计划驱动");
+        assertThat(result.scriptTasks()).isEqualTo(5);
         assertThat(result.scriptGroupName()).isEqualTo("养成一条龙-102550550");
+        assertThat(result.warnings()).anyMatch(warning -> warning.contains("混合族") && warning.contains("没有有效候选"));
         JsonNode group = new ObjectMapper().readTree(Path.of(result.scriptGroupFile()).toFile());
         assertThat(group.path("name").asText()).isEqualTo("养成一条龙-102550550");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("folderName").asText()).toList())
                 .containsExactly("AutoPlan", "CD-Aware-AutoGather",
-                        "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss");
+                        "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss", "AutoPlan");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("name").asText()).toList())
                 .containsExactly("养成体力：摩拉·世界首领", "养成采集：沙脂蛹",
-                        "养成怪物：镀金旅团", "周本 - 博士");
+                        "养成怪物：镀金旅团·盗宝团", "周本 - 博士", "养成收尾：权威库存复核");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
+        assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("talentDomainEnabled").asBoolean()).isFalse();
+        assertThat(autoPlanSettings.path("moraLeyLineEnabled").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("run_config").asText()).isEmpty();
+        assertThat(autoPlanSettings.path("auto_check")).isEmpty();
+        assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();
+        assertThat(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")).exists();
+        assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")))
+                .contains("config.run.exclude_run_exception = false")
+                .contains("config.run.loop_plan = false")
+                .contains("GridScreenName.CharacterDevelopmentItems")
+                .doesNotContain("param.GridScreenName = GridScreenName.Materials");
+        assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("load_check_run.js")))
+                .contains("return await dispatcher.RunAutoDomainTask(domainParam);")
+                .contains("return await dispatcher.RunAutoBossTask(param)");
+        assertThat(Files.readString(autoPlanScript.resolve("main.js")))
+                .contains("runPlanDrivenCultivation")
+                .contains("runCultivationInventoryReconcile")
+                .contains("settings.cultivation_plan_mode")
+                .contains("settings.cultivation_inventory_reconcile_mode");
         JsonNode gatherSettings = group.path("projects").get(1).path("jsScriptSettingsObject");
         assertThat(gatherSettings.path("selectForgingOre")).isEmpty();
         assertThat(gatherSettings.path("filterPathByKeywords").asText()).isEmpty();
@@ -120,17 +205,25 @@ class CultivationOneStopServiceTest {
                 .map(JsonNode::asText).toList()).containsExactly("1. 高成功率路线");
         JsonNode monsterSettings = group.path("projects").get(2).path("jsScriptSettingsObject");
         assertThat(monsterSettings.path("treeLevel_0_0").get(0).asText()).isEqualTo("敌人与魔物");
-        assertThat(monsterSettings.path("treeLevel_1_1").get(0).asText()).isEqualTo("镀金旅团");
+        assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_1_1").spliterator(), false)
+                .map(JsonNode::asText).toList()).containsExactly("镀金旅团", "盗宝团");
         assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_2_9").spliterator(), false)
                 .map(JsonNode::asText).toList())
-                .containsExactly("镀金旅团路线甲", "镀金旅团路线乙");
+                .containsExactly("镀金旅团路线乙");
         assertThat(monsterSettings.path("http_api").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/cron/next-timestamp/all");
+        JsonNode reconcileSettings = group.path("projects").get(4).path("jsScriptSettingsObject");
+        assertThat(reconcileSettings.path("cultivation_inventory_reconcile_mode").asBoolean()).isTrue();
+        assertThat(reconcileSettings.path("cultivation_plan_mode").asBoolean()).isFalse();
         assertThat(group.path("config").path("pathingConfig").path("partyName").asText())
                 .isEqualTo("养成队伍");
         assertThat(group.path("config").path("pathingConfig").path("autoPickEnabled").asBoolean()).isTrue();
         assertThat(group.path("config").path("pathingConfig").path("autoFightConfig")
                 .path("strategyName").asText()).isEqualTo("根据队伍自动选择");
+        assertThat(group.path("config").path("pathingConfig").path("autoFightConfig")
+                .path("burstEnabled").asBoolean()).isFalse();
+        assertThat(group.path("config").path("pathingConfig").path("autoFightConfig")
+                .path("pickDropsAfterFightSeconds").asInt()).isEqualTo(60);
         assertThat(group.path("config").path("pathingConfig").path("taskCycleConfig")
                 .path("enable").asBoolean()).isFalse();
         assertThat(group.path("config").path("enableShellConfig").asBoolean()).isFalse();
@@ -168,7 +261,7 @@ class CultivationOneStopServiceTest {
         CultivationOneStopResult repeated = service.prepare("102550550");
         assertThat(repeated.scriptGroupName()).isEqualTo(result.scriptGroupName());
         assertThat(new ObjectMapper().readTree(Path.of(repeated.scriptGroupFile()).toFile())
-                .path("projects").size()).isEqualTo(4);
+                .path("projects").size()).isEqualTo(5);
         assertThat(duplicate).doesNotExist();
         assertThat(Path.of(repeated.backupDirectory()).resolve("ScriptGroup")
                 .resolve(duplicate.getFileName())).exists();
@@ -216,7 +309,7 @@ class CultivationOneStopServiceTest {
         var weekly = new CultivationExecutionProjection.WeeklyBossAction(
                 "狂人的约束", 18, "博士", Map.of("monsterName", "博士", "unfairContractTerms", true), "待执行");
         var gatherTarget = new CultivationExecutionProjection.GatherTarget(
-                "沙脂蛹", 168, 4, 164, "须弥", "selectLocalSpecialty_须弥");
+                "沙脂蛹", 168, 4, 4, 164, "须弥", "selectLocalSpecialty_须弥");
         var gather = new CultivationExecutionProjection.GatherAction(
                 "CD-Aware-AutoGather", "待执行",
                 Map.of("runMode", "采集选中的材料",
@@ -225,15 +318,20 @@ class CultivationOneStopServiceTest {
                         "selectForgingOre", List.of("水晶块")),
                 List.of(gatherTarget));
         var monsterTarget = new CultivationExecutionProjection.MonsterTarget(
-                "织金红绸", 18, 0, 18, "镀金旅团", List.of("镀金旅团·机弩兵"));
+                "织金红绸", 18, 0, 0, 18, "镀金旅团", List.of("镀金旅团·机弩兵"));
+        var directRootMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
+                "寻宝鸦印", 36, 0, 0, 36, "盗宝团", List.of("盗宝团·斥候"));
+        var mixedRootMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
+                "混合素材", 12, 0, 0, 12, "混合族", List.of("混合怪"));
         var monster = new CultivationExecutionProjection.MonsterAction(
                 "FullyAutoAndSemiAutoTools", "待执行",
-                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团"),
+                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团", "盗宝团", "混合族"),
                         "treeLevel_0_0", List.of("锄地专区", "敌人与魔物"),
                         "treeLevel_1_0", List.of("精英400@汐"),
                         "treeLevel_1_1", List.of("巡陆艇"),
                         "config_white_list", "锄地专区"),
-                List.of(monsterTarget), List.of("镀金旅团"));
+                List.of(monsterTarget, directRootMonsterTarget, mixedRootMonsterTarget),
+                List.of("镀金旅团", "盗宝团", "混合族"));
         return new CultivationExecutionProjection(
                 "102550550", 1, "IMPORTED", "单轮执行", List.of(resin, mora, experience), List.of(boss),
                 List.of(weekly), gather, monster, List.of(),

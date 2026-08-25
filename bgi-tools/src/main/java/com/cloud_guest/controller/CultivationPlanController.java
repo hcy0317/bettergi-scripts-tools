@@ -8,6 +8,13 @@ import com.cloud_guest.cultivation.execution.CultivationScriptSyncResult;
 import com.cloud_guest.cultivation.execution.CultivationOneStopResult;
 import com.cloud_guest.cultivation.execution.CultivationLaunchResult;
 import com.cloud_guest.cultivation.execution.CultivationOneStopService;
+import com.cloud_guest.cultivation.execution.CultivationActionResultRequest;
+import com.cloud_guest.cultivation.execution.CultivationActionResultResponse;
+import com.cloud_guest.cultivation.execution.CultivationNextActionResponse;
+import com.cloud_guest.cultivation.execution.CultivationPlanDrivenExecutionService;
+import com.cloud_guest.cultivation.execution.CultivationInventoryObservationRequest;
+import com.cloud_guest.cultivation.execution.CultivationInventoryObservationResponse;
+import com.cloud_guest.cultivation.execution.CultivationInventoryReconcileTargetsResponse;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
@@ -47,17 +54,20 @@ public class CultivationPlanController {
     private final CultivationModuleConfigurationService moduleConfigurationService;
     private final CultivationScriptGroupSyncService scriptGroupSyncService;
     private final CultivationOneStopService oneStopService;
+    private final CultivationPlanDrivenExecutionService planDrivenExecutionService;
 
     public CultivationPlanController(CultivationPlanApplicationService service,
                                      CultivationExecutionService executionService,
                                      CultivationModuleConfigurationService moduleConfigurationService,
                                      CultivationScriptGroupSyncService scriptGroupSyncService,
-                                     CultivationOneStopService oneStopService) {
+                                     CultivationOneStopService oneStopService,
+                                     CultivationPlanDrivenExecutionService planDrivenExecutionService) {
         this.service = service;
         this.executionService = executionService;
         this.moduleConfigurationService = moduleConfigurationService;
         this.scriptGroupSyncService = scriptGroupSyncService;
         this.oneStopService = oneStopService;
+        this.planDrivenExecutionService = planDrivenExecutionService;
     }
 
     @PostMapping("import/preview")
@@ -71,19 +81,60 @@ public class CultivationPlanController {
     @Operation(summary = "确认校正后的材料并生成不可变计划 revision")
     public Result<CultivationPlanRevisionResponse> confirm(
             @Valid @RequestBody ConfirmCultivationImportRequest request) {
-        return ok(service.confirm(request));
+        CultivationPlanRevisionResponse confirmed = service.confirm(request);
+        oneStopService.prepare(confirmed.uid());
+        return ok(confirmed);
     }
 
     @GetMapping("plan/latest")
     @Operation(summary = "读取 UID 最新养成材料账本")
     public Result<CultivationPlanRevisionResponse> latest(@RequestParam String uid) {
-        return ok(service.latest(uid));
+        return ok(executionService.latestLedger(uid));
     }
 
     @GetMapping("execution/projection")
     @Operation(summary = "将最新养成账本投影为自动体力与采集行动")
     public Result<CultivationExecutionProjection> projection(@RequestParam String uid) {
         return ok(executionService.projection(uid));
+    }
+
+    @PostMapping("execution/next-action")
+    @Operation(summary = "领取一个带租约的养成行动；每次只发放一个安全批次")
+    public Result<CultivationNextActionResponse> nextAction(
+            @RequestParam String uid,
+            @RequestParam String executorId) {
+        return ok(planDrivenExecutionService.claim(uid, executorId));
+    }
+
+    @PostMapping("execution/actions/{actionId}/result")
+    @Operation(summary = "回写行动结果和权威背包持有量，然后重新规划")
+    public Result<CultivationActionResultResponse> actionResult(
+            @PathVariable String actionId,
+            @RequestBody CultivationActionResultRequest request) {
+        CultivationActionResultResponse response = planDrivenExecutionService.complete(actionId, request);
+        if (response.observedOwned() != null && response.observedOwned() >= 0) {
+            oneStopService.prepare(response.uid());
+        }
+        return ok(response);
+    }
+
+    @PostMapping("execution/inventory-reconcile-targets")
+    @Operation(summary = "领取组末地方特产与怪物材料权威背包复核租约")
+    public Result<CultivationInventoryReconcileTargetsResponse> inventoryReconcileTargets(
+            @RequestParam String uid,
+            @RequestParam String executorId) {
+        return ok(planDrivenExecutionService.claimInventoryReconcile(uid, executorId));
+    }
+
+    @PostMapping("execution/inventory-observations")
+    @Operation(summary = "回写组末地方特产与怪物材料的权威背包持有量")
+    public Result<CultivationInventoryObservationResponse> inventoryObservations(
+            @RequestParam String uid,
+            @RequestBody CultivationInventoryObservationRequest request) {
+        CultivationInventoryObservationResponse response =
+                planDrivenExecutionService.recordInventoryObservations(uid, request);
+        if ("REPLANNING".equals(response.status())) oneStopService.prepare(response.uid());
+        return ok(response);
     }
 
     @GetMapping("execution/preferences")
@@ -96,7 +147,9 @@ public class CultivationPlanController {
     @Operation(summary = "保存 UID 的养成执行偏好")
     public Result<CultivationExecutionPreferences> savePreferences(
             @RequestBody CultivationExecutionPreferences request) {
-        return ok(executionService.savePreferences(request));
+        CultivationExecutionPreferences saved = executionService.savePreferences(request);
+        oneStopService.prepare(saved.uid());
+        return ok(saved);
     }
 
     @GetMapping("execution/modules")
@@ -111,7 +164,9 @@ public class CultivationPlanController {
             @RequestParam String uid,
             @PathVariable String moduleId,
             @RequestBody CultivationModuleConfigurationRequest request) {
-        return ok(moduleConfigurationService.save(uid, moduleId, request));
+        CultivationModuleConfiguration saved = moduleConfigurationService.save(uid, moduleId, request);
+        oneStopService.prepare(uid);
+        return ok(saved);
     }
 
     @PostMapping("execution/modules/{moduleId}/sync")

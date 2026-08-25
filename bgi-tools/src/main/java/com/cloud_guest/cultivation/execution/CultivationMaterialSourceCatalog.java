@@ -23,6 +23,7 @@ public class CultivationMaterialSourceCatalog {
     private static final Path MONSTER_INFO = Path.of(
             "User", "JsScript", "AutoHoeingOneDragon", "assets", "monsterInfo.json");
     private static final Path MONSTER_ROUTES = Path.of("User", "AutoPathing", "敌人与魔物");
+    private static final Path SPECIALTY_ROUTES = Path.of("User", "AutoPathing", "地方特产");
 
     private final CultivationOcrProperties properties;
     private final ObjectMapper objectMapper;
@@ -71,6 +72,28 @@ public class CultivationMaterialSourceCatalog {
             return Optional.of(new MonsterSource(family, List.copyOf(monsterNames), routeFamilies));
         } catch (IOException exception) {
             throw new IllegalStateException("无法读取 BetterGI 怪物材料目录", exception);
+        }
+    }
+
+    public Optional<String> findSpecialtyCountry(String materialName) {
+        if (materialName == null || materialName.isBlank()) return Optional.empty();
+        Path routeRoot = betterGiRoot().resolve(SPECIALTY_ROUTES);
+        if (!Files.isDirectory(routeRoot)) return Optional.empty();
+        try (var countries = Files.list(routeRoot)) {
+            for (Path country : countries.filter(Files::isDirectory)
+                    .sorted(Comparator.comparing(Path::toString)).toList()) {
+                Path materialRoot = country.resolve(materialName);
+                if (!Files.isDirectory(materialRoot)) continue;
+                try (var paths = Files.walk(materialRoot)) {
+                    if (paths.anyMatch(path -> Files.isRegularFile(path)
+                            && path.getFileName().toString().endsWith(".json"))) {
+                        return Optional.of(country.getFileName().toString());
+                    }
+                }
+            }
+            return Optional.empty();
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法读取 BetterGI 地方特产路线目录", exception);
         }
     }
 

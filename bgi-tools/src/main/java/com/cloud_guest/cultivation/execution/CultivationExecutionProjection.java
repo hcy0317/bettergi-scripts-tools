@@ -55,6 +55,7 @@ public record CultivationExecutionProjection(
             String materialName,
             long required,
             long baselineOwned,
+            long currentOwned,
             long remaining,
             String country,
             String selectionKey
@@ -73,6 +74,7 @@ public record CultivationExecutionProjection(
             String materialName,
             long required,
             long baselineOwned,
+            long currentOwned,
             long remaining,
             String routeFamily,
             List<String> monsters

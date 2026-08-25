@@ -1,6 +1,7 @@
 package com.cloud_guest.cultivation.execution.module;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.persistence.CultivationModuleConfigEntity;
 import com.cloud_guest.cultivation.persistence.CultivationModuleConfigMapper;
 import com.cloud_guest.cultivation.execution.BetterGiInstalledScriptSettingsReader;
@@ -10,9 +11,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -48,23 +53,29 @@ public class CultivationModuleConfigurationService {
     public CultivationModuleConfiguration find(String uid, CultivationExecutionModule module) {
         CultivationModuleConfigEntity entity = select(uid, module.moduleId());
         Map<String, Object> settings = initialSettings(module, uid);
-        if (entity != null && entity.getSettingsJson() != null && !entity.getSettingsJson().isBlank()) {
-            try {
-                Set<String> supportedKeys = module.settingsSchema().stream()
-                        .map(CultivationModuleSettingField::key)
-                        .collect(Collectors.toSet());
-                Map<String, Object> stored = objectMapper.readValue(
-                        entity.getSettingsJson(), new TypeReference<>() {});
-                stored.forEach((key, value) -> {
-                    if (supportedKeys.contains(key)) settings.put(key, value);
-                });
-            } catch (Exception exception) {
-                throw new IllegalStateException("无法读取模块设置：" + module.moduleId(), exception);
-            }
+        Optional<BetterGiInstalledScriptSettingsReader.InstalledScriptSettings> installed =
+                installedSettingsReader.read(uid, module.moduleId());
+        Instant storedModifiedAt = entity == null ? null : entityModifiedAt(entity);
+        boolean installedWins = installed.isPresent()
+                && (entity == null || storedModifiedAt == null
+                    || installed.get().modifiedAt().isAfter(storedModifiedAt));
+        if (installedWins) {
+            mergeSupported(settings, installed.get().settings(), module);
+        } else if (entity != null && entity.getSettingsJson() != null && !entity.getSettingsJson().isBlank()) {
+            mergeStored(settings, entity, module);
+        }
+        if (FullyAutoToolsExecutionModule.ID.equals(module.moduleId())) {
+            Object selectedFamilies = settings.get("treeLevel_1_1");
+            if (selectedFamilies instanceof List<?>) settings.put("routeFamilies", selectedFamilies);
         }
         applyReadOnlyDefaults(module, uid, settings);
         applyRuntimeSettings(module, settings);
-        boolean enabled = entity == null ? module.defaultEnabled() : !Boolean.FALSE.equals(entity.getEnabled());
+        boolean enabled = installedWins && installed.get().enabled() != null
+                ? installed.get().enabled()
+                : entity == null ? module.defaultEnabled() : !Boolean.FALSE.equals(entity.getEnabled());
+        if (installedWins) {
+            persistInstalled(uid, module, entity, settings, enabled, installed.get().modifiedAt());
+        }
         return new CultivationModuleConfiguration(CultivationModuleDefinition.from(module), enabled, settings);
     }
 
@@ -75,7 +86,8 @@ public class CultivationModuleConfigurationService {
         String normalizedUid = requireUid(uid);
         CultivationExecutionModule module = registry.require(moduleId);
         CultivationModuleConfigEntity existing = select(normalizedUid, moduleId);
-        Map<String, Object> settings = initialSettings(module, normalizedUid);
+        CultivationModuleConfiguration current = find(normalizedUid, module);
+        Map<String, Object> settings = new LinkedHashMap<>(current.settings());
         Set<String> allowedKeys = module.settingsSchema().stream()
                 .map(CultivationModuleSettingField::key)
                 .collect(Collectors.toSet());
@@ -97,9 +109,13 @@ public class CultivationModuleConfigurationService {
             entity.setModuleId(moduleId);
             entity.setAdapterVersion(module.adapterVersion());
             entity.setEnabled(request.enabled() == null
-                    ? (existing == null ? module.defaultEnabled() : existing.getEnabled())
+                    ? current.enabled()
                     : request.enabled());
             entity.setSettingsJson(objectMapper.writeValueAsString(settings));
+            Instant installedModifiedAt = installedSettingsReader.read(normalizedUid, moduleId)
+                    .map(BetterGiInstalledScriptSettingsReader.InstalledScriptSettings::modifiedAt)
+                    .orElse(null);
+            entity.setUpdateTime(nextModifiedAt(installedModifiedAt, entity.getUpdateTime()));
             if (existing == null) mapper.insert(entity); else mapper.updateById(entity);
         } catch (Exception exception) {
             throw new IllegalStateException("无法保存模块设置：" + moduleId, exception);
@@ -114,14 +130,70 @@ public class CultivationModuleConfigurationService {
     }
 
     private Map<String, Object> initialSettings(CultivationExecutionModule module, String uid) {
-        Map<String, Object> settings = new LinkedHashMap<>(module.defaultSettings(uid));
-        settings.putAll(installedSettingsReader.read(module.moduleId()));
-        if (FullyAutoToolsExecutionModule.ID.equals(module.moduleId())) {
-            Object selectedFamilies = settings.get("treeLevel_1_1");
-            if (selectedFamilies instanceof List<?>) settings.put("routeFamilies", selectedFamilies);
+        return new LinkedHashMap<>(module.defaultSettings(uid));
+    }
+
+    private void mergeStored(Map<String, Object> target,
+                             CultivationModuleConfigEntity entity,
+                             CultivationExecutionModule module) {
+        try {
+            Map<String, Object> stored = objectMapper.readValue(
+                    entity.getSettingsJson(), new TypeReference<>() {});
+            mergeSupported(target, stored, module);
+        } catch (Exception exception) {
+            throw new IllegalStateException("无法读取模块设置：" + module.moduleId(), exception);
         }
-        applyRuntimeSettings(module, settings);
-        return settings;
+    }
+
+    private static void mergeSupported(Map<String, Object> target,
+                                       Map<String, Object> source,
+                                       CultivationExecutionModule module) {
+        Set<String> supportedKeys = module.settingsSchema().stream()
+                .map(CultivationModuleSettingField::key)
+                .collect(Collectors.toSet());
+        source.forEach((key, value) -> {
+            if (supportedKeys.contains(key)) target.put(key, value);
+        });
+    }
+
+    private static Instant entityModifiedAt(CultivationModuleConfigEntity entity) {
+        var modifiedAt = entity.getUpdateTime() != null ? entity.getUpdateTime() : entity.getCreateTime();
+        return modifiedAt == null ? null : modifiedAt.atZone(ZoneId.systemDefault()).toInstant();
+    }
+
+    private void persistInstalled(String uid,
+                                  CultivationExecutionModule module,
+                                  CultivationModuleConfigEntity existing,
+                                  Map<String, Object> settings,
+                                  boolean enabled,
+                                  Instant fileModifiedAt) {
+        try {
+            CultivationModuleConfigEntity entity = existing == null
+                    ? new CultivationModuleConfigEntity() : existing;
+            entity.setUid(uid);
+            entity.setModuleId(module.moduleId());
+            entity.setAdapterVersion(module.adapterVersion());
+            entity.setEnabled(enabled);
+            entity.setSettingsJson(objectMapper.writeValueAsString(settings));
+            entity.setUpdateTime(nextModifiedAt(fileModifiedAt, entity.getUpdateTime()));
+            if (existing == null) mapper.insert(entity); else mapper.updateById(entity);
+        } catch (Exception exception) {
+            throw new IllegalStateException("无法吸收 BetterGI 较新的模块设置：" + module.moduleId(), exception);
+        }
+    }
+
+    private static LocalDateTime nextModifiedAt(Instant externalModifiedAt,
+                                                LocalDateTime existingModifiedAt) {
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDateTime candidate = LocalDateTime.now();
+        if (externalModifiedAt != null) {
+            LocalDateTime external = LocalDateTime.ofInstant(externalModifiedAt, zone);
+            if (!candidate.isAfter(external)) candidate = external.plusNanos(1);
+        }
+        if (existingModifiedAt != null && !candidate.isAfter(existingModifiedAt)) {
+            candidate = existingModifiedAt.plusNanos(1);
+        }
+        return candidate;
     }
 
     private void applyRuntimeSettings(CultivationExecutionModule module, Map<String, Object> settings) {
@@ -147,7 +219,6 @@ public class CultivationModuleConfigurationService {
     }
 
     private static String requireUid(String uid) {
-        if (uid == null || uid.isBlank()) throw new IllegalArgumentException("UID 不能为空");
-        return uid.trim();
+        return CultivationUid.normalize(uid);
     }
 }
