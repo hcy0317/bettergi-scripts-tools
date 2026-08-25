@@ -82,8 +82,19 @@ public class CultivationPlanDrivenExecutionService {
                     return status("PLAN_NEEDS_RECONCILE", "组末库存存在未知值，需先重新完整清点",
                             normalizedUid, projection.revision());
                 }
+                String previousExecutor = existing.getExecutorId();
                 existing.setExecutorId(normalizedExecutor);
-                actionMapper.updateById(existing);
+                existing.setLeaseExpiresAt(LocalDateTime.now(clock).plus(LEASE_DURATION));
+                int transferred = actionMapper.update(existing, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                        .eq(CultivationExecutionActionEntity::getId, existing.getId())
+                        .eq(CultivationExecutionActionEntity::getStatus, AWAITING_RECONCILE)
+                        .eq(CultivationExecutionActionEntity::getExecutorId, previousExecutor)
+                        .eq(CultivationExecutionActionEntity::getResultIdempotencyKey,
+                                existing.getResultIdempotencyKey()));
+                if (transferred != 1) {
+                    return status("BUSY", "行动对账租约刚被其他执行器接管或完成，请重新领取",
+                            normalizedUid, projection.revision());
+                }
                 return fromEntity(existing, "NEEDS_RECONCILE", "上一行动缺少有效背包证据，停止消耗资源");
             }
             if (existing.getLeaseExpiresAt() != null
@@ -242,10 +253,21 @@ public class CultivationPlanDrivenExecutionService {
                         existing.getLeaseExpiresAt(), materialNames);
             }
             if (inventoryBatch && AWAITING_RECONCILE.equals(existing.getStatus())) {
+                String previousExecutor = existing.getExecutorId();
                 existing.setExecutorId(normalizedExecutor);
                 existing.setLeaseExpiresAt(LocalDateTime.now(clock).plus(LEASE_DURATION));
                 existing.setLeaseKey(normalizedUid + ":" + projection.revision());
-                actionMapper.updateById(existing);
+                int transferred = actionMapper.update(existing, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                        .eq(CultivationExecutionActionEntity::getId, existing.getId())
+                        .eq(CultivationExecutionActionEntity::getStatus, AWAITING_RECONCILE)
+                        .eq(CultivationExecutionActionEntity::getExecutorId, previousExecutor)
+                        .eq(CultivationExecutionActionEntity::getResultIdempotencyKey,
+                                existing.getResultIdempotencyKey()));
+                if (transferred != 1) {
+                    return inventoryStatus(
+                            "BUSY", "组末复核租约刚被其他执行器接管或完成，请重新领取",
+                            normalizedUid, projection.revision(), materialNames);
+                }
                 return inventoryResponse(existing, "NEEDS_RECONCILE", "上次组末库存存在未知值，请重新完整清点");
             }
             if (activeLease) {

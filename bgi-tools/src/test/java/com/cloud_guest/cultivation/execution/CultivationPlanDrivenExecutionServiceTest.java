@@ -274,6 +274,27 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
+    void doesNotReopenACompletedInventoryBatchWhenAwaitingLeaseTransferLosesTheCas() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = inventoryBatch("inventory-awaiting");
+        awaiting.setStatus("AWAITING_RECONCILE");
+        awaiting.setResultIdempotencyKey("inventory-awaiting:result");
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        when(mapper.findLeased("102550550", 3)).thenReturn(awaiting);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(0);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationInventoryReconcileTargetsResponse response =
+                service.claimInventoryReconcile("102550550", "second-executor");
+
+        assertThat(response.status()).isEqualTo("BUSY");
+        assertThat(response.actionId()).isNull();
+        verify(mapper).update(any(CultivationExecutionActionEntity.class), any());
+    }
+
+    @Test
     void persistsFinalGatherAndMonsterInventoryAsOneLeasedIdempotentBatch() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
