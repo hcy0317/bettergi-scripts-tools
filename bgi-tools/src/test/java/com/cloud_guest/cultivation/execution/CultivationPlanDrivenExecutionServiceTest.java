@@ -147,6 +147,28 @@ class CultivationPlanDrivenExecutionServiceTest {
         assertThat(reconciled.status()).isEqualTo("REPLANNING");
         assertThat(leased.getStatus()).isEqualTo("COMPLETED");
         assertThat(leased.getLeaseKey()).isNull();
+        assertThat(leased.getRewardsJson()).contains("谜土的护符").contains("2");
+        assertThat(leased.getTerminationReason()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void rejectsSupplementalInventoryAfterTheReconcileLeaseExpires() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = leasedAction("expired-reconcile");
+        awaiting.setStatus("AWAITING_RECONCILE");
+        awaiting.setResultIdempotencyKey("expired-reconcile:result");
+        awaiting.setRewardsJson("{\"谜土的护符\":2}");
+        awaiting.setTerminationReason("COMPLETED");
+        awaiting.setLeaseExpiresAt(LocalDateTime.now(MONDAY).minusSeconds(1));
+        when(mapper.selectById("expired-reconcile")).thenReturn(awaiting);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        assertThatThrownBy(() -> service.complete("expired-reconcile", new CultivationActionResultRequest(
+                "executor-a", 3, "expired-reconcile:result", false, 10L, Map.of(), "RECONCILE_ONLY")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("对账租约已过期");
     }
 
     @Test

@@ -175,16 +175,19 @@ public class CultivationPlanDrivenExecutionService {
             }
             if (AWAITING_RECONCILE.equals(entity.getStatus())
                     && request.observedOwned() != null && request.observedOwned() >= 0) {
+                LocalDateTime now = LocalDateTime.now(clock);
+                if (entity.getLeaseExpiresAt() == null || !entity.getLeaseExpiresAt().isAfter(now)) {
+                    throw new IllegalStateException("行动对账租约已过期");
+                }
                 entity.setObservedOwned(request.observedOwned());
-                entity.setRewardsJson(write(request.rewards()));
-                entity.setTerminationReason(request.terminationReason());
                 entity.setStatus(COMPLETED);
                 entity.setLeaseKey(null);
                 int updated = actionMapper.update(entity, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
                         .eq(CultivationExecutionActionEntity::getId, normalizedActionId)
                         .eq(CultivationExecutionActionEntity::getStatus, AWAITING_RECONCILE)
                         .eq(CultivationExecutionActionEntity::getExecutorId, executorId)
-                        .eq(CultivationExecutionActionEntity::getResultIdempotencyKey, idempotencyKey));
+                        .eq(CultivationExecutionActionEntity::getResultIdempotencyKey, idempotencyKey)
+                        .gt(CultivationExecutionActionEntity::getLeaseExpiresAt, now));
                 if (updated != 1) return existingResultOrThrow(normalizedActionId, idempotencyKey);
             }
             return result(entity);
