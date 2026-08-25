@@ -254,6 +254,26 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
+    void returnsBusyWhenARegularCultivationActionStillOwnsTheUidLease() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity regularAction = leasedAction("domain-action");
+        regularAction.setActionType("DOMAIN");
+        regularAction.setPlanJson("{\"runType\":\"秘境\"}");
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        when(mapper.findLeased("102550550", 3)).thenReturn(regularAction);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationInventoryReconcileTargetsResponse response =
+                service.claimInventoryReconcile("102550550", "inventory-executor");
+
+        assertThat(response.status()).isEqualTo("BUSY");
+        assertThat(response.actionId()).isEqualTo("domain-action");
+        assertThat(response.materialNames()).containsExactly("沙脂蛹", "织金红绸");
+    }
+
+    @Test
     void persistsFinalGatherAndMonsterInventoryAsOneLeasedIdempotentBatch() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);

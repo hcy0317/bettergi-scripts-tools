@@ -232,23 +232,27 @@ public class CultivationPlanDrivenExecutionService {
 
         CultivationExecutionActionEntity existing = actionMapper.findLeased(normalizedUid, projection.revision());
         if (existing != null) {
-            if (INVENTORY_RECONCILE_BATCH.equals(existing.getActionType())
-                    && AWAITING_RECONCILE.equals(existing.getStatus())) {
+            boolean inventoryBatch = INVENTORY_RECONCILE_BATCH.equals(existing.getActionType());
+            boolean activeLease = existing.getLeaseExpiresAt() != null
+                    && existing.getLeaseExpiresAt().isAfter(LocalDateTime.now(clock));
+            if (!inventoryBatch && (AWAITING_RECONCILE.equals(existing.getStatus()) || activeLease)) {
+                return new CultivationInventoryReconcileTargetsResponse(
+                        "BUSY", "该 UID 仍有未完成的养成行动",
+                        normalizedUid, projection.revision(), existing.getId(),
+                        existing.getLeaseExpiresAt(), materialNames);
+            }
+            if (inventoryBatch && AWAITING_RECONCILE.equals(existing.getStatus())) {
                 existing.setExecutorId(normalizedExecutor);
                 existing.setLeaseExpiresAt(LocalDateTime.now(clock).plus(LEASE_DURATION));
                 existing.setLeaseKey(normalizedUid + ":" + projection.revision());
                 actionMapper.updateById(existing);
                 return inventoryResponse(existing, "NEEDS_RECONCILE", "上次组末库存存在未知值，请重新完整清点");
             }
-            if (existing.getLeaseExpiresAt() != null
-                    && existing.getLeaseExpiresAt().isAfter(LocalDateTime.now(clock))) {
+            if (activeLease) {
                 if (!normalizedExecutor.equals(existing.getExecutorId())) {
                     return inventoryResponse(existing, "BUSY", "该 UID 已有其他执行器持有行动租约");
                 }
-                if (INVENTORY_RECONCILE_BATCH.equals(existing.getActionType())) {
-                    return inventoryResponse(existing, "ACTION", "恢复尚未到期的组末库存复核");
-                }
-                return inventoryResponse(existing, "BUSY", "该 UID 仍有未完成的养成行动");
+                return inventoryResponse(existing, "ACTION", "恢复尚未到期的组末库存复核");
             }
             existing.setStatus("EXPIRED");
             existing.setLeaseKey(null);
