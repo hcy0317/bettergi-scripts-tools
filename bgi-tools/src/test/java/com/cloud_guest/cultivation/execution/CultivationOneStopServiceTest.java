@@ -85,6 +85,12 @@ class CultivationOneStopServiceTest {
                 "User", "AutoPathing", "敌人与魔物", "盗宝团", "璃月路线.json"));
         Files.createDirectories(directFamilyRoute.getParent());
         Files.writeString(directFamilyRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
+        Path mixedSafeRoute = temporaryRoot.resolve(Path.of(
+                "User", "AutoPathing", "敌人与魔物", "混合族", "安全路线.json"));
+        Path mixedUnsafeRoute = mixedSafeRoute.getParent().resolve("9. 低效路线.json");
+        Files.createDirectories(mixedSafeRoute.getParent());
+        Files.writeString(mixedSafeRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
+        Files.writeString(mixedUnsafeRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
         Path gatherScript = temporaryRoot.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather"));
         Files.createDirectories(gatherScript);
         Files.writeString(gatherScript.resolve("settings.json"), "[]");
@@ -157,6 +163,7 @@ class CultivationOneStopServiceTest {
         assertThat(result.message()).contains("计划驱动");
         assertThat(result.scriptTasks()).isEqualTo(5);
         assertThat(result.scriptGroupName()).isEqualTo("养成一条龙-102550550");
+        assertThat(result.warnings()).anyMatch(warning -> warning.contains("混合族") && warning.contains("没有有效候选"));
         JsonNode group = new ObjectMapper().readTree(Path.of(result.scriptGroupFile()).toFile());
         assertThat(group.path("name").asText()).isEqualTo("养成一条龙-102550550");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
@@ -314,14 +321,17 @@ class CultivationOneStopServiceTest {
                 "织金红绸", 18, 0, 0, 18, "镀金旅团", List.of("镀金旅团·机弩兵"));
         var directRootMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
                 "寻宝鸦印", 36, 0, 0, 36, "盗宝团", List.of("盗宝团·斥候"));
+        var mixedRootMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
+                "混合素材", 12, 0, 0, 12, "混合族", List.of("混合怪"));
         var monster = new CultivationExecutionProjection.MonsterAction(
                 "FullyAutoAndSemiAutoTools", "待执行",
-                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团", "盗宝团"),
+                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团", "盗宝团", "混合族"),
                         "treeLevel_0_0", List.of("锄地专区", "敌人与魔物"),
                         "treeLevel_1_0", List.of("精英400@汐"),
                         "treeLevel_1_1", List.of("巡陆艇"),
                         "config_white_list", "锄地专区"),
-                List.of(monsterTarget, directRootMonsterTarget), List.of("镀金旅团", "盗宝团"));
+                List.of(monsterTarget, directRootMonsterTarget, mixedRootMonsterTarget),
+                List.of("镀金旅团", "盗宝团", "混合族"));
         return new CultivationExecutionProjection(
                 "102550550", 1, "IMPORTED", "单轮执行", List.of(resin, mora, experience), List.of(boss),
                 List.of(weekly), gather, monster, List.of(),

@@ -79,6 +79,7 @@ class CultivationLedgerObservationServiceTest {
 
         assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().getFirst().remaining()).isEqualTo(6);
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(3);
     }
 
     @Test
@@ -92,6 +93,8 @@ class CultivationLedgerObservationServiceTest {
                         .effective(revision(10, 4, 6));
 
         assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
     }
 
     @Test

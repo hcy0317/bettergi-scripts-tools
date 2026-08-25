@@ -64,8 +64,11 @@ public class CultivationLedgerObservationService {
                         || historicalMaximum != null && observedOwned < historicalMaximum);
         });
         List<EntryProgress> progress = imported.requirements().stream()
-                .map(entry -> withEvidence(
-                        entry, latestOwned.get(entry.materialName()), actualRewards, unexplainedDecrease))
+                .map(entry -> withEvidence(entry,
+                        latestOwned.get(entry.materialName()),
+                        historicalMaxOwned.get(entry.materialName()),
+                        actualRewards,
+                        unexplainedDecrease))
                 .toList();
         String state = awaitingReconcile || unexplainedDecrease
                 ? "NEEDS_RECONCILE"
@@ -90,20 +93,21 @@ public class CultivationLedgerObservationService {
 
     private EntryProgress withEvidence(CultivationLedgerEntry entry,
                                        Long observedOwned,
+                                       Long historicalMaximum,
                                        Map<String, Long> actualRewards,
                                        boolean unexplainedDecrease) {
-        if (observedOwned != null && unexplainedDecrease && observedOwned < entry.baselineOwned()) {
-            return new EntryProgress(entry, false);
-        }
-
-        long observedGain = observedOwned == null ? 0 : Math.max(observedOwned - entry.baselineOwned(), 0);
+        Long confirmedOwned = unexplainedDecrease && historicalMaximum != null
+                ? Math.max(historicalMaximum, entry.baselineOwned())
+                : observedOwned;
+        long observedGain = confirmedOwned == null
+                ? 0 : Math.max(confirmedOwned - entry.baselineOwned(), 0);
         long exactRewards = actualRewards.getOrDefault(entry.materialName(), 0L);
         long convertibleRewards = convertibleTalentRewards(entry.materialName(), actualRewards);
-        long alreadyCrafted = observedOwned == null
+        long alreadyCrafted = confirmedOwned == null
                 ? 0
                 : Math.min(convertibleRewards, Math.max(observedGain - exactRewards, 0));
         long uncraftedEquivalent = Math.max(convertibleRewards - alreadyCrafted, 0);
-        long eventGain = observedOwned == null ? exactRewards : 0;
+        long eventGain = confirmedOwned == null ? exactRewards : 0;
         long remainingAfterObservation = Math.max(entry.remaining() - observedGain - eventGain, 0);
         long remaining = Math.max(remainingAfterObservation - uncraftedEquivalent, 0);
         boolean needsCraft = remainingAfterObservation > 0

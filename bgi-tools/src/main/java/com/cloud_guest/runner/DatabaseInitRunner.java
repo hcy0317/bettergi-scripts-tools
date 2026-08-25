@@ -442,8 +442,9 @@ public class DatabaseInitRunner {
                     }
                 }
             }
-            requireIndex(uniqueIndexes, Set.of("lease_key"), "lease_key 唯一约束");
-            requireIndex(uniqueIndexes, Set.of("result_idempotency_key"), "result_idempotency_key 唯一约束");
+            requireExactIndex(uniqueIndexes, Set.of("lease_key"), "lease_key 单列唯一约束");
+            requireExactIndex(uniqueIndexes, Set.of("result_idempotency_key"),
+                    "result_idempotency_key 单列唯一约束");
             requireIndex(allIndexes, Set.of("uid", "plan_revision", "status"),
                     "uid/plan_revision/status 查询索引");
         } catch (Exception exception) {
@@ -466,6 +467,14 @@ public class DatabaseInitRunner {
                                      Set<String> requiredColumns,
                                      String description) {
         if (indexes.values().stream().noneMatch(columns -> columns.containsAll(requiredColumns))) {
+            throw new IllegalStateException("缺少 " + description);
+        }
+    }
+
+    private static void requireExactIndex(Map<String, Set<String>> indexes,
+                                          Set<String> requiredColumns,
+                                          String description) {
+        if (indexes.values().stream().noneMatch(requiredColumns::equals)) {
             throw new IllegalStateException("缺少 " + description);
         }
     }

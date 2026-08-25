@@ -464,7 +464,7 @@ public class CultivationOneStopService {
         try (var children = Files.list(familyRoot)) {
             return children.filter(Files::isDirectory)
                     .map(path -> path.getFileName().toString())
-                    .filter(name -> !name.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*"))
+                    .filter(name -> !knownBadRouteName(name))
                     .sorted(String::compareTo)
                     .toList();
         }
@@ -476,7 +476,7 @@ public class CultivationOneStopService {
             String option) {
         Path bundleRoot = root.resolve(Path.of("User", "AutoPathing", "敌人与魔物", family, option));
         if (!Files.isDirectory(bundleRoot)
-                || option.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*")) {
+                || knownBadRouteName(option)) {
             return new CultivationMonsterRouteSelector.Candidate(option, 0, 0, 0, false);
         }
 
@@ -489,6 +489,10 @@ public class CultivationOneStopService {
                     .sorted()
                     .toList();
             routeCount = routeFiles.size();
+            if (routeFiles.stream().map(path -> path.getFileName().toString())
+                    .anyMatch(CultivationOneStopService::knownBadRouteName)) {
+                valid = false;
+            }
             for (Path routeFile : routeFiles) {
                 JsonNode route = objectMapper.readTree(routeFile.toFile());
                 JsonNode positions = route.path("positions");
@@ -526,6 +530,10 @@ public class CultivationOneStopService {
                     .sorted()
                     .toList();
             routeCount = routeFiles.size();
+            if (routeFiles.stream().map(path -> path.getFileName().toString())
+                    .anyMatch(CultivationOneStopService::knownBadRouteName)) {
+                valid = false;
+            }
             for (Path routeFile : routeFiles) {
                 JsonNode positions = objectMapper.readTree(routeFile.toFile()).path("positions");
                 if (!positions.isArray()) {
@@ -1128,9 +1136,12 @@ public class CultivationOneStopService {
 
     static List<String> safeGatherRouteNames(Collection<String> routes) {
         return routes.stream()
-                .filter(route -> route != null
-                        && !route.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*"))
+                .filter(route -> route != null && !knownBadRouteName(route))
                 .toList();
+    }
+
+    private static boolean knownBadRouteName(String name) {
+        return name != null && name.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*");
     }
 
     private record MonsterRouteSelection(
