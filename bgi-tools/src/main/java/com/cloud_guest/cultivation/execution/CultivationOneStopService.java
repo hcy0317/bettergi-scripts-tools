@@ -433,6 +433,13 @@ public class CultivationOneStopService {
                                     .map(option -> inspectMonsterRouteBundle(root, family, option))
                                     .toList());
                         }
+                        if (!fieldByFamily.containsKey(family)) {
+                            CultivationMonsterRouteSelector.Candidate rootCandidate =
+                                    inspectMonsterFamilyRoot(root, family);
+                            if (rootCandidate.valid()) {
+                                candidatesByFamily.put(family, List.of(rootCandidate));
+                            }
+                        }
                     }
                     Map<String, String> selected = CultivationMonsterRouteSelector.select(candidatesByFamily);
                     Map<String, List<String>> result = new LinkedHashMap<>();
@@ -505,8 +512,42 @@ public class CultivationOneStopService {
                 valid);
     }
 
+    private CultivationMonsterRouteSelector.Candidate inspectMonsterFamilyRoot(Path root, String family) {
+        Path familyRoot = root.resolve(Path.of("User", "AutoPathing", "敌人与魔物", family));
+        if (!Files.isDirectory(familyRoot)) {
+            return new CultivationMonsterRouteSelector.Candidate(family + "@(根目录)", 0, 0, 0, false);
+        }
+        int routeCount = 0;
+        int fightActions = 0;
+        boolean valid = true;
+        try (var paths = Files.list(familyRoot)) {
+            List<Path> routeFiles = paths.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .sorted()
+                    .toList();
+            routeCount = routeFiles.size();
+            for (Path routeFile : routeFiles) {
+                JsonNode positions = objectMapper.readTree(routeFile.toFile()).path("positions");
+                if (!positions.isArray()) {
+                    valid = false;
+                    continue;
+                }
+                for (JsonNode position : positions) {
+                    if ("fight".equalsIgnoreCase(position.path("action").asText())) fightActions++;
+                }
+            }
+        } catch (IOException | RuntimeException exception) {
+            valid = false;
+        }
+        if (routeCount == 0 || fightActions == 0) valid = false;
+        return new CultivationMonsterRouteSelector.Candidate(
+                family + "@(根目录)", routeCount, fightActions,
+                historicalMonsterRouteFailures(root, family, null), valid);
+    }
+
     private int historicalMonsterRouteFailures(Path root, String family, String option) {
-        String marker = ("\\" + family + "\\" + option + "\\").toLowerCase(java.util.Locale.ROOT);
+        String marker = ("\\" + family + "\\" + (option == null ? "" : option + "\\"))
+                .toLowerCase(java.util.Locale.ROOT);
         for (String alias : List.of("HCY-FullyAutoAndSemiAutoTools", "FullyAutoAndSemiAutoTools")) {
             Path recordFile = root.resolve(Path.of("User", "JsScript", alias, "config", "record.json"));
             if (!Files.isRegularFile(recordFile)) continue;

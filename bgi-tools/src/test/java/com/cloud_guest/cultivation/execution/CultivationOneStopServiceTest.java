@@ -81,6 +81,10 @@ class CultivationOneStopServiceTest {
         Files.createDirectories(routeB.getParent());
         Files.writeString(routeA, "{\"positions\":[{\"action\":\"fight\"}]}");
         Files.writeString(routeB, "{\"positions\":[{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"}]}");
+        Path directFamilyRoute = temporaryRoot.resolve(Path.of(
+                "User", "AutoPathing", "敌人与魔物", "盗宝团", "璃月路线.json"));
+        Files.createDirectories(directFamilyRoute.getParent());
+        Files.writeString(directFamilyRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
         Path gatherScript = temporaryRoot.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather"));
         Files.createDirectories(gatherScript);
         Files.writeString(gatherScript.resolve("settings.json"), "[]");
@@ -162,7 +166,7 @@ class CultivationOneStopServiceTest {
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("name").asText()).toList())
                 .containsExactly("养成体力：摩拉·世界首领", "养成采集：沙脂蛹",
-                        "养成怪物：镀金旅团", "周本 - 博士", "养成收尾：权威库存复核");
+                        "养成怪物：镀金旅团·盗宝团", "周本 - 博士", "养成收尾：权威库存复核");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
@@ -194,7 +198,8 @@ class CultivationOneStopServiceTest {
                 .map(JsonNode::asText).toList()).containsExactly("1. 高成功率路线");
         JsonNode monsterSettings = group.path("projects").get(2).path("jsScriptSettingsObject");
         assertThat(monsterSettings.path("treeLevel_0_0").get(0).asText()).isEqualTo("敌人与魔物");
-        assertThat(monsterSettings.path("treeLevel_1_1").get(0).asText()).isEqualTo("镀金旅团");
+        assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_1_1").spliterator(), false)
+                .map(JsonNode::asText).toList()).containsExactly("镀金旅团", "盗宝团");
         assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_2_9").spliterator(), false)
                 .map(JsonNode::asText).toList())
                 .containsExactly("镀金旅团路线乙");
@@ -307,14 +312,16 @@ class CultivationOneStopServiceTest {
                 List.of(gatherTarget));
         var monsterTarget = new CultivationExecutionProjection.MonsterTarget(
                 "织金红绸", 18, 0, 0, 18, "镀金旅团", List.of("镀金旅团·机弩兵"));
+        var directRootMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
+                "寻宝鸦印", 36, 0, 0, 36, "盗宝团", List.of("盗宝团·斥候"));
         var monster = new CultivationExecutionProjection.MonsterAction(
                 "FullyAutoAndSemiAutoTools", "待执行",
-                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团"),
+                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团", "盗宝团"),
                         "treeLevel_0_0", List.of("锄地专区", "敌人与魔物"),
                         "treeLevel_1_0", List.of("精英400@汐"),
                         "treeLevel_1_1", List.of("巡陆艇"),
                         "config_white_list", "锄地专区"),
-                List.of(monsterTarget), List.of("镀金旅团"));
+                List.of(monsterTarget, directRootMonsterTarget), List.of("镀金旅团", "盗宝团"));
         return new CultivationExecutionProjection(
                 "102550550", 1, "IMPORTED", "单轮执行", List.of(resin, mora, experience), List.of(boss),
                 List.of(weekly), gather, monster, List.of(),
