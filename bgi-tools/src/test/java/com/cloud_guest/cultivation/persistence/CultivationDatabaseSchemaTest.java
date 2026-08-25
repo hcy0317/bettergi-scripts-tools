@@ -24,6 +24,7 @@ class CultivationDatabaseSchemaTest {
             assertThat(tableExists(connection, "cultivation_import_preview")).isTrue();
             assertThat(tableExists(connection, "cultivation_plan_revision")).isTrue();
             assertThat(tableExists(connection, "cultivation_module_config")).isTrue();
+            assertThat(tableExists(connection, "cultivation_execution_action")).isTrue();
             assertThat(columnExists(connection, "uid_info_config", "is_default")).isTrue();
 
             String insert = """
@@ -44,6 +45,18 @@ class CultivationDatabaseSchemaTest {
                     """;
             connection.createStatement().executeUpdate(moduleInsert.formatted(10));
             assertThatThrownBy(() -> connection.createStatement().executeUpdate(moduleInsert.formatted(11)))
+                    .isInstanceOf(SQLException.class);
+
+            String actionInsert = """
+                    INSERT INTO cultivation_execution_action
+                    (id, uid, plan_revision, executor_id, lease_key, status, action_type,
+                     material_name, remaining_before, plan_json)
+                    VALUES ('%s', '123456789', 1, 'executor', '123456789:1', 'LEASED',
+                            'DOMAIN', '「公平」的哲学', 5, '{}')
+                    """;
+            connection.createStatement().executeUpdate(actionInsert.formatted("action-1"));
+            assertThatThrownBy(() -> connection.createStatement()
+                    .executeUpdate(actionInsert.formatted("action-2")))
                     .isInstanceOf(SQLException.class);
         }
     }

@@ -27,21 +27,24 @@ import java.util.Set;
 
 @Service
 public class CultivationExecutionService {
-    private static final String EXECUTION_MODE = "单轮执行，执行后重新确认缺口";
+    private static final String EXECUTION_MODE = "计划驱动：领取一个行动，权威库存回写后重新规划";
     private static final Map<String, String> SPECIALTY_COUNTRIES = specialtyCountries();
     private static final Map<String, String> MANUAL_MATERIALS = Map.of(
             "智识之冕", "人工来源：活动、版本奖励等限量渠道；系统持续保留缺口，取得后重新导入确认");
 
     private final CultivationPlanApplicationService planService;
+    private final CultivationLedgerObservationService observationService;
     private final AutoPlanService autoPlanService;
     private final CultivationModuleConfigurationService configurationService;
     private final CultivationMaterialSourceCatalog materialSourceCatalog;
 
     public CultivationExecutionService(CultivationPlanApplicationService planService,
+                                       CultivationLedgerObservationService observationService,
                                        AutoPlanService autoPlanService,
                                        CultivationModuleConfigurationService configurationService,
                                        CultivationMaterialSourceCatalog materialSourceCatalog) {
         this.planService = planService;
+        this.observationService = observationService;
         this.autoPlanService = autoPlanService;
         this.configurationService = configurationService;
         this.materialSourceCatalog = materialSourceCatalog;
@@ -49,7 +52,7 @@ public class CultivationExecutionService {
 
     public CultivationExecutionProjection projection(String uid) {
         String normalizedUid = requireUid(uid);
-        CultivationPlanRevisionResponse revision = planService.latest(normalizedUid);
+        CultivationPlanRevisionResponse revision = latestLedger(normalizedUid);
         if (revision == null) {
             return null;
         }
@@ -110,7 +113,7 @@ public class CultivationExecutionService {
             String country = SPECIALTY_COUNTRIES.get(entry.materialName());
             if (country != null) {
                 gatherTargets.add(new CultivationExecutionProjection.GatherTarget(
-                        entry.materialName(), entry.required(), entry.baselineOwned(), entry.remaining(),
+                        entry.materialName(), entry.required(), entry.baselineOwned(), entry.currentOwned(), entry.remaining(),
                         country, "selectLocalSpecialty_" + country));
                 continue;
             }
@@ -129,7 +132,7 @@ public class CultivationExecutionService {
             if (monster.isPresent()) {
                 CultivationMaterialSourceCatalog.MonsterSource source = monster.get();
                 monsterTargets.add(new CultivationExecutionProjection.MonsterTarget(
-                        entry.materialName(), entry.required(), entry.baselineOwned(), entry.remaining(),
+                        entry.materialName(), entry.required(), entry.baselineOwned(), entry.currentOwned(), entry.remaining(),
                         source.routeFamily(), source.monsters()));
                 continue;
             }
@@ -153,6 +156,11 @@ public class CultivationExecutionService {
                 normalizedUid, revision.revision(), revision.state(), EXECUTION_MODE,
                 resinActions, bossActions, weeklyBossActions, gatherAction, monsterAction,
                 pending, preferences, partyOptions(normalizedUid));
+    }
+
+    public CultivationPlanRevisionResponse latestLedger(String uid) {
+        String normalizedUid = requireUid(uid);
+        return observationService.effective(planService.latest(normalizedUid));
     }
 
     public CultivationExecutionPreferences preferences(String uid) {
@@ -251,7 +259,7 @@ public class CultivationExecutionService {
             CultivationModuleConfiguration configuration,
             List<CultivationExecutionProjection.MonsterTarget> targets) {
         Map<String, Object> settings = new LinkedHashMap<>(configuration.settings());
-        Set<String> routeFamilies = new LinkedHashSet<>(stringList(settings.get("routeFamilies")));
+        Set<String> routeFamilies = new LinkedHashSet<>();
         targets.stream().map(CultivationExecutionProjection.MonsterTarget::routeFamily)
                 .forEach(routeFamilies::add);
         settings.put("routeFamilies", List.copyOf(routeFamilies));

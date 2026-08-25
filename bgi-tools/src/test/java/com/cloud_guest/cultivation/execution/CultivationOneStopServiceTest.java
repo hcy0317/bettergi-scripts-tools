@@ -35,7 +35,7 @@ class CultivationOneStopServiceTest {
         Path source = temporaryRoot.resolve(Path.of("User", "ScriptGroup", "来源组.json"));
         Files.createDirectories(source.getParent());
         Files.writeString(source, """
-                {"index":1,"name":"来源组","config":{"pathingConfig":{"partyName":"通用队伍"}},"projects":[
+                {"index":1,"name":"来源组","config":{"pathingConfig":{"partyName":"通用队伍","autoFightConfig":{"guardianAvatar":"4","burstEnabled":true}}},"projects":[
                   {"name":"体力","folderName":"AutoPlan","type":"Javascript","jsScriptSettingsObject":{}},
                   {"name":"采集","folderName":"CD-Aware-AutoGather","type":"Javascript","jsScriptSettingsObject":{}},
                   {"name":"怪物","folderName":"HCY-FullyAutoAndSemiAutoTools","type":"Javascript","jsScriptSettingsObject":{}}
@@ -51,9 +51,39 @@ class CultivationOneStopServiceTest {
                 ]]]
                 """);
         Files.writeString(uidSettings.getParent().getParent().resolve("settings.json"), "[]");
+        Path routeA = temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "镀金旅团",
+                "镀金旅团路线甲", "路线甲.json"));
+        Path routeB = temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "镀金旅团",
+                "镀金旅团路线乙", "路线乙.json"));
+        Files.createDirectories(routeA.getParent());
+        Files.createDirectories(routeB.getParent());
+        Files.writeString(routeA, "{\"positions\":[{\"action\":\"fight\"}]}");
+        Files.writeString(routeB, "{\"positions\":[{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"}]}");
         Path gatherScript = temporaryRoot.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather"));
         Files.createDirectories(gatherScript);
         Files.writeString(gatherScript.resolve("settings.json"), "[]");
+        Path autoPlanScript = temporaryRoot.resolve(Path.of("User", "JsScript", "AutoPlan"));
+        Files.createDirectories(autoPlanScript.resolve("utils"));
+        Files.writeString(autoPlanScript.resolve("main.js"), """
+                import {buildInitConfigSettings, config, initConfig, initSettings} from './config/config';
+                async function main() {
+                    // 初始化配置
+                    await init();
+                    let runConfig = config.run.config;
+                }
+                await main();
+                """);
+        Path betterGiConfig = temporaryRoot.resolve(Path.of("User", "config.json"));
+        Files.createDirectories(betterGiConfig.getParent());
+        Files.writeString(betterGiConfig, "{\"autoFightConfig\":{\"burstEnabled\":false,\"pickDropsAfterFightSeconds\":60}}");
+        Files.writeString(autoPlanScript.resolve("utils").resolve("load_check_run.js"), """
+                async function runDomain(domainParam) {
+                    await dispatcher.RunAutoDomainTask(domainParam);
+                }
+                async function runBoss(param) {
+                    await dispatcher.RunAutoBossTask(param)
+                }
+                """);
         Path safeGatherRoute = temporaryRoot.resolve(Path.of("User", "AutoPathing", "地方特产", "须弥",
                 "沙脂蛹", "1. 高成功率路线", "沙脂蛹-神的棋盘.json"));
         Path unsafeGatherRoute = temporaryRoot.resolve(Path.of("User", "AutoPathing", "地方特产", "须弥",
@@ -72,6 +102,7 @@ class CultivationOneStopServiceTest {
         when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID)).thenReturn(
                 configuration(AutoPlanResinExecutionModule.ID, Map.of(
                         "auto_load", List.of("bgi_tools加载"),
+                        "bgi_tools_token", "Authorization= ",
                         "leyLineCountry", "挪德卡莱",
                         "talentDomainEnabled", false,
                         "moraLeyLineEnabled", true,
@@ -96,7 +127,8 @@ class CultivationOneStopServiceTest {
                 executionService, configurationService, catalog, autoPlanService, new ObjectMapper());
         CultivationOneStopResult result = service.prepare("102550550");
 
-        assertThat(result.autoPlanActions()).isEqualTo(2);
+        assertThat(result.autoPlanActions()).isEqualTo(1);
+        assertThat(result.message()).contains("计划驱动");
         assertThat(result.scriptTasks()).isEqualTo(4);
         assertThat(result.scriptGroupName()).isEqualTo("养成一条龙-102550550");
         JsonNode group = new ObjectMapper().readTree(Path.of(result.scriptGroupFile()).toFile());
@@ -112,6 +144,22 @@ class CultivationOneStopServiceTest {
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
+        assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("run_config").asText()).isEmpty();
+        assertThat(autoPlanSettings.path("auto_check")).isEmpty();
+        assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();
+        assertThat(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")).exists();
+        assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")))
+                .contains("config.run.exclude_run_exception = false")
+                .contains("config.run.loop_plan = false")
+                .contains("GridScreenName.CharacterDevelopmentItems")
+                .doesNotContain("param.GridScreenName = GridScreenName.Materials");
+        assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("load_check_run.js")))
+                .contains("return await dispatcher.RunAutoDomainTask(domainParam);")
+                .contains("return await dispatcher.RunAutoBossTask(param)");
+        assertThat(Files.readString(autoPlanScript.resolve("main.js")))
+                .contains("runPlanDrivenCultivation")
+                .contains("settings.cultivation_plan_mode");
         JsonNode gatherSettings = group.path("projects").get(1).path("jsScriptSettingsObject");
         assertThat(gatherSettings.path("selectForgingOre")).isEmpty();
         assertThat(gatherSettings.path("filterPathByKeywords").asText()).isEmpty();
@@ -123,7 +171,7 @@ class CultivationOneStopServiceTest {
         assertThat(monsterSettings.path("treeLevel_1_1").get(0).asText()).isEqualTo("镀金旅团");
         assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_2_9").spliterator(), false)
                 .map(JsonNode::asText).toList())
-                .containsExactly("镀金旅团路线甲", "镀金旅团路线乙");
+                .containsExactly("镀金旅团路线乙");
         assertThat(monsterSettings.path("http_api").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/cron/next-timestamp/all");
         assertThat(group.path("config").path("pathingConfig").path("partyName").asText())
@@ -131,6 +179,10 @@ class CultivationOneStopServiceTest {
         assertThat(group.path("config").path("pathingConfig").path("autoPickEnabled").asBoolean()).isTrue();
         assertThat(group.path("config").path("pathingConfig").path("autoFightConfig")
                 .path("strategyName").asText()).isEqualTo("根据队伍自动选择");
+        assertThat(group.path("config").path("pathingConfig").path("autoFightConfig")
+                .path("burstEnabled").asBoolean()).isFalse();
+        assertThat(group.path("config").path("pathingConfig").path("autoFightConfig")
+                .path("pickDropsAfterFightSeconds").asInt()).isEqualTo(60);
         assertThat(group.path("config").path("pathingConfig").path("taskCycleConfig")
                 .path("enable").asBoolean()).isFalse();
         assertThat(group.path("config").path("enableShellConfig").asBoolean()).isFalse();
@@ -216,7 +268,7 @@ class CultivationOneStopServiceTest {
         var weekly = new CultivationExecutionProjection.WeeklyBossAction(
                 "狂人的约束", 18, "博士", Map.of("monsterName", "博士", "unfairContractTerms", true), "待执行");
         var gatherTarget = new CultivationExecutionProjection.GatherTarget(
-                "沙脂蛹", 168, 4, 164, "须弥", "selectLocalSpecialty_须弥");
+                "沙脂蛹", 168, 4, 4, 164, "须弥", "selectLocalSpecialty_须弥");
         var gather = new CultivationExecutionProjection.GatherAction(
                 "CD-Aware-AutoGather", "待执行",
                 Map.of("runMode", "采集选中的材料",
@@ -225,7 +277,7 @@ class CultivationOneStopServiceTest {
                         "selectForgingOre", List.of("水晶块")),
                 List.of(gatherTarget));
         var monsterTarget = new CultivationExecutionProjection.MonsterTarget(
-                "织金红绸", 18, 0, 18, "镀金旅团", List.of("镀金旅团·机弩兵"));
+                "织金红绸", 18, 0, 0, 18, "镀金旅团", List.of("镀金旅团·机弩兵"));
         var monster = new CultivationExecutionProjection.MonsterAction(
                 "FullyAutoAndSemiAutoTools", "待执行",
                 Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团"),

@@ -10,11 +10,6 @@ import com.cloud_guest.cultivation.execution.module.CultivationModuleSettingFiel
 import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
 import com.cloud_guest.cultivation.execution.module.ScriptGroupSettingsExecutionModule;
 import com.cloud_guest.cultivation.execution.module.WeeklyBossExecutionModule;
-import com.cloud_guest.entitys.common.auto_plan.AutoBoss;
-import com.cloud_guest.entitys.common.auto_plan.AutoDomain;
-import com.cloud_guest.entitys.common.auto_plan.AutoLeyLineOutcrop;
-import com.cloud_guest.entitys.common.auto_plan.AutoPlan;
-import com.cloud_guest.entitys.common.auto_plan.Physical;
 import com.cloud_guest.entitys.pojo.AutoPlanConfig;
 import com.cloud_guest.service.AutoPlanService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -27,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,7 +50,8 @@ public class CultivationOneStopService {
             "exclude_run_exception", "loop_plan", "retry_count",
             "bgi_tools_http_pull_json_config", "bgi_tools_open_push",
             "bgi_tools_http_push_all_json_config", "bgi_tools_http_push_all_country_config",
-            "bgi_tools_http_push_all_boss_config", "bgi_tools_token", "debug");
+            "bgi_tools_http_push_all_boss_config", "bgi_tools_token", "debug",
+            "cultivation_plan_mode");
 
     private final CultivationExecutionService executionService;
     private final CultivationModuleConfigurationService configurationService;
@@ -110,11 +107,10 @@ public class CultivationOneStopService {
         CultivationModuleConfiguration groupSettings = configurationService.find(
                 uid, ScriptGroupSettingsExecutionModule.ID);
 
-        List<AutoPlanConfig> plans = autoPlans(uid, projection, autoPlan);
+        boolean hasPlanDrivenAction = hasPlanDrivenAction(projection, autoPlan);
         autoPlanService.remove(Wrappers.lambdaQuery(AutoPlanConfig.class)
                 .eq(AutoPlanConfig::getUid, uid)
                 .eq(AutoPlanConfig::getCultivate, Boolean.TRUE));
-        if (!plans.isEmpty()) autoPlanService.saveBatch(plans);
 
         Path root = materialSourceCatalog.betterGiRoot();
         String groupName = "养成一条龙-" + projection.uid();
@@ -131,6 +127,9 @@ public class CultivationOneStopService {
             for (Path duplicate : duplicateGroupFiles) {
                 backup(duplicate, backupDirectory.resolve("ScriptGroup").resolve(duplicate.getFileName()));
             }
+            if (hasPlanDrivenAction) {
+                installPlanDrivenAutoPlanBridge(root, backupDirectory);
+            }
             synchronizeScriptSettingsUi(root, uid, projection, backupDirectory, warnings);
             writeJsonIfChanged(
                     groupFile,
@@ -143,9 +142,9 @@ public class CultivationOneStopService {
 
         int taskCount = managedGroup.path("projects").size();
         return new CultivationOneStopResult(
-                uid, projection.revision(), groupName, groupFile.toString(), plans.size(), taskCount,
+                uid, projection.revision(), groupName, groupFile.toString(), hasPlanDrivenAction ? 1 : 0, taskCount,
                 backupDirectory.toString(), List.copyOf(warnings),
-                "已生成 UID 专属养成一条龙配置");
+                "已生成 UID 专属计划驱动养成一条龙配置");
     }
 
     public CultivationLaunchResult start(String uid) {
@@ -172,51 +171,11 @@ public class CultivationOneStopService {
         }
     }
 
-    private List<AutoPlanConfig> autoPlans(String uid,
-                                           CultivationExecutionProjection projection,
-                                           CultivationModuleConfiguration configuration) {
-        if (!configuration.enabled()) return List.of();
-        List<AutoPlanConfig> plans = new ArrayList<>();
-        Set<String> deduplicationKeys = new LinkedHashSet<>();
-        int order = 1;
-        for (CultivationExecutionProjection.ResinAction action : projection.resinActions()) {
-            if (!resinActionEnabled(action, configuration)) continue;
-            String key = action.actionType() + "|" + action.sourceName() + "|" + action.sourceMaterialIndex();
-            if (!deduplicationKeys.add(key)) continue;
-            AutoPlan plan = basePlan(order++, action.availableDays(), action.sourceType());
-            if ("秘境".equals(action.actionType())) {
-                plan.setRunType("秘境");
-                plan.setAutoDomain(new AutoDomain(
-                        action.sourceName(), action.sourceMaterialIndex(), action.sourceMaterialName(),
-                        action.partyName(), 1, defaultPhysical()));
-            } else {
-                plan.setRunType("地脉");
-                AutoLeyLineOutcrop leyLine = new AutoLeyLineOutcrop();
-                leyLine.setCount(1);
-                leyLine.setCountry(stringSetting(configuration, "leyLineCountry", "挪德卡莱"));
-                leyLine.setLeyLineOutcropType(action.sourceName());
-                leyLine.setUseAdventurerHandbook(true);
-                leyLine.setTeam(action.partyName());
-                leyLine.setFriendshipTeam("");
-                leyLine.setTimeout(120);
-                plan.setAutoLeyLineOutcrop(leyLine);
-            }
-            plans.add(toCultivationConfig(uid, plan));
-        }
-        for (CultivationExecutionProjection.BossAction action : projection.bossActions()) {
-            if (!deduplicationKeys.add("Boss|" + action.bossName())) continue;
-            AutoPlan plan = basePlan(order++, List.of(), "首领");
-            plan.setRunType("Boss");
-            plan.setAutoBoss(new AutoBoss(
-                    action.bossName(), stringSetting(configuration, "bossStrategyName", "根据队伍自动选择"),
-                    "", action.partyName(), true, 1, false, false,
-                    intSetting(configuration, "bossReviveRetryCount", 5),
-                    booleanSetting(configuration, "bossReturnToStatueAfterEachRound", false),
-                    booleanSetting(configuration, "bossRewardRecognitionEnabled", true),
-                    intSetting(configuration, "bossTimeoutSeconds", 300)));
-            plans.add(toCultivationConfig(uid, plan));
-        }
-        return List.copyOf(plans);
+    private static boolean hasPlanDrivenAction(CultivationExecutionProjection projection,
+                                               CultivationModuleConfiguration configuration) {
+        if (!configuration.enabled()) return false;
+        return projection.resinActions().stream().anyMatch(action -> resinActionEnabled(action, configuration))
+                || !projection.bossActions().isEmpty();
     }
 
     private ObjectNode buildManagedGroup(Path root,
@@ -235,7 +194,7 @@ public class CultivationOneStopService {
                 .orElseGet(objectMapper::createObjectNode);
         template.put("index", existingOrNextIndex(targetFile, documents));
         template.put("name", groupName);
-        applyGroupSettings(template, groupSettings.settings());
+        applyGroupSettings(root, template, groupSettings.settings());
         ArrayNode projects = objectMapper.createArrayNode();
 
         boolean hasEnabledResinAction = projection.resinActions().stream()
@@ -250,6 +209,10 @@ public class CultivationOneStopService {
             settings.put("bgi_tools_http_push_all_json_config", autoPlanBase + "/domain/json/all");
             settings.put("bgi_tools_http_push_all_country_config", autoPlanBase + "/country/json/all");
             settings.put("bgi_tools_http_push_all_boss_config", autoPlanBase + "/boss/json/all");
+            settings.put("cultivation_plan_mode", true);
+            settings.put("run_config", "");
+            settings.set("auto_check", objectMapper.createArrayNode());
+            settings.put("bgi_tools_token", "");
             project.put("name", autoPlanTaskName(projection, autoPlan));
             prepareProject(project, projects.size() + 1, settings);
             projects.add(project);
@@ -423,7 +386,9 @@ public class CultivationOneStopService {
                 JsonNode entries = objectMapper.readTree(uidSettings.toFile());
                 for (JsonNode entry : entries) {
                     if (!entry.isArray() || entry.size() < 2 || !uid.equals(entry.get(0).asText())) continue;
-                    Map<String, List<String>> result = new LinkedHashMap<>();
+                    Map<String, String> fieldByFamily = new LinkedHashMap<>();
+                    Map<String, List<CultivationMonsterRouteSelector.Candidate>> candidatesByFamily =
+                            new LinkedHashMap<>();
                     for (String family : families) {
                         String marker = "->[" + family + "]";
                         for (JsonNode field : entry.get(1)) {
@@ -431,10 +396,21 @@ public class CultivationOneStopService {
                             if (!name.startsWith("treeLevel_2_")
                                     || !field.path("label").asText().contains(marker)
                                     || !field.path("options").isArray()) continue;
-                            List<String> options = stringList(field.path("options"));
-                            if (!options.isEmpty()) result.put(name, options);
+                            LinkedHashSet<String> options = new LinkedHashSet<>(stringList(field.path("options")));
+                            options.addAll(monsterRouteBundleDirectories(root, family));
+                            if (options.isEmpty()) continue;
+                            fieldByFamily.put(family, name);
+                            candidatesByFamily.put(family, options.stream()
+                                    .map(option -> inspectMonsterRouteBundle(root, family, option))
+                                    .toList());
                         }
                     }
+                    Map<String, String> selected = CultivationMonsterRouteSelector.select(candidatesByFamily);
+                    Map<String, List<String>> result = new LinkedHashMap<>();
+                    selected.forEach((family, option) -> {
+                        String field = fieldByFamily.get(family);
+                        if (field != null) result.put(field, List.of(option));
+                    });
                     return result;
                 }
             } catch (IOException exception) {
@@ -442,6 +418,82 @@ public class CultivationOneStopService {
             }
         }
         return Map.of();
+    }
+
+    private List<String> monsterRouteBundleDirectories(Path root, String family) throws IOException {
+        Path familyRoot = root.resolve(Path.of("User", "AutoPathing", "敌人与魔物", family));
+        if (!Files.isDirectory(familyRoot)) return List.of();
+        try (var children = Files.list(familyRoot)) {
+            return children.filter(Files::isDirectory)
+                    .map(path -> path.getFileName().toString())
+                    .filter(name -> !name.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*"))
+                    .sorted(String::compareTo)
+                    .toList();
+        }
+    }
+
+    private CultivationMonsterRouteSelector.Candidate inspectMonsterRouteBundle(
+            Path root,
+            String family,
+            String option) {
+        Path bundleRoot = root.resolve(Path.of("User", "AutoPathing", "敌人与魔物", family, option));
+        if (!Files.isDirectory(bundleRoot)
+                || option.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*")) {
+            return new CultivationMonsterRouteSelector.Candidate(option, 0, 0, 0, false);
+        }
+
+        int routeCount = 0;
+        int fightActions = 0;
+        boolean valid = true;
+        try (var paths = Files.walk(bundleRoot)) {
+            List<Path> routeFiles = paths.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .sorted()
+                    .toList();
+            routeCount = routeFiles.size();
+            for (Path routeFile : routeFiles) {
+                JsonNode route = objectMapper.readTree(routeFile.toFile());
+                JsonNode positions = route.path("positions");
+                if (!positions.isArray()) {
+                    valid = false;
+                    continue;
+                }
+                for (JsonNode position : positions) {
+                    if ("fight".equalsIgnoreCase(position.path("action").asText())) fightActions++;
+                }
+            }
+        } catch (IOException | RuntimeException exception) {
+            valid = false;
+        }
+        if (routeCount == 0 || fightActions == 0) valid = false;
+        return new CultivationMonsterRouteSelector.Candidate(
+                option,
+                routeCount,
+                fightActions,
+                historicalMonsterRouteFailures(root, family, option),
+                valid);
+    }
+
+    private int historicalMonsterRouteFailures(Path root, String family, String option) {
+        String marker = ("\\" + family + "\\" + option + "\\").toLowerCase(java.util.Locale.ROOT);
+        for (String alias : List.of("HCY-FullyAutoAndSemiAutoTools", "FullyAutoAndSemiAutoTools")) {
+            Path recordFile = root.resolve(Path.of("User", "JsScript", alias, "config", "record.json"));
+            if (!Files.isRegularFile(recordFile)) continue;
+            try {
+                int failures = 0;
+                for (JsonNode record : objectMapper.readTree(recordFile.toFile())) {
+                    for (JsonNode errorPath : record.path("errorPaths")) {
+                        String normalized = errorPath.asText().replace('/', '\\')
+                                .toLowerCase(java.util.Locale.ROOT);
+                        if (normalized.contains(marker)) failures++;
+                    }
+                }
+                return failures;
+            } catch (IOException exception) {
+                return 0;
+            }
+        }
+        return 0;
     }
 
     private List<String> gatherRouteOptions(
@@ -621,7 +673,7 @@ public class CultivationOneStopService {
         }
     }
 
-    private void applyGroupSettings(ObjectNode group, Map<String, Object> settings) {
+    private void applyGroupSettings(Path root, ObjectNode group, Map<String, Object> settings) {
         ObjectNode config = childObject(group, "config");
         ObjectNode pathing = childObject(config, "pathingConfig");
         pathing.put("enabled", booleanSetting(settings, "pathingEnabled", true));
@@ -654,9 +706,10 @@ public class CultivationOneStopService {
         ObjectNode fight = childObject(pathing, "autoFightConfig");
         fight.put("strategyName", stringSetting(settings, "autoFightStrategyName", "根据队伍自动选择"));
         fight.put("teamNames", stringSetting(settings, "autoFightTeamNames", ""));
+        fight.put("burstEnabled", betterGiBurstEnabled(root, fight));
         fight.put("fightFinishDetectEnabled", booleanSetting(settings, "fightFinishDetectEnabled", true));
         fight.put("pickDropsAfterFightEnabled", booleanSetting(settings, "pickDropsAfterFightEnabled", true));
-        fight.put("pickDropsAfterFightSeconds", intSetting(settings, "pickDropsAfterFightSeconds", 15));
+        fight.put("pickDropsAfterFightSeconds", intSetting(settings, "pickDropsAfterFightSeconds", 60));
         fight.put("timeout", intSetting(settings, "fightTimeoutSeconds", 200));
 
         ObjectNode cycle = childObject(pathing, "taskCycleConfig");
@@ -810,6 +863,108 @@ public class CultivationOneStopService {
         Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
     }
 
+    private boolean betterGiBurstEnabled(Path root, ObjectNode existingFightSettings) {
+        Path configFile = root.resolve(Path.of("User", "config.json"));
+        if (!Files.isRegularFile(configFile)) {
+            return existingFightSettings.path("burstEnabled").asBoolean(false);
+        }
+        try {
+            JsonNode configured = objectMapper.readTree(configFile.toFile())
+                    .path("autoFightConfig").path("burstEnabled");
+            return configured.isBoolean()
+                    ? configured.asBoolean()
+                    : existingFightSettings.path("burstEnabled").asBoolean(false);
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法读取 BetterGI 现有盾位元素爆发开关", exception);
+        }
+    }
+
+    private void installPlanDrivenAutoPlanBridge(Path root, Path backupDirectory) throws IOException {
+        Path scriptRoot = root.resolve(Path.of("User", "JsScript", "AutoPlan"));
+        Path mainFile = scriptRoot.resolve("main.js");
+        if (!Files.isRegularFile(mainFile)) {
+            throw new IllegalStateException("未找到 AutoPlan/main.js，无法启用计划驱动执行");
+        }
+
+        String bridge;
+        try (InputStream input = getClass().getResourceAsStream(
+                "/cultivation/autoplan/cultivation_plan.js")) {
+            if (input == null) throw new IllegalStateException("计划驱动 AutoPlan 桥接资源缺失");
+            bridge = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        Path bridgeFile = scriptRoot.resolve(Path.of("utils", "cultivation_plan.js"));
+        writeTextIfChanged(
+                bridgeFile, bridge,
+                backupDirectory.resolve(Path.of("JsScript", "AutoPlan", "utils", "cultivation_plan.js")));
+        installAutoPlanRewardPassthrough(scriptRoot, backupDirectory);
+
+        String main = Files.readString(mainFile);
+        String importLine = "import {runPlanDrivenCultivation} from './utils/cultivation_plan';";
+        if (!main.contains(importLine)) main = importLine + System.lineSeparator() + main;
+        if (!main.contains("settings.cultivation_plan_mode")) {
+            String anchor = "    await init();";
+            int mainStart = main.indexOf("async function main()");
+            int anchorIndex = main.indexOf(anchor, mainStart);
+            if (mainStart < 0 || anchorIndex < 0) {
+                throw new IllegalStateException("AutoPlan/main.js 结构已变化，无法安全安装计划驱动桥接");
+            }
+            String planMode = anchor + System.lineSeparator()
+                    + "    if (settings.cultivation_plan_mode) {" + System.lineSeparator()
+                    + "        await runPlanDrivenCultivation(config);" + System.lineSeparator()
+                    + "        return;" + System.lineSeparator()
+                    + "    }";
+            main = main.substring(0, anchorIndex) + planMode + main.substring(anchorIndex + anchor.length());
+        }
+        writeTextIfChanged(
+                mainFile, main,
+                backupDirectory.resolve(Path.of("JsScript", "AutoPlan", "main.js")));
+    }
+
+    private void installAutoPlanRewardPassthrough(Path scriptRoot, Path backupDirectory) throws IOException {
+        Path handlerFile = scriptRoot.resolve(Path.of("utils", "load_check_run.js"));
+        if (!Files.isRegularFile(handlerFile)) {
+            throw new IllegalStateException("未找到 AutoPlan/utils/load_check_run.js，无法回传实际奖励");
+        }
+        String source = Files.readString(handlerFile);
+        source = ensureReturnedDispatcherCall(source, "dispatcher.RunAutoDomainTask(domainParam)");
+        source = ensureReturnedDispatcherCall(source, "dispatcher.RunAutoBossTask(param)");
+        writeTextIfChanged(
+                handlerFile, source,
+                backupDirectory.resolve(Path.of("JsScript", "AutoPlan", "utils", "load_check_run.js")));
+    }
+
+    private static String ensureReturnedDispatcherCall(String source, String call) {
+        String returned = "return await " + call + ";";
+        if (source.contains(returned)) return source;
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "(?m)^(\\h*)await " + java.util.regex.Pattern.quote(call) + ";?\\h*$");
+        java.util.regex.Matcher matcher = pattern.matcher(source);
+        if (!matcher.find()) {
+            throw new IllegalStateException("AutoPlan 奖励回传锚点已变化：" + call);
+        }
+        return matcher.replaceFirst(java.util.regex.Matcher.quoteReplacement(matcher.group(1) + returned));
+    }
+
+    private static void writeTextIfChanged(Path target, String value, Path backupTarget) throws IOException {
+        if (Files.isRegularFile(target)) {
+            String current = Files.readString(target);
+            if (current.equals(value)) return;
+            backup(target, backupTarget);
+        }
+        Files.createDirectories(target.getParent());
+        Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temporary, value);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
     private void writeJsonIfChanged(Path target, JsonNode value, Path backupTarget) throws IOException {
         if (Files.isRegularFile(target)) {
             JsonNode current = objectMapper.readTree(target.toFile());
@@ -831,49 +986,6 @@ public class CultivationOneStopService {
             }
         } finally {
             Files.deleteIfExists(temporary);
-        }
-    }
-
-    private static AutoPlan basePlan(int order, List<Integer> days, String selectedType) {
-        return new AutoPlan()
-                .setOrder(order)
-                .setDays(days)
-                .setDayName(days.isEmpty() ? "" : "按材料开放日执行")
-                .setSelectedType(selectedType)
-                .setEnable(true)
-                .setCultivate(true)
-                .setRecord(true);
-    }
-
-    private static AutoPlanConfig toCultivationConfig(String uid, AutoPlan plan) {
-        AutoPlanConfig config = plan.toConfig();
-        config.setUid(uid);
-        config.setCultivate(true);
-        return config;
-    }
-
-    private static List<Physical> defaultPhysical() {
-        return List.of(
-                new Physical(0, "浓缩树脂", true, 1),
-                new Physical(1, "原粹树脂", true, 1),
-                new Physical(2, "须臾树脂", false, 0),
-                new Physical(3, "脆弱树脂", false, 0));
-    }
-
-    private static String stringSetting(CultivationModuleConfiguration configuration,
-                                        String key,
-                                        String fallback) {
-        Object value = configuration.settings().get(key);
-        return value == null || String.valueOf(value).isBlank() ? fallback : String.valueOf(value);
-    }
-
-    private static int intSetting(CultivationModuleConfiguration configuration, String key, int fallback) {
-        Object value = configuration.settings().get(key);
-        if (value instanceof Number number) return number.intValue();
-        try {
-            return Integer.parseInt(String.valueOf(value));
-        } catch (Exception ignored) {
-            return fallback;
         }
     }
 

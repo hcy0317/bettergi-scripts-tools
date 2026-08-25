@@ -179,3 +179,31 @@ CREATE TABLE IF NOT EXISTS cultivation_module_config (
     remark TEXT,
     UNIQUE (uid, module_id)
 );
+
+CREATE TABLE IF NOT EXISTS cultivation_execution_action (
+    id TEXT PRIMARY KEY,
+    uid TEXT NOT NULL,
+    plan_revision INTEGER NOT NULL,
+    executor_id TEXT NOT NULL,
+    lease_key TEXT,
+    lease_expires_at TEXT,
+    status TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    material_name TEXT NOT NULL,
+    remaining_before INTEGER NOT NULL,
+    plan_json TEXT NOT NULL,
+    observed_owned INTEGER,
+    rewards_json TEXT,
+    termination_reason TEXT,
+    result_idempotency_key TEXT,
+    create_by TEXT,
+    create_time TEXT,
+    update_by TEXT,
+    update_time TEXT,
+    remark TEXT,
+    UNIQUE (lease_key),
+    UNIQUE (result_idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cultivation_action_uid_revision
+    ON cultivation_execution_action (uid, plan_revision, status);

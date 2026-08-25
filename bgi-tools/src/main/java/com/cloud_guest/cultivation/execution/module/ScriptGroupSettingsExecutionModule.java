@@ -98,7 +98,7 @@ public class ScriptGroupSettingsExecutionModule implements CultivationExecutionM
         result.put("autoFightTeamNames", "");
         result.put("fightFinishDetectEnabled", true);
         result.put("pickDropsAfterFightEnabled", true);
-        result.put("pickDropsAfterFightSeconds", 15);
+        result.put("pickDropsAfterFightSeconds", 60);
         result.put("fightTimeoutSeconds", 200);
         result.put("taskCycleEnabled", false);
         result.put("taskCycleBoundaryTime", 0);

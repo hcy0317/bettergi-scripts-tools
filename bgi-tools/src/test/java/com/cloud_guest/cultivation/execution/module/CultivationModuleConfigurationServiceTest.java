@@ -8,8 +8,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,7 +32,7 @@ class CultivationModuleConfigurationServiceTest {
         CultivationModuleConfigMapper mapper = mock(CultivationModuleConfigMapper.class);
         when(mapper.selectOne(any(Wrapper.class))).thenReturn(stored);
         BetterGiInstalledScriptSettingsReader reader = mock(BetterGiInstalledScriptSettingsReader.class);
-        when(reader.read(FullyAutoToolsExecutionModule.ID)).thenReturn(Map.of());
+        when(reader.read("102550550", FullyAutoToolsExecutionModule.ID)).thenReturn(Optional.empty());
         CultivationModuleConfigurationService service = new CultivationModuleConfigurationService(
                 new CultivationModuleRegistry(List.of(new FullyAutoToolsExecutionModule())),
                 mapper, new ObjectMapper(), reader);
@@ -39,5 +43,85 @@ class CultivationModuleConfigurationServiceTest {
 
         assertThat(configuration.settings().get("http_api"))
                 .isEqualTo("http://127.0.0.1:8081/bgi/cron/next-timestamp/all");
+    }
+
+    @Test
+    void newerBetterGiEditWinsOverTheStoredWebConfiguration() {
+        Instant betterGiModifiedAt = Instant.parse("2026-08-26T02:00:00Z");
+        CultivationModuleConfigEntity stored = storedGatherConfiguration(
+                "网页队伍", betterGiModifiedAt.minusSeconds(60), true);
+        CultivationModuleConfigMapper mapper = mapperReturning(stored);
+        BetterGiInstalledScriptSettingsReader reader = mock(BetterGiInstalledScriptSettingsReader.class);
+        when(reader.read("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(Optional.of(
+                new BetterGiInstalledScriptSettingsReader.InstalledScriptSettings(
+                        Map.of("partyName", "BetterGI 队伍"), false, betterGiModifiedAt)));
+        CultivationModuleConfigurationService service = service(mapper, reader);
+
+        CultivationModuleConfiguration result = service.find(
+                "102550550", CdAwareAutoGatherExecutionModule.ID);
+
+        assertThat(result.settings()).containsEntry("partyName", "BetterGI 队伍");
+        assertThat(result.enabled()).isFalse();
+    }
+
+    @Test
+    void newerWebEditWinsOverTheUidSpecificBetterGiConfiguration() {
+        Instant betterGiModifiedAt = Instant.parse("2026-08-26T02:00:00Z");
+        CultivationModuleConfigEntity stored = storedGatherConfiguration(
+                "网页队伍", betterGiModifiedAt.plusSeconds(60), true);
+        CultivationModuleConfigMapper mapper = mapperReturning(stored);
+        BetterGiInstalledScriptSettingsReader reader = mock(BetterGiInstalledScriptSettingsReader.class);
+        when(reader.read("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(Optional.of(
+                new BetterGiInstalledScriptSettingsReader.InstalledScriptSettings(
+                        Map.of("partyName", "BetterGI 队伍"), false, betterGiModifiedAt)));
+        CultivationModuleConfigurationService service = service(mapper, reader);
+
+        CultivationModuleConfiguration result = service.find(
+                "102550550", CdAwareAutoGatherExecutionModule.ID);
+
+        assertThat(result.settings()).containsEntry("partyName", "网页队伍");
+        assertThat(result.enabled()).isTrue();
+    }
+
+    @Test
+    void equalModificationTimesKeepTheStoredWebConfiguration() {
+        Instant modifiedAt = Instant.parse("2026-08-26T02:00:00Z");
+        CultivationModuleConfigEntity stored = storedGatherConfiguration("网页队伍", modifiedAt, true);
+        CultivationModuleConfigMapper mapper = mapperReturning(stored);
+        BetterGiInstalledScriptSettingsReader reader = mock(BetterGiInstalledScriptSettingsReader.class);
+        when(reader.read("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(Optional.of(
+                new BetterGiInstalledScriptSettingsReader.InstalledScriptSettings(
+                        Map.of("partyName", "BetterGI 队伍"), false, modifiedAt)));
+
+        CultivationModuleConfiguration result = service(mapper, reader).find(
+                "102550550", CdAwareAutoGatherExecutionModule.ID);
+
+        assertThat(result.settings()).containsEntry("partyName", "网页队伍");
+        assertThat(result.enabled()).isTrue();
+    }
+
+    private static CultivationModuleConfigEntity storedGatherConfiguration(
+            String partyName, Instant modifiedAt, boolean enabled) {
+        CultivationModuleConfigEntity stored = new CultivationModuleConfigEntity();
+        stored.setUid("102550550");
+        stored.setModuleId(CdAwareAutoGatherExecutionModule.ID);
+        stored.setEnabled(enabled);
+        stored.setSettingsJson("{\"partyName\":\"" + partyName + "\"}");
+        stored.setUpdateTime(LocalDateTime.ofInstant(modifiedAt, ZoneId.systemDefault()));
+        return stored;
+    }
+
+    private static CultivationModuleConfigMapper mapperReturning(CultivationModuleConfigEntity stored) {
+        CultivationModuleConfigMapper mapper = mock(CultivationModuleConfigMapper.class);
+        when(mapper.selectOne(any(Wrapper.class))).thenReturn(stored);
+        return mapper;
+    }
+
+    private static CultivationModuleConfigurationService service(
+            CultivationModuleConfigMapper mapper,
+            BetterGiInstalledScriptSettingsReader reader) {
+        return new CultivationModuleConfigurationService(
+                new CultivationModuleRegistry(List.of(new CdAwareAutoGatherExecutionModule())),
+                mapper, new ObjectMapper(), reader);
     }
 }

@@ -26,20 +26,44 @@ import static org.mockito.Mockito.when;
 
 class CultivationExecutionServiceTest {
     @Test
+    void returnsTheEffectiveLedgerWithTheLatestAuthoritativeOwnedCount() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        CultivationPlanRevisionResponse imported = revision("IMPORTED", 6, 6, 34);
+        CultivationPlanRevisionResponse effective = revision("ACTIVE", 6, 18, 22);
+        when(planService.latest("102550550")).thenReturn(imported);
+        when(observationService.effective(imported)).thenReturn(effective);
+
+        CultivationExecutionService service = new CultivationExecutionService(
+                planService, observationService, mock(AutoPlanService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationMaterialSourceCatalog.class));
+
+        CultivationPlanRevisionResponse result = service.latestLedger("102550550");
+
+        assertThat(result.state()).isEqualTo("ACTIVE");
+        assertThat(result.requirements()).singleElement().satisfies(entry -> {
+            assertThat(entry.baselineOwned()).isEqualTo(6);
+            assertThat(entry.currentOwned()).isEqualTo(18);
+            assertThat(entry.remaining()).isEqualTo(22);
+        });
+    }
+
+    @Test
     void projectsLedgerThroughResinGatherAndPendingAdapters() {
         CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
         AutoPlanService autoPlanService = mock(AutoPlanService.class);
         CultivationModuleConfigurationService configurationService = mock(CultivationModuleConfigurationService.class);
         CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
 
-        when(planService.latest("123456789")).thenReturn(new CultivationPlanRevisionResponse(
+        CultivationPlanRevisionResponse revision = new CultivationPlanRevisionResponse(
                 1, "123456789", 3, "IMPORTED", "name-only-v1", 2, "hash",
                 "PP-OCRv6", "local", List.of(
                 entry("「浪迹」的指引", 63, 3, 60),
                 entry("摩拉", 1_000_000, 250_000, 750_000),
-                entry("沙脂蛹", 168, 4, 164),
+                entry("沙脂蛹", 168, 4, 24, 144),
                 entry("谜土的护符", 46, 1, 45),
-                entry("史莱姆凝液", 18, 2, 16)), LocalDateTime.now()));
+                entry("史莱姆凝液", 18, 2, 16)), LocalDateTime.now());
+        when(planService.latest("123456789")).thenReturn(revision);
         when(autoPlanService.findDomainAll()).thenReturn(List.of());
         when(autoPlanService.find("123456789", null)).thenReturn(List.of());
 
@@ -49,7 +73,7 @@ class CultivationExecutionServiceTest {
                 CdAwareAutoGatherExecutionModule.ID, true,
                 Map.of("partyName", "钟纳久万", "partyName2nd", "钟纳久万"));
         CultivationModuleConfiguration monster = configuration(
-                FullyAutoToolsExecutionModule.ID, true, Map.of("routeFamilies", List.of()));
+                FullyAutoToolsExecutionModule.ID, true, Map.of("routeFamilies", List.of("巡陆艇")));
         CultivationModuleConfiguration weekly = configuration(
                 WeeklyBossExecutionModule.ID, true, Map.of("unfairContractTerms", true));
         when(configurationService.find("123456789", AutoPlanResinExecutionModule.ID)).thenReturn(autoPlan);
@@ -67,8 +91,10 @@ class CultivationExecutionServiceTest {
                         "史莱姆", List.of("火史莱姆"), List.of("史莱姆"))));
         when(materialSourceCatalog.availableMonsterRouteFamilies()).thenReturn(List.of("史莱姆"));
 
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        when(observationService.effective(revision)).thenReturn(revision);
         CultivationExecutionProjection result = new CultivationExecutionService(
-                planService, autoPlanService, configurationService, materialSourceCatalog)
+                planService, observationService, autoPlanService, configurationService, materialSourceCatalog)
                 .projection("123456789");
 
         assertThat(result.resinActions()).extracting(CultivationExecutionProjection.ResinAction::sourceName)
@@ -78,8 +104,12 @@ class CultivationExecutionServiceTest {
                 .containsEntry("manualSetAccountName", "123456789")
                 .containsEntry("selectLocalSpecialty_须弥", List.of("沙脂蛹"));
         assertThat(result.gatherAction().csvTargets()).singleElement()
-                .extracting(CultivationExecutionProjection.GatherTarget::required)
-                .isEqualTo(168L);
+                .satisfies(target -> {
+                    assertThat(target.required()).isEqualTo(168L);
+                    assertThat(target.baselineOwned()).isEqualTo(4L);
+                    assertThat(target.currentOwned()).isEqualTo(24L);
+                    assertThat(target.remaining()).isEqualTo(144L);
+                });
         assertThat(result.bossActions()).singleElement()
                 .extracting(CultivationExecutionProjection.BossAction::bossName)
                 .isEqualTo("灵觉隐修的迷者");
@@ -94,6 +124,27 @@ class CultivationExecutionServiceTest {
         return new CultivationLedgerEntry(
                 null, name, required, owned, remaining, RemainingEvidence.OCR,
                 0.99, false, List.of());
+    }
+
+    private static CultivationLedgerEntry entry(String name,
+                                                 long required,
+                                                 long baselineOwned,
+                                                 long currentOwned,
+                                                 long remaining) {
+        return new CultivationLedgerEntry(
+                null, name, required, baselineOwned, currentOwned, remaining,
+                RemainingEvidence.OCR, 0.99, false, List.of());
+    }
+
+    private static CultivationPlanRevisionResponse revision(String state,
+                                                            long baselineOwned,
+                                                            long currentOwned,
+                                                            long remaining) {
+        return new CultivationPlanRevisionResponse(
+                1, "102550550", 1, state, "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(new CultivationLedgerEntry(
+                null, "蕈王钩喙", 40, baselineOwned, currentOwned, remaining,
+                RemainingEvidence.OCR, 0.99, false, List.of())), LocalDateTime.now());
     }
 
     private static CultivationModuleConfiguration configuration(String id,
