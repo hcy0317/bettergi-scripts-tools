@@ -28,7 +28,6 @@ import java.util.Set;
 @Service
 public class CultivationExecutionService {
     private static final String EXECUTION_MODE = "计划驱动：领取一个行动，权威库存回写后重新规划";
-    private static final Map<String, String> SPECIALTY_COUNTRIES = specialtyCountries();
     private static final Map<String, String> MANUAL_MATERIALS = Map.of(
             "智识之冕", "人工来源：活动、版本奖励等限量渠道；系统持续保留缺口，取得后重新导入确认");
 
@@ -110,8 +109,9 @@ public class CultivationExecutionService {
                 continue;
             }
 
-            String country = SPECIALTY_COUNTRIES.get(entry.materialName());
-            if (country != null) {
+            Optional<String> specialtyCountry = materialSourceCatalog.findSpecialtyCountry(entry.materialName());
+            if (specialtyCountry.isPresent()) {
+                String country = specialtyCountry.get();
                 gatherTargets.add(new CultivationExecutionProjection.GatherTarget(
                         entry.materialName(), entry.required(), entry.baselineOwned(), entry.currentOwned(), entry.remaining(),
                         country, "selectLocalSpecialty_" + country));
@@ -408,21 +408,6 @@ public class CultivationExecutionService {
     private static String setting(CultivationModuleConfiguration configuration, String key) {
         Object value = configuration.settings().get(key);
         return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    private static Map<String, String> specialtyCountries() {
-        Map<String, String> result = new LinkedHashMap<>();
-        addSpecialties(result, "蒙德", "嘟嘟莲", "风车菊", "钩钩果", "落落莓", "慕风蘑菇", "蒲公英籽", "塞西莉亚花", "小灯草");
-        addSpecialties(result, "璃月", "琉璃袋", "清水玉", "夜泊石");
-        addSpecialties(result, "稻妻", "绯樱绣球", "鬼兜虫", "海灵芝", "珊瑚真珠", "天云草实", "血斛");
-        addSpecialties(result, "须弥", "幽灯蕈", "悼灵花", "劫波莲", "沙脂蛹", "树王圣体菇");
-        addSpecialties(result, "枫丹", "海露花", "子探测单元", "幽光星星");
-        addSpecialties(result, "纳塔", "青蜜莓", "微光角菌", "灼灼彩菊", "冬凌草");
-        return Map.copyOf(result);
-    }
-
-    private static void addSpecialties(Map<String, String> target, String country, String... names) {
-        for (String name : names) target.put(name, country);
     }
 
     private record DomainMatch(String name, String type, int materialIndex, String materialName) {

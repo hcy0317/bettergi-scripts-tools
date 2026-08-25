@@ -1,5 +1,6 @@
 package com.cloud_guest.cultivation.execution;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.cloud_guest.cultivation.persistence.CultivationExecutionActionEntity;
 import com.cloud_guest.cultivation.persistence.CultivationExecutionActionMapper;
 import com.cloud_guest.entitys.common.auto_plan.AutoBoss;
@@ -9,6 +10,7 @@ import com.cloud_guest.entitys.common.auto_plan.Physical;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,7 +18,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -143,9 +147,22 @@ public class CultivationPlanDrivenExecutionService {
                 entity.setRewardsJson(write(request.rewards()));
                 entity.setTerminationReason(request.terminationReason());
                 entity.setStatus(COMPLETED);
-                actionMapper.updateById(entity);
+                int updated = actionMapper.update(entity, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                        .eq(CultivationExecutionActionEntity::getId, normalizedActionId)
+                        .eq(CultivationExecutionActionEntity::getStatus, AWAITING_RECONCILE)
+                        .eq(CultivationExecutionActionEntity::getExecutorId, executorId)
+                        .eq(CultivationExecutionActionEntity::getResultIdempotencyKey, idempotencyKey));
+                if (updated != 1) return existingResultOrThrow(normalizedActionId, idempotencyKey);
             }
             return result(entity);
+        }
+
+        if (!LEASED.equals(entity.getStatus())) {
+            throw new IllegalStateException("行动不再处于可提交的租约状态");
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (entity.getLeaseExpiresAt() == null || !entity.getLeaseExpiresAt().isAfter(now)) {
+            throw new IllegalStateException("行动租约已过期");
         }
 
         entity.setResultIdempotencyKey(idempotencyKey);
@@ -158,8 +175,119 @@ public class CultivationPlanDrivenExecutionService {
         } else {
             entity.setStatus(AWAITING_RECONCILE);
         }
-        actionMapper.updateById(entity);
+        int updated = actionMapper.update(entity, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                .eq(CultivationExecutionActionEntity::getId, normalizedActionId)
+                .eq(CultivationExecutionActionEntity::getStatus, LEASED)
+                .eq(CultivationExecutionActionEntity::getExecutorId, executorId)
+                .isNull(CultivationExecutionActionEntity::getResultIdempotencyKey)
+                .gt(CultivationExecutionActionEntity::getLeaseExpiresAt, now));
+        if (updated != 1) return existingResultOrThrow(normalizedActionId, idempotencyKey);
         return result(entity);
+    }
+
+    private CultivationActionResultResponse existingResultOrThrow(String actionId, String idempotencyKey) {
+        CultivationExecutionActionEntity existing = actionMapper.selectById(actionId);
+        if (existing != null && idempotencyKey.equals(existing.getResultIdempotencyKey())) {
+            return result(existing);
+        }
+        throw new IllegalStateException("行动已由另一个幂等结果完成");
+    }
+
+    public CultivationInventoryReconcileTargetsResponse reconcileTargets(String uid) {
+        String normalizedUid = require(uid, "UID");
+        CultivationExecutionProjection projection = executionService.projection(normalizedUid);
+        if (projection == null) {
+            return new CultivationInventoryReconcileTargetsResponse(normalizedUid, 0, List.of());
+        }
+        return new CultivationInventoryReconcileTargetsResponse(
+                normalizedUid, projection.revision(), reconcileMaterialNames(projection));
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public CultivationInventoryObservationResponse recordInventoryObservations(
+            String uid, CultivationInventoryObservationRequest request) {
+        String normalizedUid = require(uid, "UID");
+        if (request == null) throw new IllegalArgumentException("库存观察不能为空");
+        String executorId = require(request.executorId(), "执行器 ID");
+        String idempotencyKey = require(request.idempotencyKey(), "幂等键");
+        CultivationExecutionProjection projection = executionService.projection(normalizedUid);
+        if (projection == null) throw new IllegalStateException("该 UID 尚未建立养成账本");
+        if (request.expectedRevision() != projection.revision()) {
+            throw new IllegalStateException("库存观察 revision 已过期");
+        }
+        LinkedHashSet<String> allowed = new LinkedHashSet<>(reconcileMaterialNames(projection));
+        int observedCount = 0;
+        for (Map.Entry<String, Long> observation : request.observedOwned().entrySet()) {
+            String materialName = require(observation.getKey(), "材料名称");
+            if (!allowed.contains(materialName)) {
+                throw new IllegalArgumentException("库存观察包含非当前采集或怪物目标：" + materialName);
+            }
+            Long observedOwned = observation.getValue();
+            if (observedOwned == null || observedOwned < 0) continue;
+            String resultKey = inventoryObservationKey(idempotencyKey, materialName);
+            CultivationExecutionActionEntity existing = actionMapper.findByResultIdempotencyKey(resultKey);
+            if (existing != null) {
+                validateExistingInventoryObservation(
+                        existing, normalizedUid, projection.revision(), materialName, observedOwned);
+                observedCount++;
+                continue;
+            }
+            CultivationExecutionActionEntity entity = new CultivationExecutionActionEntity();
+            entity.setId(UUID.randomUUID().toString());
+            entity.setUid(normalizedUid);
+            entity.setPlanRevision(projection.revision());
+            entity.setExecutorId(executorId);
+            entity.setStatus(COMPLETED);
+            entity.setActionType("INVENTORY_RECONCILE");
+            entity.setMaterialName(materialName);
+            entity.setObservedOwned(observedOwned);
+            entity.setRewardsJson("{}");
+            entity.setTerminationReason("INVENTORY_RECONCILE");
+            entity.setResultIdempotencyKey(resultKey);
+            try {
+                actionMapper.insert(entity);
+            } catch (DuplicateKeyException conflict) {
+                CultivationExecutionActionEntity winner = actionMapper.findByResultIdempotencyKey(resultKey);
+                validateExistingInventoryObservation(
+                        winner, normalizedUid, projection.revision(), materialName, observedOwned);
+            }
+            observedCount++;
+        }
+        return new CultivationInventoryObservationResponse(
+                "REPLANNING", "权威库存已回写，将自动重生成后续路线",
+                normalizedUid, projection.revision(), observedCount);
+    }
+
+    private static List<String> reconcileMaterialNames(CultivationExecutionProjection projection) {
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        projection.gatherAction().csvTargets().stream()
+                .map(CultivationExecutionProjection.GatherTarget::materialName).forEach(names::add);
+        projection.monsterAction().targets().stream()
+                .map(CultivationExecutionProjection.MonsterTarget::materialName).forEach(names::add);
+        return List.copyOf(names);
+    }
+
+    private static String inventoryObservationKey(String idempotencyKey, String materialName) {
+        UUID digest = UUID.nameUUIDFromBytes(
+                (idempotencyKey + "|" + materialName).getBytes(StandardCharsets.UTF_8));
+        return "inventory:" + digest;
+    }
+
+    private static void validateExistingInventoryObservation(
+            CultivationExecutionActionEntity existing,
+            String uid,
+            int revision,
+            String materialName,
+            long observedOwned) {
+        if (existing == null
+                || !uid.equals(existing.getUid())
+                || existing.getPlanRevision() == null
+                || existing.getPlanRevision() != revision
+                || !materialName.equals(existing.getMaterialName())
+                || existing.getObservedOwned() == null
+                || existing.getObservedOwned() != observedOwned) {
+            throw new IllegalStateException("库存观察幂等键已对应不同结果");
+        }
     }
 
     private CultivationActionResultResponse result(CultivationExecutionActionEntity entity) {

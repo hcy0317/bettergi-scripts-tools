@@ -26,4 +26,12 @@ public interface CultivationExecutionActionMapper extends BaseMapper<Cultivation
             """)
     List<CultivationExecutionActionEntity> findCompletedObservations(
             @Param("uid") String uid, @Param("revision") int revision);
+
+    @Select("""
+            SELECT * FROM cultivation_execution_action
+            WHERE result_idempotency_key = #{idempotencyKey}
+            LIMIT 1
+            """)
+    CultivationExecutionActionEntity findByResultIdempotencyKey(
+            @Param("idempotencyKey") String idempotencyKey);
 }

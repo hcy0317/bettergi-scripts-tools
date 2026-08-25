@@ -8,11 +8,25 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CultivationDatabaseSchemaTest {
+
+    @Test
+    void mysqlAndPostgresKeepUnboundedTerminationDiagnostics() throws Exception {
+        String mysql = new ClassPathResource("sql/mysql.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+        String postgres = new ClassPathResource("sql/pgsql.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(mysql).contains("`termination_reason` text");
+        assertThat(postgres)
+                .contains("termination_reason TEXT")
+                .contains("ADD COLUMN IF NOT EXISTS is_delete BOOLEAN DEFAULT false;");
+    }
 
     @Test
     void sqliteInitializationIsIdempotentAndRevisionIsUniquePerUid() throws Exception {

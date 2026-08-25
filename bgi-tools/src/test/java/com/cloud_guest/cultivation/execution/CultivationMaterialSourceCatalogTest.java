@@ -23,6 +23,10 @@ class CultivationMaterialSourceCatalogTest {
                 [{"name":"镀金旅团·机弩兵","item":["织金红绸"],"tags":[]}]
                 """);
         Files.createDirectories(temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "镀金旅团")));
+        Path specialtyRoute = temporaryRoot.resolve(Path.of(
+                "User", "AutoPathing", "地方特产", "挪德卡莱", "月矩力结晶", "路线", "01.json"));
+        Files.createDirectories(specialtyRoute.getParent());
+        Files.writeString(specialtyRoute, "{}");
 
         CultivationOcrProperties properties = new CultivationOcrProperties();
         properties.setBettergiRoot(temporaryRoot.toString());
@@ -36,5 +40,6 @@ class CultivationMaterialSourceCatalogTest {
                 .extracting(CultivationMaterialSourceCatalog.BossSource::bossName)
                 .isEqualTo("灵觉隐修的迷者");
         assertThat(catalog.findWeeklyBoss("无光涡眼")).contains("吞星之鲸");
+        assertThat(catalog.findSpecialtyCountry("月矩力结晶")).contains("挪德卡莱");
     }
 }

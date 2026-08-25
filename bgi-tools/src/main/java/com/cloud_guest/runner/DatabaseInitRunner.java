@@ -352,6 +352,7 @@ public class DatabaseInitRunner {
                 }
                 errorList.stream().forEach(sql -> log.warn("[字段存在] `{}.{}`字段已存在，跳过添加 {}", sql.table, sql.column,sql.remark));
                 log.info("====================================");
+                verifyCultivationExecutionSchema();
             } else {
                 log.info("数据库类型 {} 未配置对应脚本，跳过", dbType);
             }
@@ -398,6 +399,16 @@ public class DatabaseInitRunner {
             page++;
         } while (CollUtil.isNotEmpty(pageRecords));
         log.info("数据兼容性迁移耗时: {} ms，更新记录数: {}", System.currentTimeMillis() - start, totalUpdated);
+    }
+
+    void verifyCultivationExecutionSchema() {
+        try {
+            jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM cultivation_execution_action WHERE 1 = 0", Integer.class);
+        } catch (Exception exception) {
+            throw new IllegalStateException(
+                    "养成执行行动表缺失或不可用，拒绝在不完整数据库结构上启动", exception);
+        }
     }
 
 

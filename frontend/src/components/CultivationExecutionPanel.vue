@@ -31,6 +31,7 @@ const GROUP_SETTINGS_MODULE_ID = 'script-group-settings'
 const AUTO_SYNC_INTERVAL_MS = 5000
 let autoSyncTimer = null
 let autoSyncing = false
+let loadGeneration = 0
 
 const partyOptions = computed(() => {
   const result = new Set(projection.value?.partyOptions || [])
@@ -57,6 +58,7 @@ const isGroupSettings = module => module.module.moduleId === GROUP_SETTINGS_MODU
 const isAutoPlan = module => module.module.moduleId === 'auto-plan-resin'
 
 const load = async (silent = false) => {
+  const generation = ++loadGeneration
   const uid = props.uid.trim()
   if (!silent) {
     projection.value = null
@@ -70,12 +72,15 @@ const load = async (silent = false) => {
       getCultivationExecutionProjection(uid),
       getCultivationExecutionModules(uid)
     ])
+    if (generation !== loadGeneration) return
     projection.value = nextProjection
     modules.value = Array.isArray(moduleConfigurations) ? moduleConfigurations : []
   } catch (error) {
-    if (!silent) loadError.value = error?.message || '无法读取养成执行计划'
+    if (!silent && generation === loadGeneration) {
+      loadError.value = error?.message || '无法读取养成执行计划'
+    }
   } finally {
-    if (!silent) loading.value = false
+    if (!silent && generation === loadGeneration) loading.value = false
   }
 }
 

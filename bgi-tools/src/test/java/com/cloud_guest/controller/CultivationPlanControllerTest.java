@@ -3,6 +3,8 @@ package com.cloud_guest.controller;
 import com.cloud_guest.cultivation.execution.CultivationActionResultRequest;
 import com.cloud_guest.cultivation.execution.CultivationActionResultResponse;
 import com.cloud_guest.cultivation.execution.CultivationExecutionPreferences;
+import com.cloud_guest.cultivation.execution.CultivationInventoryObservationRequest;
+import com.cloud_guest.cultivation.execution.CultivationInventoryObservationResponse;
 import com.cloud_guest.cultivation.execution.CultivationExecutionService;
 import com.cloud_guest.cultivation.execution.CultivationOneStopService;
 import com.cloud_guest.cultivation.execution.CultivationPlanDrivenExecutionService;
@@ -93,6 +95,25 @@ class CultivationPlanControllerTest {
                 oneStopService, mock(CultivationPlanDrivenExecutionService.class));
 
         controller.savePreferences(request);
+
+        verify(oneStopService).prepare("102550550");
+    }
+
+    @Test
+    void finalGatherAndMonsterInventoryWritebackRegeneratesTheUidSpecificPlan() {
+        CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
+        CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);
+        CultivationInventoryObservationRequest request = new CultivationInventoryObservationRequest(
+                "inventory-executor", 3, "inventory-run", Map.of("沙脂蛹", 48L));
+        when(planDrivenService.recordInventoryObservations("102550550", request)).thenReturn(
+                new CultivationInventoryObservationResponse(
+                        "REPLANNING", "已回写", "102550550", 3, 1));
+        CultivationPlanController controller = new CultivationPlanController(
+                mock(CultivationPlanApplicationService.class), mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                oneStopService, planDrivenService);
+
+        controller.inventoryObservations("102550550", request);
 
         verify(oneStopService).prepare("102550550");
     }

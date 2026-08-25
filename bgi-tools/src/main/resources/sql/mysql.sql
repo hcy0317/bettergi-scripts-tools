@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS `cultivation_execution_action` (
     `plan_json` longtext NOT NULL,
     `observed_owned` bigint DEFAULT NULL,
     `rewards_json` longtext,
-    `termination_reason` varchar(128) DEFAULT NULL,
+    `termination_reason` text,
     `result_idempotency_key` varchar(128) DEFAULT NULL,
     `create_by` varchar(64) DEFAULT NULL,
     `create_time` datetime DEFAULT NULL,

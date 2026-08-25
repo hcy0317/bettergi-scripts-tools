@@ -48,6 +48,21 @@ async function observeOwned(materialName, reconcileGrid) {
     return Math.trunc(observed);
 }
 
+async function observeOwnedBatch(materialNames) {
+    const names = Array.from(materialNames ?? []).map(String).filter(Boolean);
+    if (names.length === 0) return {};
+    const result = await dispatcher.runTask(new SoloTask("CountInventoryItem", {
+        gridScreenName: "Materials",
+        itemNames: names,
+    }));
+    const observedOwned = {};
+    for (const name of names) {
+        const count = Number(result?.[name]);
+        if (Number.isFinite(count) && count >= 0) observedOwned[name] = Math.trunc(count);
+    }
+    return observedOwned;
+}
+
 function toPlainRewards(value) {
     const rewards = {};
     if (!value) return rewards;
@@ -69,6 +84,37 @@ async function reportResult(baseUrl, action, executorId, observedOwned, succeede
         rewards,
         terminationReason: reason,
     }, token);
+}
+
+export async function runCultivationInventoryReconcile(config) {
+    const baseUrl = cultivationApiBase(config.bgi_tools.api.httpPullJsonConfig);
+    const uid = String(config.user.uid ?? "").trim();
+    if (!uid) throw new Error("库存复核模式缺少 UID");
+    const executorId = `inventory-${uid}-${Date.now()}`;
+    const targets = await requestJson(
+        "GET", `${baseUrl}/execution/inventory-reconcile-targets?uid=${encodeURIComponent(uid)}`,
+        null, config.bgi_tools.token);
+    const materialNames = Array.from(targets?.materialNames ?? []);
+    if (materialNames.length === 0) {
+        log.info("[计划驱动] 当前没有需要组末复核的地方特产或怪物材料");
+        return;
+    }
+    log.info("[计划驱动] 组末权威库存复核：{0}", materialNames.join("、"));
+    const observedOwned = await observeOwnedBatch(materialNames);
+    if (Object.keys(observedOwned).length === 0) {
+        log.warn("[计划驱动] 组末库存均未能识别，不写入未知值");
+        return;
+    }
+    const response = await requestJson(
+        "POST", `${baseUrl}/execution/inventory-observations?uid=${encodeURIComponent(uid)}`,
+        {
+            executorId,
+            expectedRevision: targets.revision,
+            idempotencyKey: executorId,
+            observedOwned,
+        },
+        config.bgi_tools.token);
+    log.info("[计划驱动] 组末库存回写完成：{0} 项，{1}", response.observedCount, response.message);
 }
 
 async function executeAction(baseUrl, action, executorId, token) {

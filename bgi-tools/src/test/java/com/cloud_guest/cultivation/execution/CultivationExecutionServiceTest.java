@@ -82,6 +82,8 @@ class CultivationExecutionServiceTest {
         when(configurationService.find("123456789", WeeklyBossExecutionModule.ID)).thenReturn(weekly);
         when(configurationService.findAll(anyString())).thenReturn(List.of(autoPlan, gather, monster, weekly));
         when(materialSourceCatalog.findBoss(anyString())).thenReturn(Optional.empty());
+        when(materialSourceCatalog.findSpecialtyCountry(anyString())).thenReturn(Optional.empty());
+        when(materialSourceCatalog.findSpecialtyCountry("沙脂蛹")).thenReturn(Optional.of("须弥"));
         when(materialSourceCatalog.findMonster(anyString())).thenReturn(Optional.empty());
         when(materialSourceCatalog.findWeeklyBoss(anyString())).thenReturn(Optional.empty());
         when(materialSourceCatalog.findBoss("谜土的护符")).thenReturn(Optional.of(

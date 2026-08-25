@@ -129,22 +129,24 @@ class CultivationOneStopServiceTest {
 
         assertThat(result.autoPlanActions()).isEqualTo(1);
         assertThat(result.message()).contains("计划驱动");
-        assertThat(result.scriptTasks()).isEqualTo(4);
+        assertThat(result.scriptTasks()).isEqualTo(5);
         assertThat(result.scriptGroupName()).isEqualTo("养成一条龙-102550550");
         JsonNode group = new ObjectMapper().readTree(Path.of(result.scriptGroupFile()).toFile());
         assertThat(group.path("name").asText()).isEqualTo("养成一条龙-102550550");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("folderName").asText()).toList())
                 .containsExactly("AutoPlan", "CD-Aware-AutoGather",
-                        "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss");
+                        "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss", "AutoPlan");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("name").asText()).toList())
                 .containsExactly("养成体力：摩拉·世界首领", "养成采集：沙脂蛹",
-                        "养成怪物：镀金旅团", "周本 - 博士");
+                        "养成怪物：镀金旅团", "周本 - 博士", "养成收尾：权威库存复核");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
         assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("talentDomainEnabled").asBoolean()).isFalse();
+        assertThat(autoPlanSettings.path("moraLeyLineEnabled").asBoolean()).isTrue();
         assertThat(autoPlanSettings.path("run_config").asText()).isEmpty();
         assertThat(autoPlanSettings.path("auto_check")).isEmpty();
         assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();
@@ -159,7 +161,9 @@ class CultivationOneStopServiceTest {
                 .contains("return await dispatcher.RunAutoBossTask(param)");
         assertThat(Files.readString(autoPlanScript.resolve("main.js")))
                 .contains("runPlanDrivenCultivation")
-                .contains("settings.cultivation_plan_mode");
+                .contains("runCultivationInventoryReconcile")
+                .contains("settings.cultivation_plan_mode")
+                .contains("settings.cultivation_inventory_reconcile_mode");
         JsonNode gatherSettings = group.path("projects").get(1).path("jsScriptSettingsObject");
         assertThat(gatherSettings.path("selectForgingOre")).isEmpty();
         assertThat(gatherSettings.path("filterPathByKeywords").asText()).isEmpty();
@@ -174,6 +178,9 @@ class CultivationOneStopServiceTest {
                 .containsExactly("镀金旅团路线乙");
         assertThat(monsterSettings.path("http_api").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/cron/next-timestamp/all");
+        JsonNode reconcileSettings = group.path("projects").get(4).path("jsScriptSettingsObject");
+        assertThat(reconcileSettings.path("cultivation_inventory_reconcile_mode").asBoolean()).isTrue();
+        assertThat(reconcileSettings.path("cultivation_plan_mode").asBoolean()).isFalse();
         assertThat(group.path("config").path("pathingConfig").path("partyName").asText())
                 .isEqualTo("养成队伍");
         assertThat(group.path("config").path("pathingConfig").path("autoPickEnabled").asBoolean()).isTrue();
@@ -220,7 +227,7 @@ class CultivationOneStopServiceTest {
         CultivationOneStopResult repeated = service.prepare("102550550");
         assertThat(repeated.scriptGroupName()).isEqualTo(result.scriptGroupName());
         assertThat(new ObjectMapper().readTree(Path.of(repeated.scriptGroupFile()).toFile())
-                .path("projects").size()).isEqualTo(4);
+                .path("projects").size()).isEqualTo(5);
         assertThat(duplicate).doesNotExist();
         assertThat(Path.of(repeated.backupDirectory()).resolve("ScriptGroup")
                 .resolve(duplicate.getFileName())).exists();

@@ -14,6 +14,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,6 +63,8 @@ class CultivationModuleConfigurationServiceTest {
 
         assertThat(result.settings()).containsEntry("partyName", "BetterGI 队伍");
         assertThat(result.enabled()).isFalse();
+        assertThat(stored.getEnabled()).isFalse();
+        assertThat(stored.getSettingsJson()).contains("BetterGI 队伍");
     }
 
     @Test
@@ -98,6 +101,33 @@ class CultivationModuleConfigurationServiceTest {
 
         assertThat(result.settings()).containsEntry("partyName", "网页队伍");
         assertThat(result.enabled()).isTrue();
+    }
+
+    @Test
+    void webSaveAdvancesTheStoredTimestampPastThePreviouslyNewerBetterGiFile() {
+        Instant fileModifiedAt = Instant.parse("2026-08-25T00:01:00Z");
+        CultivationModuleConfigEntity initial = storedGatherConfiguration(
+                "旧网页队伍", fileModifiedAt.minusSeconds(60), true);
+        AtomicReference<CultivationModuleConfigEntity> stored = new AtomicReference<>(initial);
+        CultivationModuleConfigMapper mapper = mock(CultivationModuleConfigMapper.class);
+        when(mapper.selectOne(any(Wrapper.class))).thenAnswer(ignored -> stored.get());
+        when(mapper.updateById(any(CultivationModuleConfigEntity.class))).thenAnswer(invocation -> {
+            stored.set(invocation.getArgument(0));
+            return 1;
+        });
+        BetterGiInstalledScriptSettingsReader reader = mock(BetterGiInstalledScriptSettingsReader.class);
+        when(reader.read("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(Optional.of(
+                new BetterGiInstalledScriptSettingsReader.InstalledScriptSettings(
+                        Map.of("partyName", "BetterGI 队伍"), true, fileModifiedAt)));
+        CultivationModuleConfigurationService service = service(mapper, reader);
+
+        CultivationModuleConfiguration result = service.save(
+                "102550550", CdAwareAutoGatherExecutionModule.ID,
+                new CultivationModuleConfigurationRequest(true, Map.of("partyName", "新网页队伍")));
+
+        assertThat(result.settings()).containsEntry("partyName", "新网页队伍");
+        assertThat(stored.get().getUpdateTime().atZone(ZoneId.systemDefault()).toInstant())
+                .isAfter(fileModifiedAt);
     }
 
     private static CultivationModuleConfigEntity storedGatherConfiguration(

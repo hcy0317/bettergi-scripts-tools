@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -71,6 +72,9 @@ public class CultivationModuleConfigurationService {
         boolean enabled = installedWins && installed.get().enabled() != null
                 ? installed.get().enabled()
                 : entity == null ? module.defaultEnabled() : !Boolean.FALSE.equals(entity.getEnabled());
+        if (installedWins) {
+            persistInstalled(uid, module, entity, settings, enabled, installed.get().modifiedAt());
+        }
         return new CultivationModuleConfiguration(CultivationModuleDefinition.from(module), enabled, settings);
     }
 
@@ -107,6 +111,10 @@ public class CultivationModuleConfigurationService {
                     ? current.enabled()
                     : request.enabled());
             entity.setSettingsJson(objectMapper.writeValueAsString(settings));
+            Instant installedModifiedAt = installedSettingsReader.read(normalizedUid, moduleId)
+                    .map(BetterGiInstalledScriptSettingsReader.InstalledScriptSettings::modifiedAt)
+                    .orElse(null);
+            entity.setUpdateTime(nextModifiedAt(installedModifiedAt, entity.getUpdateTime()));
             if (existing == null) mapper.insert(entity); else mapper.updateById(entity);
         } catch (Exception exception) {
             throw new IllegalStateException("无法保存模块设置：" + moduleId, exception);
@@ -150,6 +158,41 @@ public class CultivationModuleConfigurationService {
     private static Instant entityModifiedAt(CultivationModuleConfigEntity entity) {
         var modifiedAt = entity.getUpdateTime() != null ? entity.getUpdateTime() : entity.getCreateTime();
         return modifiedAt == null ? null : modifiedAt.atZone(ZoneId.systemDefault()).toInstant();
+    }
+
+    private void persistInstalled(String uid,
+                                  CultivationExecutionModule module,
+                                  CultivationModuleConfigEntity existing,
+                                  Map<String, Object> settings,
+                                  boolean enabled,
+                                  Instant fileModifiedAt) {
+        try {
+            CultivationModuleConfigEntity entity = existing == null
+                    ? new CultivationModuleConfigEntity() : existing;
+            entity.setUid(uid);
+            entity.setModuleId(module.moduleId());
+            entity.setAdapterVersion(module.adapterVersion());
+            entity.setEnabled(enabled);
+            entity.setSettingsJson(objectMapper.writeValueAsString(settings));
+            entity.setUpdateTime(nextModifiedAt(fileModifiedAt, entity.getUpdateTime()));
+            if (existing == null) mapper.insert(entity); else mapper.updateById(entity);
+        } catch (Exception exception) {
+            throw new IllegalStateException("无法吸收 BetterGI 较新的模块设置：" + module.moduleId(), exception);
+        }
+    }
+
+    private static LocalDateTime nextModifiedAt(Instant externalModifiedAt,
+                                                LocalDateTime existingModifiedAt) {
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDateTime candidate = LocalDateTime.now();
+        if (externalModifiedAt != null) {
+            LocalDateTime external = LocalDateTime.ofInstant(externalModifiedAt, zone);
+            if (!candidate.isAfter(external)) candidate = external.plusNanos(1);
+        }
+        if (existingModifiedAt != null && !candidate.isAfter(existingModifiedAt)) {
+            candidate = existingModifiedAt.plusNanos(1);
+        }
+        return candidate;
     }
 
     private void applyRuntimeSettings(CultivationExecutionModule module, Map<String, Object> settings) {

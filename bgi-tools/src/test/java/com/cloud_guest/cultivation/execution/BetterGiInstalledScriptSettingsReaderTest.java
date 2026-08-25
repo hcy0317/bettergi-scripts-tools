@@ -1,6 +1,7 @@
 package com.cloud_guest.cultivation.execution;
 
 import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
+import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
 import com.cloud_guest.cultivation.execution.module.ScriptGroupSettingsExecutionModule;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,47 @@ class BetterGiInstalledScriptSettingsReaderTest {
                 .containsEntry("partyName", "BetterGI 根配置队伍")
                 .containsEntry("autoFightStrategyName", "自定义策略")
                 .containsEntry("shellEnabled", false);
+    }
+
+    @Test
+    void autoPlanSettingsIgnoreTheEnabledFinalInventoryReconcileProject() throws Exception {
+        Path groups = temporaryRoot.resolve(Path.of("User", "ScriptGroup"));
+        Files.createDirectories(groups);
+        Files.writeString(groups.resolve("养成一条龙-102550550.json"), """
+                {
+                  "projects": [
+                    {
+                      "folderName": "AutoPlan",
+                      "status": "Disabled",
+                      "jsScriptSettingsObject": {"talentDomainEnabled": false}
+                    },
+                    {
+                      "folderName": "AutoPlan",
+                      "status": "Enabled",
+                      "jsScriptSettingsObject": {"cultivation_inventory_reconcile_mode": true}
+                    }
+                  ]
+                }
+                """);
+        CultivationMaterialSourceCatalog catalog = mock(CultivationMaterialSourceCatalog.class);
+        when(catalog.betterGiRoot()).thenReturn(temporaryRoot);
+        BetterGiInstalledScriptSettingsReader reader =
+                new BetterGiInstalledScriptSettingsReader(catalog, new ObjectMapper());
+
+        BetterGiInstalledScriptSettingsReader.InstalledScriptSettings result = reader
+                .read("102550550", AutoPlanResinExecutionModule.ID).orElseThrow();
+
+        assertThat(result.enabled()).isFalse();
+        assertThat(result.settings()).containsEntry("talentDomainEnabled", false);
+
+        Files.writeString(groups.resolve("养成一条龙-999999999.json"), """
+                {"projects":[{
+                  "folderName":"AutoPlan",
+                  "status":"Enabled",
+                  "jsScriptSettingsObject":{"cultivation_inventory_reconcile_mode":true}
+                }]}
+                """);
+        assertThat(reader.read("999999999", AutoPlanResinExecutionModule.ID)).isEmpty();
     }
 
     private static String group(String partyName, String status) {

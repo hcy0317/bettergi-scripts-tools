@@ -10,9 +10,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -88,7 +90,9 @@ class CultivationPlanDrivenExecutionServiceTest {
         leased.setExecutorId("executor-a");
         leased.setMaterialName("「公平」的哲学");
         leased.setStatus("LEASED");
+        leased.setLeaseExpiresAt(LocalDateTime.now(MONDAY).plusMinutes(10));
         when(mapper.selectById("action-1")).thenReturn(leased);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
 
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
@@ -102,7 +106,7 @@ class CultivationPlanDrivenExecutionServiceTest {
         assertThat(response.observedOwned()).isEqualTo(8);
         assertThat(leased.getStatus()).isEqualTo("COMPLETED");
         assertThat(leased.getResultIdempotencyKey()).isEqualTo("result-1");
-        verify(mapper).updateById(leased);
+        verify(mapper).update(any(CultivationExecutionActionEntity.class), any());
 
         when(mapper.selectById("action-1")).thenReturn(leased);
         CultivationActionResultResponse repeated = service.complete("action-1", request);
@@ -120,7 +124,9 @@ class CultivationPlanDrivenExecutionServiceTest {
         leased.setExecutorId("executor-a");
         leased.setMaterialName("谜土的护符");
         leased.setStatus("LEASED");
+        leased.setLeaseExpiresAt(LocalDateTime.now(MONDAY).plusMinutes(10));
         when(mapper.selectById("action-2")).thenReturn(leased);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
 
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
@@ -138,6 +144,42 @@ class CultivationPlanDrivenExecutionServiceTest {
                         Map.of(), "RECONCILE_ONLY"));
         assertThat(reconciled.status()).isEqualTo("REPLANNING");
         assertThat(leased.getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void rejectsAResultAfterTheActionLeaseHasExpired() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity leased = leasedAction("expired-action");
+        leased.setLeaseExpiresAt(LocalDateTime.now(MONDAY).minusSeconds(1));
+        when(mapper.selectById("expired-action")).thenReturn(leased);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        assertThatThrownBy(() -> service.complete("expired-action", new CultivationActionResultRequest(
+                "executor-a", 3, "expired-result", true, 18L, Map.of(), "COMPLETED")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("租约已过期");
+    }
+
+    @Test
+    void rejectsACompetingResultWhenAnotherIdempotencyKeyWinsTheCas() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity leased = leasedAction("racing-action");
+        CultivationExecutionActionEntity winner = leasedAction("racing-action");
+        winner.setStatus("COMPLETED");
+        winner.setResultIdempotencyKey("winner-result");
+        winner.setObservedOwned(18L);
+        when(mapper.selectById("racing-action")).thenReturn(leased, winner);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(0);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        assertThatThrownBy(() -> service.complete("racing-action", new CultivationActionResultRequest(
+                "executor-a", 3, "loser-result", true, 17L, Map.of(), "COMPLETED")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("另一个幂等结果");
     }
 
     @Test
@@ -175,7 +217,9 @@ class CultivationPlanDrivenExecutionServiceTest {
         leased.setExecutorId("executor-a");
         leased.setMaterialName("谜土的护符");
         leased.setStatus("LEASED");
+        leased.setLeaseExpiresAt(LocalDateTime.now(MONDAY).plusMinutes(10));
         when(mapper.selectById("action-no-progress")).thenReturn(leased);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
 
@@ -186,6 +230,49 @@ class CultivationPlanDrivenExecutionServiceTest {
 
         assertThat(response.status()).isEqualTo("STOPPED_NO_PROGRESS");
         assertThat(leased.getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void exposesGatherAndMonsterMaterialsForTheFinalAuthoritativeInventoryReconcile() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationInventoryReconcileTargetsResponse response = service.reconcileTargets("102550550");
+
+        assertThat(response.revision()).isEqualTo(3);
+        assertThat(response.materialNames()).containsExactly("沙脂蛹", "织金红绸");
+    }
+
+    @Test
+    void persistsFinalGatherAndMonsterInventoryAsIdempotentLedgerObservations() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        Map<String, CultivationExecutionActionEntity> persisted = new HashMap<>();
+        when(mapper.findByResultIdempotencyKey(any())).thenAnswer(invocation ->
+                persisted.get(invocation.getArgument(0, String.class)));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            CultivationExecutionActionEntity entity = invocation.getArgument(0);
+            persisted.put(entity.getResultIdempotencyKey(), entity);
+            return 1;
+        }).when(mapper).insert(any(CultivationExecutionActionEntity.class));
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+        CultivationInventoryObservationRequest request = new CultivationInventoryObservationRequest(
+                "inventory-executor", 3, "inventory-run-1",
+                Map.of("沙脂蛹", 48L, "织金红绸", 73L));
+
+        CultivationInventoryObservationResponse response = service.recordInventoryObservations(
+                "102550550", request);
+        CultivationInventoryObservationResponse repeated =
+                service.recordInventoryObservations("102550550", request);
+
+        assertThat(response.observedCount()).isEqualTo(2);
+        assertThat(repeated.observedCount()).isEqualTo(2);
+        verify(mapper, org.mockito.Mockito.times(2)).insert(any(CultivationExecutionActionEntity.class));
     }
 
     private static CultivationExecutionProjection projection() {
@@ -207,5 +294,32 @@ class CultivationPlanDrivenExecutionServiceTest {
                         "FullyAutoAndSemiAutoTools", "无", Map.of(), List.of(), List.of()),
                 List.of(), new CultivationExecutionPreferences(
                 "102550550", "钟纳久万", "钟纳久万", "钟纳久万", true), List.of("钟纳久万"));
+    }
+
+    private static CultivationExecutionActionEntity leasedAction(String id) {
+        CultivationExecutionActionEntity leased = new CultivationExecutionActionEntity();
+        leased.setId(id);
+        leased.setUid("102550550");
+        leased.setPlanRevision(3);
+        leased.setExecutorId("executor-a");
+        leased.setMaterialName("蕈王钩喙");
+        leased.setStatus("LEASED");
+        leased.setLeaseExpiresAt(LocalDateTime.now(MONDAY).plusMinutes(10));
+        return leased;
+    }
+
+    private static CultivationExecutionProjection projectionWithReconcileTargets() {
+        var gatherTarget = new CultivationExecutionProjection.GatherTarget(
+                "沙脂蛹", 168, 4, 4, 164, "须弥", "selectLocalSpecialty_须弥");
+        var gather = new CultivationExecutionProjection.GatherAction(
+                "CD-Aware-AutoGather", "待执行", Map.of(), List.of(gatherTarget));
+        var monsterTarget = new CultivationExecutionProjection.MonsterTarget(
+                "织金红绸", 129, 59, 59, 70, "镀金旅团", List.of("镀金旅团·机弩兵"));
+        var monster = new CultivationExecutionProjection.MonsterAction(
+                "FullyAutoAndSemiAutoTools", "待执行", Map.of(), List.of(monsterTarget), List.of("镀金旅团"));
+        return new CultivationExecutionProjection(
+                "102550550", 3, "ACTIVE", "计划驱动", List.of(), List.of(), List.of(),
+                gather, monster, List.of(), new CultivationExecutionPreferences(
+                "102550550", "", "", "", true), List.of());
     }
 }

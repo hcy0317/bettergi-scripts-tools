@@ -135,7 +135,7 @@ COMMENT ON COLUMN uid_info_config.update_by   IS '更新者';
 COMMENT ON COLUMN uid_info_config.update_time IS '更新时间';
 COMMENT ON COLUMN uid_info_config.remark      IS '备注';
 
-ALTER TABLE uid_info_config ADD COLUMN is_delete BOOLEAN  DEFAULT false
+ALTER TABLE uid_info_config ADD COLUMN IF NOT EXISTS is_delete BOOLEAN DEFAULT false;
 -- =========================================================
 -- 表 4: db_kv
 -- =========================================================
@@ -312,7 +312,7 @@ CREATE TABLE IF NOT EXISTS cultivation_execution_action (
     plan_json TEXT NOT NULL,
     observed_owned BIGINT,
     rewards_json TEXT,
-    termination_reason VARCHAR(128),
+    termination_reason TEXT,
     result_idempotency_key VARCHAR(128),
     create_by VARCHAR(64),
     create_time TIMESTAMP,

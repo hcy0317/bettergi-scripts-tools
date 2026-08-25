@@ -103,7 +103,7 @@ public class BetterGiInstalledScriptSettingsReader {
                 return Optional.of(new InstalledScriptSettings(
                         readGroupSettings(group), null, Files.getLastModifiedTime(groupFile).toInstant()));
             }
-            JsonNode project = findProject(group, aliases);
+            JsonNode project = findProject(group, aliases, moduleId);
             if (project == null || !project.path("jsScriptSettingsObject").isObject()) {
                 return Optional.empty();
             }
@@ -130,10 +130,15 @@ public class BetterGiInstalledScriptSettingsReader {
         return settings;
     }
 
-    private static JsonNode findProject(JsonNode node, Set<String> aliases) {
-        if (node.isObject() && aliases.contains(node.path("folderName").asText())) return node;
+    private static JsonNode findProject(JsonNode node, Set<String> aliases, String moduleId) {
+        if (node.isObject() && aliases.contains(node.path("folderName").asText())) {
+            boolean finalReconcile = AutoPlanResinExecutionModule.ID.equals(moduleId)
+                    && node.path("jsScriptSettingsObject")
+                    .path("cultivation_inventory_reconcile_mode").asBoolean(false);
+            if (!finalReconcile) return node;
+        }
         for (JsonNode child : node) {
-            JsonNode found = findProject(child, aliases);
+            JsonNode found = findProject(child, aliases, moduleId);
             if (found != null) return found;
         }
         return null;

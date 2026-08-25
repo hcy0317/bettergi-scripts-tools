@@ -45,14 +45,6 @@ import java.util.UUID;
 public class CultivationOneStopService {
     private static final DateTimeFormatter BACKUP_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
     private static final Duration LAUNCH_REQUEST_TTL = Duration.ofMinutes(5);
-    private static final Set<String> AUTO_PLAN_SCRIPT_KEYS = Set.of(
-            "key", "auto_check", "holy_relic_threshold", "auto_load", "run_config",
-            "exclude_run_exception", "loop_plan", "retry_count",
-            "bgi_tools_http_pull_json_config", "bgi_tools_open_push",
-            "bgi_tools_http_push_all_json_config", "bgi_tools_http_push_all_country_config",
-            "bgi_tools_http_push_all_boss_config", "bgi_tools_token", "debug",
-            "cultivation_plan_mode");
-
     private final CultivationExecutionService executionService;
     private final CultivationModuleConfigurationService configurationService;
     private final CultivationMaterialSourceCatalog materialSourceCatalog;
@@ -108,6 +100,7 @@ public class CultivationOneStopService {
                 uid, ScriptGroupSettingsExecutionModule.ID);
 
         boolean hasPlanDrivenAction = hasPlanDrivenAction(projection, autoPlan);
+        boolean hasInventoryReconcileTargets = hasInventoryReconcileTargets(projection);
         autoPlanService.remove(Wrappers.lambdaQuery(AutoPlanConfig.class)
                 .eq(AutoPlanConfig::getUid, uid)
                 .eq(AutoPlanConfig::getCultivate, Boolean.TRUE));
@@ -127,7 +120,7 @@ public class CultivationOneStopService {
             for (Path duplicate : duplicateGroupFiles) {
                 backup(duplicate, backupDirectory.resolve("ScriptGroup").resolve(duplicate.getFileName()));
             }
-            if (hasPlanDrivenAction) {
+            if (hasPlanDrivenAction || hasInventoryReconcileTargets) {
                 installPlanDrivenAutoPlanBridge(root, backupDirectory);
             }
             synchronizeScriptSettingsUi(root, uid, projection, backupDirectory, warnings);
@@ -178,6 +171,11 @@ public class CultivationOneStopService {
                 || !projection.bossActions().isEmpty();
     }
 
+    private static boolean hasInventoryReconcileTargets(CultivationExecutionProjection projection) {
+        return !projection.gatherAction().csvTargets().isEmpty()
+                || !projection.monsterAction().targets().isEmpty();
+    }
+
     private ObjectNode buildManagedGroup(Path root,
                                          Path targetFile,
                                          String groupName,
@@ -202,7 +200,7 @@ public class CultivationOneStopService {
         if (autoPlan.enabled() && (hasEnabledResinAction || !projection.bossActions().isEmpty())) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
-            ObjectNode settings = filteredSettings(autoPlan.settings(), AUTO_PLAN_SCRIPT_KEYS);
+            ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
             settings.set("auto_load", mergedArray(settings.get("auto_load"), List.of("bgi_tools加载")));
             String autoPlanBase = betterGiApiUrl("/auto/plan");
             settings.put("bgi_tools_http_pull_json_config", autoPlanBase + "/json");
@@ -248,6 +246,25 @@ public class CultivationOneStopService {
                     projects.add(project);
                 }
             }
+        }
+        if (hasInventoryReconcileTargets(projection)) {
+            ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
+            if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
+            ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
+            settings.set("auto_load", mergedArray(settings.get("auto_load"), List.of("bgi_tools加载")));
+            String autoPlanBase = betterGiApiUrl("/auto/plan");
+            settings.put("bgi_tools_http_pull_json_config", autoPlanBase + "/json");
+            settings.put("bgi_tools_http_push_all_json_config", autoPlanBase + "/domain/json/all");
+            settings.put("bgi_tools_http_push_all_country_config", autoPlanBase + "/country/json/all");
+            settings.put("bgi_tools_http_push_all_boss_config", autoPlanBase + "/boss/json/all");
+            settings.put("cultivation_plan_mode", false);
+            settings.put("cultivation_inventory_reconcile_mode", true);
+            settings.put("run_config", "");
+            settings.set("auto_check", objectMapper.createArrayNode());
+            settings.put("bgi_tools_token", "");
+            project.put("name", "养成收尾：权威库存复核");
+            prepareProject(project, projects.size() + 1, settings);
+            projects.add(project);
         }
         if (projects.isEmpty()) warnings.add("当前没有可执行缺口，脚本组为空");
         template.set("projects", projects);
@@ -300,14 +317,6 @@ public class CultivationOneStopService {
         project.put("allowJsHTTPHash", "");
         prepareProject(project, index, settings);
         return project;
-    }
-
-    private ObjectNode filteredSettings(Map<String, Object> source, Set<String> keys) {
-        ObjectNode result = objectMapper.createObjectNode();
-        keys.forEach(key -> {
-            if (source.containsKey(key)) result.set(key, objectMapper.valueToTree(source.get(key)));
-        });
-        return result;
     }
 
     private ObjectNode cultivationOnlyGatherSettings(
@@ -899,8 +908,29 @@ public class CultivationOneStopService {
         installAutoPlanRewardPassthrough(scriptRoot, backupDirectory);
 
         String main = Files.readString(mainFile);
-        String importLine = "import {runPlanDrivenCultivation} from './utils/cultivation_plan';";
-        if (!main.contains(importLine)) main = importLine + System.lineSeparator() + main;
+        String oldImportLine = "import {runPlanDrivenCultivation} from './utils/cultivation_plan';";
+        String importLine = "import {runPlanDrivenCultivation, runCultivationInventoryReconcile} "
+                + "from './utils/cultivation_plan';";
+        if (main.contains(oldImportLine)) {
+            main = main.replace(oldImportLine, importLine);
+        } else if (!main.contains(importLine)) {
+            main = importLine + System.lineSeparator() + main;
+        }
+        if (!main.contains("settings.cultivation_inventory_reconcile_mode")) {
+            String anchor = "    await init();";
+            int mainStart = main.indexOf("async function main()");
+            int anchorIndex = main.indexOf(anchor, mainStart);
+            if (mainStart < 0 || anchorIndex < 0) {
+                throw new IllegalStateException("AutoPlan/main.js 结构已变化，无法安全安装库存复核桥接");
+            }
+            String reconcileMode = anchor + System.lineSeparator()
+                    + "    if (settings.cultivation_inventory_reconcile_mode) {" + System.lineSeparator()
+                    + "        await runCultivationInventoryReconcile(config);" + System.lineSeparator()
+                    + "        return;" + System.lineSeparator()
+                    + "    }";
+            main = main.substring(0, anchorIndex) + reconcileMode
+                    + main.substring(anchorIndex + anchor.length());
+        }
         if (!main.contains("settings.cultivation_plan_mode")) {
             String anchor = "    await init();";
             int mainStart = main.indexOf("async function main()");

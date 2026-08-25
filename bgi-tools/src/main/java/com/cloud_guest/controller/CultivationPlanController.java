@@ -12,6 +12,9 @@ import com.cloud_guest.cultivation.execution.CultivationActionResultRequest;
 import com.cloud_guest.cultivation.execution.CultivationActionResultResponse;
 import com.cloud_guest.cultivation.execution.CultivationNextActionResponse;
 import com.cloud_guest.cultivation.execution.CultivationPlanDrivenExecutionService;
+import com.cloud_guest.cultivation.execution.CultivationInventoryObservationRequest;
+import com.cloud_guest.cultivation.execution.CultivationInventoryObservationResponse;
+import com.cloud_guest.cultivation.execution.CultivationInventoryReconcileTargetsResponse;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
@@ -110,6 +113,24 @@ public class CultivationPlanController {
         if (response.observedOwned() != null && response.observedOwned() >= 0) {
             oneStopService.prepare(response.uid());
         }
+        return ok(response);
+    }
+
+    @GetMapping("execution/inventory-reconcile-targets")
+    @Operation(summary = "读取组末需要权威背包复核的地方特产与怪物材料")
+    public Result<CultivationInventoryReconcileTargetsResponse> inventoryReconcileTargets(
+            @RequestParam String uid) {
+        return ok(planDrivenExecutionService.reconcileTargets(uid));
+    }
+
+    @PostMapping("execution/inventory-observations")
+    @Operation(summary = "回写组末地方特产与怪物材料的权威背包持有量")
+    public Result<CultivationInventoryObservationResponse> inventoryObservations(
+            @RequestParam String uid,
+            @RequestBody CultivationInventoryObservationRequest request) {
+        CultivationInventoryObservationResponse response =
+                planDrivenExecutionService.recordInventoryObservations(uid, request);
+        if (response.observedCount() > 0) oneStopService.prepare(response.uid());
         return ok(response);
     }
 
