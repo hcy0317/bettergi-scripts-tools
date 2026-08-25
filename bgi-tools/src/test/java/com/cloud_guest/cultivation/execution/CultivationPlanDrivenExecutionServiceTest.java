@@ -150,6 +150,30 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
+    void recoversAnAwaitingActionBeforeApplyingTheProjectionNeedsReconcileGate() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = leasedAction("awaiting-action");
+        awaiting.setActionType("BOSS");
+        awaiting.setStatus("AWAITING_RECONCILE");
+        awaiting.setResultIdempotencyKey("awaiting-action:result");
+        awaiting.setPlanJson("{\"runType\":\"Boss\"}");
+        CultivationExecutionProjection blockedProjection = projectionWithState("NEEDS_RECONCILE");
+        when(projectionService.projection("102550550")).thenReturn(blockedProjection);
+        when(mapper.findLeased("102550550", 3)).thenReturn(awaiting);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim("102550550", "reconcile-executor");
+
+        assertThat(response.status()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(response.actionId()).isEqualTo("awaiting-action");
+        assertThat(awaiting.getExecutorId()).isEqualTo("reconcile-executor");
+        verify(mapper).update(any(CultivationExecutionActionEntity.class), any());
+    }
+
+    @Test
     void rejectsAResultAfterTheActionLeaseHasExpired() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
@@ -396,6 +420,14 @@ class CultivationPlanDrivenExecutionServiceTest {
                         "FullyAutoAndSemiAutoTools", "无", Map.of(), List.of(), List.of()),
                 List.of(), new CultivationExecutionPreferences(
                 "102550550", "钟纳久万", "钟纳久万", "钟纳久万", true), List.of("钟纳久万"));
+    }
+
+    private static CultivationExecutionProjection projectionWithState(String state) {
+        CultivationExecutionProjection current = projection();
+        return new CultivationExecutionProjection(
+                current.uid(), current.revision(), state, current.executionMode(), current.resinActions(),
+                current.bossActions(), current.weeklyBossActions(), current.gatherAction(),
+                current.monsterAction(), current.pendingMaterials(), current.preferences(), current.partyOptions());
     }
 
     private static CultivationExecutionActionEntity leasedAction(String id) {
