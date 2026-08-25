@@ -50,13 +50,17 @@ public class CultivationScriptGroupSyncService {
         }
         CultivationExecutionProjection projection = executionService.projection(uid);
         if (projection == null) throw new IllegalStateException("该 UID 尚未建立养成账本");
+        String normalizedUid = projection.uid();
 
-        Path root = materialSourceCatalog.betterGiRoot();
-        Path scriptGroupRoot = root.resolve(Path.of("User", "ScriptGroup"));
+        Path root = materialSourceCatalog.betterGiRoot().toAbsolutePath().normalize();
+        Path scriptGroupRoot = root.resolve(Path.of("User", "ScriptGroup")).normalize();
         if (!Files.isDirectory(scriptGroupRoot)) {
             throw new IllegalStateException("未找到 BetterGI 脚本组目录：" + scriptGroupRoot);
         }
-        Path cultivationGroupFile = scriptGroupRoot.resolve("养成一条龙-" + uid + ".json");
+        Path cultivationGroupFile = scriptGroupRoot.resolve("养成一条龙-" + normalizedUid + ".json").normalize();
+        if (!cultivationGroupFile.startsWith(scriptGroupRoot)) {
+            throw new IllegalArgumentException("UID 专属脚本组路径越出 BetterGI ScriptGroup 目录");
+        }
         if (!Files.isRegularFile(cultivationGroupFile)) {
             throw new IllegalStateException("请先生成 UID 专属养成一条龙配置：" + cultivationGroupFile);
         }
@@ -89,7 +93,7 @@ public class CultivationScriptGroupSyncService {
             writeJsonAtomically(cultivationGroupFile, rootNode);
             changedFiles.add(cultivationGroupFile.getFileName().toString());
             if (cdAware) {
-                syncGatherTargets(root, uid, projection.gatherAction().csvTargets(), backupRoot);
+                syncGatherTargets(root, normalizedUid, projection.gatherAction().csvTargets(), backupRoot);
             }
         } catch (IOException exception) {
             throw new IllegalStateException("同步 BetterGI 脚本组失败", exception);

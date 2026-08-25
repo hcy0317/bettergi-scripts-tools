@@ -26,21 +26,35 @@ public class CultivationLedgerObservationService {
 
     public CultivationPlanRevisionResponse effective(CultivationPlanRevisionResponse imported) {
         if (imported == null) return null;
+        CultivationExecutionActionEntity active = actionMapper.findLeased(imported.uid(), imported.revision());
+        boolean awaitingReconcile = active != null && "AWAITING_RECONCILE".equals(active.getStatus());
         List<CultivationExecutionActionEntity> observations = actionMapper.findCompletedObservations(
                 imported.uid(), imported.revision());
-        if (observations == null || observations.isEmpty()) return imported;
+        if (observations == null || observations.isEmpty()) {
+            return awaitingReconcile ? withState(imported, "NEEDS_RECONCILE", imported.requirements()) : imported;
+        }
 
         Map<String, Long> latestOwned = new LinkedHashMap<>();
         Map<String, Long> historicalMaxOwned = new LinkedHashMap<>();
         Map<String, Long> actualRewards = new LinkedHashMap<>();
         for (CultivationExecutionActionEntity observation : observations) {
+            if ("INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())) {
+                readInventoryBatch(observation.getRewardsJson()).forEach((materialName, observedOwned) -> {
+                    if (materialName == null || observedOwned == null || observedOwned < 0) return;
+                    latestOwned.putIfAbsent(materialName, observedOwned);
+                    historicalMaxOwned.merge(materialName, observedOwned, Math::max);
+                });
+                continue;
+            }
             if (observation.getObservedOwned() == null || observation.getObservedOwned() < 0) continue;
             latestOwned.putIfAbsent(observation.getMaterialName(), observation.getObservedOwned());
             historicalMaxOwned.merge(
                     observation.getMaterialName(), observation.getObservedOwned(), Math::max);
             mergeRewards(actualRewards, observation.getRewardsJson());
         }
-        if (latestOwned.isEmpty()) return imported;
+        if (latestOwned.isEmpty()) {
+            return awaitingReconcile ? withState(imported, "NEEDS_RECONCILE", imported.requirements()) : imported;
+        }
 
         boolean unexplainedDecrease = imported.requirements().stream().anyMatch(entry -> {
             Long observedOwned = latestOwned.get(entry.materialName());
@@ -53,7 +67,7 @@ public class CultivationLedgerObservationService {
                 .map(entry -> withEvidence(
                         entry, latestOwned.get(entry.materialName()), actualRewards, unexplainedDecrease))
                 .toList();
-        String state = unexplainedDecrease
+        String state = awaitingReconcile || unexplainedDecrease
                 ? "NEEDS_RECONCILE"
                 : progress.stream().anyMatch(EntryProgress::needsCraft)
                     ? "NEEDS_CRAFT"
@@ -61,10 +75,17 @@ public class CultivationLedgerObservationService {
                         ? "COMPLETED" : "ACTIVE";
         List<CultivationLedgerEntry> effectiveRequirements = progress.stream()
                 .map(EntryProgress::entry).toList();
+        return withState(imported, state, effectiveRequirements);
+    }
+
+    private static CultivationPlanRevisionResponse withState(
+            CultivationPlanRevisionResponse imported,
+            String state,
+            List<CultivationLedgerEntry> requirements) {
         return new CultivationPlanRevisionResponse(
                 imported.id(), imported.uid(), imported.revision(), state, imported.catalogVersion(),
                 imported.previewId(), imported.sourceImageSha256(), imported.engineVersion(),
-                imported.modelSource(), effectiveRequirements, imported.createdAt());
+                imported.modelSource(), requirements, imported.createdAt());
     }
 
     private EntryProgress withEvidence(CultivationLedgerEntry entry,
@@ -103,6 +124,15 @@ public class CultivationLedgerObservationService {
             });
         } catch (IOException exception) {
             throw new IllegalStateException("无法读取养成行动的实际奖励证据", exception);
+        }
+    }
+
+    private Map<String, Long> readInventoryBatch(String observationsJson) {
+        if (observationsJson == null || observationsJson.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(observationsJson, new TypeReference<>() {});
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法读取组末权威库存观察", exception);
         }
     }
 

@@ -81,7 +81,9 @@ public class CultivationPlanController {
     @Operation(summary = "确认校正后的材料并生成不可变计划 revision")
     public Result<CultivationPlanRevisionResponse> confirm(
             @Valid @RequestBody ConfirmCultivationImportRequest request) {
-        return ok(service.confirm(request));
+        CultivationPlanRevisionResponse confirmed = service.confirm(request);
+        oneStopService.prepare(confirmed.uid());
+        return ok(confirmed);
     }
 
     @GetMapping("plan/latest")
@@ -116,11 +118,12 @@ public class CultivationPlanController {
         return ok(response);
     }
 
-    @GetMapping("execution/inventory-reconcile-targets")
-    @Operation(summary = "读取组末需要权威背包复核的地方特产与怪物材料")
+    @PostMapping("execution/inventory-reconcile-targets")
+    @Operation(summary = "领取组末地方特产与怪物材料权威背包复核租约")
     public Result<CultivationInventoryReconcileTargetsResponse> inventoryReconcileTargets(
-            @RequestParam String uid) {
-        return ok(planDrivenExecutionService.reconcileTargets(uid));
+            @RequestParam String uid,
+            @RequestParam String executorId) {
+        return ok(planDrivenExecutionService.claimInventoryReconcile(uid, executorId));
     }
 
     @PostMapping("execution/inventory-observations")
@@ -130,7 +133,7 @@ public class CultivationPlanController {
             @RequestBody CultivationInventoryObservationRequest request) {
         CultivationInventoryObservationResponse response =
                 planDrivenExecutionService.recordInventoryObservations(uid, request);
-        if (response.observedCount() > 0) oneStopService.prepare(response.uid());
+        if ("REPLANNING".equals(response.status())) oneStopService.prepare(response.uid());
         return ok(response);
     }
 

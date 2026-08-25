@@ -1,5 +1,6 @@
 package com.cloud_guest.cultivation.execution;
 
+import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
 import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
 import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
@@ -85,9 +86,13 @@ public class BetterGiInstalledScriptSettingsReader {
     public Optional<InstalledScriptSettings> read(String uid, String moduleId) {
         Set<String> aliases = ALIASES.get(moduleId);
         boolean groupRoot = ScriptGroupSettingsExecutionModule.ID.equals(moduleId);
-        if ((!groupRoot && aliases == null) || uid == null || uid.isBlank()) return Optional.empty();
-        String normalizedUid = uid.trim();
-        if (!normalizedUid.matches("\\d+")) return Optional.empty();
+        if (!groupRoot && aliases == null) return Optional.empty();
+        String normalizedUid;
+        try {
+            normalizedUid = CultivationUid.normalize(uid);
+        } catch (IllegalArgumentException exception) {
+            return Optional.empty();
+        }
         Path groupFile;
         try {
             groupFile = materialSourceCatalog.betterGiRoot().resolve(Path.of(

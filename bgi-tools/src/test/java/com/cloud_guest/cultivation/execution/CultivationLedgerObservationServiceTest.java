@@ -143,6 +143,40 @@ class CultivationLedgerObservationServiceTest {
         assertThat(effective.requirements().getFirst().remaining()).isEqualTo(4);
     }
 
+    @Test
+    void derivesCurrentOwnedFromACompletedInventoryReconcileBatch() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity batch = new CultivationExecutionActionEntity();
+        batch.setId("inventory-batch");
+        batch.setUid("102550550");
+        batch.setPlanRevision(3);
+        batch.setStatus("COMPLETED");
+        batch.setActionType("INVENTORY_RECONCILE_BATCH");
+        batch.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of("「公平」的哲学", 8L)));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(batch));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper()).effective(revision(10, 4, 6));
+
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(8);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
+    }
+
+    @Test
+    void exposesAwaitingInventoryEvidenceAsNeedsReconcileInTheLedger() {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = new CultivationExecutionActionEntity();
+        awaiting.setStatus("AWAITING_RECONCILE");
+        when(mapper.findLeased("102550550", 3)).thenReturn(awaiting);
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of());
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper()).effective(revision(10, 4, 6));
+
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(4);
+    }
+
     private static CultivationExecutionActionEntity observation(String id, long owned) {
         CultivationExecutionActionEntity entity = new CultivationExecutionActionEntity();
         entity.setId(id);

@@ -51,14 +51,20 @@ async function observeOwned(materialName, reconcileGrid) {
 async function observeOwnedBatch(materialNames) {
     const names = Array.from(materialNames ?? []).map(String).filter(Boolean);
     if (names.length === 0) return {};
-    const result = await dispatcher.runTask(new SoloTask("CountInventoryItem", {
-        gridScreenName: "Materials",
-        itemNames: names,
-    }));
+    let result = {};
+    try {
+        result = await dispatcher.runTask(new SoloTask("CountInventoryItem", {
+            gridScreenName: "Materials",
+            itemNames: names,
+        }));
+    } catch (error) {
+        log.error(`[计划驱动] 组末库存批量识别失败，将显式上报未知并停止：{0}`,
+            error?.message ?? String(error));
+    }
     const observedOwned = {};
     for (const name of names) {
         const count = Number(result?.[name]);
-        if (Number.isFinite(count) && count >= 0) observedOwned[name] = Math.trunc(count);
+        observedOwned[name] = Number.isFinite(count) && count >= 0 ? Math.trunc(count) : -1;
     }
     return observedOwned;
 }
@@ -92,8 +98,13 @@ export async function runCultivationInventoryReconcile(config) {
     if (!uid) throw new Error("库存复核模式缺少 UID");
     const executorId = `inventory-${uid}-${Date.now()}`;
     const targets = await requestJson(
-        "GET", `${baseUrl}/execution/inventory-reconcile-targets?uid=${encodeURIComponent(uid)}`,
+        "POST", `${baseUrl}/execution/inventory-reconcile-targets?uid=${encodeURIComponent(uid)}`
+            + `&executorId=${encodeURIComponent(executorId)}`,
         null, config.bgi_tools.token);
+    if (targets.status === "BUSY") {
+        log.warn("[计划驱动] 组末库存复核未取得租约：{0}", targets.message);
+        return;
+    }
     const materialNames = Array.from(targets?.materialNames ?? []);
     if (materialNames.length === 0) {
         log.info("[计划驱动] 当前没有需要组末复核的地方特产或怪物材料");
@@ -101,19 +112,20 @@ export async function runCultivationInventoryReconcile(config) {
     }
     log.info("[计划驱动] 组末权威库存复核：{0}", materialNames.join("、"));
     const observedOwned = await observeOwnedBatch(materialNames);
-    if (Object.keys(observedOwned).length === 0) {
-        log.warn("[计划驱动] 组末库存均未能识别，不写入未知值");
-        return;
-    }
     const response = await requestJson(
         "POST", `${baseUrl}/execution/inventory-observations?uid=${encodeURIComponent(uid)}`,
         {
+            actionId: targets.actionId,
             executorId,
             expectedRevision: targets.revision,
-            idempotencyKey: executorId,
+            idempotencyKey: `${targets.actionId}:result`,
             observedOwned,
         },
         config.bgi_tools.token);
+    if (response.status === "NEEDS_RECONCILE") {
+        log.warn("[计划驱动] 组末库存存在未知值，已停止后续执行：{0}", response.message);
+        return;
+    }
     log.info("[计划驱动] 组末库存回写完成：{0} 项，{1}", response.observedCount, response.message);
 }
 

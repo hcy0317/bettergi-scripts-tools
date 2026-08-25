@@ -1,6 +1,7 @@
 package com.cloud_guest.cultivation.execution;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
 import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
@@ -67,16 +68,18 @@ public class CultivationOneStopService {
     }
 
     public List<CultivationModuleConfiguration> effectiveModules(String uid) {
-        CultivationExecutionProjection projection = executionService.projection(uid);
-        if (projection == null) return configurationService.findAll(uid);
+        String normalizedUid = CultivationUid.normalize(uid);
+        CultivationExecutionProjection projection = executionService.projection(normalizedUid);
+        if (projection == null) return configurationService.findAll(normalizedUid);
         Path root = materialSourceCatalog.betterGiRoot();
-        return configurationService.findAll(uid).stream().map(configuration -> {
+        return configurationService.findAll(normalizedUid).stream().map(configuration -> {
             String moduleId = configuration.module().moduleId();
             ObjectNode effective = null;
             if (CdAwareAutoGatherExecutionModule.ID.equals(moduleId)) {
-                effective = cultivationOnlyGatherSettings(root, projection.gatherAction());
+                effective = cultivationOnlyGatherSettings(root, projection.gatherAction(), new ArrayList<>());
             } else if (FullyAutoToolsExecutionModule.ID.equals(moduleId)) {
-                effective = cultivationOnlyMonsterSettings(root, uid, projection.monsterAction());
+                effective = cultivationOnlyMonsterSettings(
+                        root, normalizedUid, projection.monsterAction(), new ArrayList<>());
             }
             if (effective == null) return configuration;
             Map<String, Object> settings = objectMapper.convertValue(
@@ -89,26 +92,31 @@ public class CultivationOneStopService {
 
     @Transactional(rollbackFor = Exception.class)
     public CultivationOneStopResult prepare(String uid) {
-        CultivationExecutionProjection projection = executionService.projection(uid);
+        String normalizedUid = CultivationUid.normalize(uid);
+        CultivationExecutionProjection projection = executionService.projection(normalizedUid);
         if (projection == null) throw new IllegalStateException("该 UID 尚未建立养成账本");
 
-        CultivationModuleConfiguration autoPlan = configurationService.find(uid, AutoPlanResinExecutionModule.ID);
-        CultivationModuleConfiguration gather = configurationService.find(uid, CdAwareAutoGatherExecutionModule.ID);
-        CultivationModuleConfiguration monster = configurationService.find(uid, FullyAutoToolsExecutionModule.ID);
-        CultivationModuleConfiguration weekly = configurationService.find(uid, WeeklyBossExecutionModule.ID);
+        CultivationModuleConfiguration autoPlan = configurationService.find(normalizedUid, AutoPlanResinExecutionModule.ID);
+        CultivationModuleConfiguration gather = configurationService.find(normalizedUid, CdAwareAutoGatherExecutionModule.ID);
+        CultivationModuleConfiguration monster = configurationService.find(normalizedUid, FullyAutoToolsExecutionModule.ID);
+        CultivationModuleConfiguration weekly = configurationService.find(normalizedUid, WeeklyBossExecutionModule.ID);
         CultivationModuleConfiguration groupSettings = configurationService.find(
-                uid, ScriptGroupSettingsExecutionModule.ID);
+                normalizedUid, ScriptGroupSettingsExecutionModule.ID);
 
         boolean hasPlanDrivenAction = hasPlanDrivenAction(projection, autoPlan);
         boolean hasInventoryReconcileTargets = hasInventoryReconcileTargets(projection);
         autoPlanService.remove(Wrappers.lambdaQuery(AutoPlanConfig.class)
-                .eq(AutoPlanConfig::getUid, uid)
+                .eq(AutoPlanConfig::getUid, normalizedUid)
                 .eq(AutoPlanConfig::getCultivate, Boolean.TRUE));
 
-        Path root = materialSourceCatalog.betterGiRoot();
+        Path root = materialSourceCatalog.betterGiRoot().toAbsolutePath().normalize();
         String groupName = "养成一条龙-" + projection.uid();
-        Path groupFile = root.resolve(Path.of("User", "ScriptGroup", "养成一条龙-" + uid + ".json"));
-        List<Path> duplicateGroupFiles = findManagedGroupDuplicates(root, uid, groupFile);
+        Path scriptGroupRoot = root.resolve(Path.of("User", "ScriptGroup")).normalize();
+        Path groupFile = scriptGroupRoot.resolve("养成一条龙-" + normalizedUid + ".json").normalize();
+        if (!groupFile.startsWith(scriptGroupRoot)) {
+            throw new IllegalArgumentException("UID 专属脚本组路径越出 BetterGI ScriptGroup 目录");
+        }
+        List<Path> duplicateGroupFiles = findManagedGroupDuplicates(root, normalizedUid, groupFile);
         List<String> warnings = new ArrayList<>();
         ObjectNode managedGroup = buildManagedGroup(
                 root, groupFile, groupName, projection, autoPlan, gather, monster, weekly,
@@ -123,7 +131,7 @@ public class CultivationOneStopService {
             if (hasPlanDrivenAction || hasInventoryReconcileTargets) {
                 installPlanDrivenAutoPlanBridge(root, backupDirectory);
             }
-            synchronizeScriptSettingsUi(root, uid, projection, backupDirectory, warnings);
+            synchronizeScriptSettingsUi(root, normalizedUid, projection, backupDirectory, warnings);
             writeJsonIfChanged(
                     groupFile,
                     managedGroup,
@@ -135,7 +143,7 @@ public class CultivationOneStopService {
 
         int taskCount = managedGroup.path("projects").size();
         return new CultivationOneStopResult(
-                uid, projection.revision(), groupName, groupFile.toString(), hasPlanDrivenAction ? 1 : 0, taskCount,
+                normalizedUid, projection.revision(), groupName, groupFile.toString(), hasPlanDrivenAction ? 1 : 0, taskCount,
                 backupDirectory.toString(), List.copyOf(warnings),
                 "已生成 UID 专属计划驱动养成一条龙配置");
     }
@@ -218,22 +226,27 @@ public class CultivationOneStopService {
         if (gather.enabled() && !projection.gatherAction().csvTargets().isEmpty()) {
             ObjectNode project = copyProject(documents, Set.of("CD-Aware-AutoGather"));
             if (project == null) throw new IllegalStateException("未找到已安装的 CD-Aware-AutoGather 脚本任务");
-            ObjectNode settings = cultivationOnlyGatherSettings(root, projection.gatherAction());
-            project.put("name", taskName("养成采集", projection.gatherAction().csvTargets().stream()
-                    .map(CultivationExecutionProjection.GatherTarget::materialName).toList()));
-            prepareProject(project, projects.size() + 1, settings);
-            projects.add(project);
+            ObjectNode settings = cultivationOnlyGatherSettings(root, projection.gatherAction(), warnings);
+            List<String> runnableMaterials = nonEmptyArraySettingSuffixes(settings, "selectRoute_");
+            if (!runnableMaterials.isEmpty()) {
+                project.put("name", taskName("养成采集", runnableMaterials));
+                prepareProject(project, projects.size() + 1, settings);
+                projects.add(project);
+            }
         }
         if (monster.enabled() && !projection.monsterAction().targets().isEmpty()) {
             ObjectNode project = copyProject(documents,
                     Set.of("FullyAutoAndSemiAutoTools", "HCY-FullyAutoAndSemiAutoTools"));
             if (project == null) throw new IllegalStateException("未找到已安装的 FullyAutoAndSemiAutoTools 脚本任务");
-            ObjectNode settings = cultivationOnlyMonsterSettings(root, projection.uid(), projection.monsterAction());
+            ObjectNode settings = cultivationOnlyMonsterSettings(
+                    root, projection.uid(), projection.monsterAction(), warnings);
             List<String> families = stringList(settings.path("treeLevel_1_1"));
-            settings.remove("routeFamilies");
-            project.put("name", taskName("养成怪物", families));
-            prepareProject(project, projects.size() + 1, settings);
-            projects.add(project);
+            if (!families.isEmpty()) {
+                settings.remove("routeFamilies");
+                project.put("name", taskName("养成怪物", families));
+                prepareProject(project, projects.size() + 1, settings);
+                projects.add(project);
+            }
         }
         if (weekly.enabled() && !projection.weeklyBossActions().isEmpty()) {
             if (!Boolean.TRUE.equals(weekly.settings().get("unfairContractTerms"))) {
@@ -321,7 +334,8 @@ public class CultivationOneStopService {
 
     private ObjectNode cultivationOnlyGatherSettings(
             Path root,
-            CultivationExecutionProjection.GatherAction action) {
+            CultivationExecutionProjection.GatherAction action,
+            List<String> warnings) {
         ObjectNode settings = objectMapper.valueToTree(action.settings());
         List<String> selectionKeys = new ArrayList<>();
         settings.fieldNames().forEachRemaining(key -> {
@@ -329,16 +343,17 @@ public class CultivationOneStopService {
         });
         selectionKeys.forEach(key -> settings.set(key, objectMapper.createArrayNode()));
         Map<String, List<String>> materialsBySelection = new LinkedHashMap<>();
-        action.csvTargets().forEach(target -> materialsBySelection
-                .computeIfAbsent(target.selectionKey(), ignored -> new ArrayList<>())
-                .add(target.materialName()));
-        materialsBySelection.forEach((key, values) -> settings.set(key, objectMapper.valueToTree(values)));
         action.csvTargets().forEach(target -> {
             List<String> routes = gatherRouteOptions(root, target, true);
-            if (!routes.isEmpty()) {
-                settings.set("selectRoute_" + target.materialName(), objectMapper.valueToTree(routes));
+            if (routes.isEmpty()) {
+                warnings.add("地方特产“" + target.materialName() + "”没有安全可用路线，本轮不生成该采集任务");
+                return;
             }
+            materialsBySelection.computeIfAbsent(target.selectionKey(), ignored -> new ArrayList<>())
+                    .add(target.materialName());
+            settings.set("selectRoute_" + target.materialName(), objectMapper.valueToTree(routes));
         });
+        materialsBySelection.forEach((key, values) -> settings.set(key, objectMapper.valueToTree(values)));
         settings.put("runMode", "采集选中的材料");
         settings.put("targetCountOfSelected", "csv");
         settings.put("filterPathByKeywords", "");
@@ -348,7 +363,8 @@ public class CultivationOneStopService {
     private ObjectNode cultivationOnlyMonsterSettings(
             Path root,
             String uid,
-            CultivationExecutionProjection.MonsterAction action) {
+            CultivationExecutionProjection.MonsterAction action,
+            List<String> warnings) {
         ObjectNode settings = objectMapper.valueToTree(action.settings());
         List<String> families = stringList(settings.path("routeFamilies"));
         if (families.isEmpty()) {
@@ -357,11 +373,15 @@ public class CultivationOneStopService {
                     .filter(value -> value != null && !value.isBlank())
                     .distinct().toList();
         }
+        MonsterRouteSelection routeSelection = concreteMonsterRouteSettings(root, uid, families);
+        routeSelection.blockedFamilies().forEach(family -> warnings.add(
+                "怪物材料路线“" + family + "”没有有效候选，本轮不生成该路线"));
+        families = routeSelection.families();
         settings.set("routeFamilies", objectMapper.valueToTree(families));
         clearArraySettings(settings, "treeLevel_");
         settings.set("treeLevel_0_0", objectMapper.valueToTree(List.of("敌人与魔物")));
         settings.set("treeLevel_1_1", objectMapper.valueToTree(families));
-        concreteMonsterRouteSettings(root, uid, families)
+        routeSelection.settings()
                 .forEach((key, routes) -> settings.set(key, objectMapper.valueToTree(routes)));
         settings.put("config_white_list", "敌人与魔物");
         settings.put("high_level_filtering", "");
@@ -383,7 +403,7 @@ public class CultivationOneStopService {
         return base + (path.startsWith("/") ? path : "/" + path);
     }
 
-    private Map<String, List<String>> concreteMonsterRouteSettings(
+    private MonsterRouteSelection concreteMonsterRouteSettings(
             Path root,
             String uid,
             Collection<String> families) {
@@ -420,13 +440,15 @@ public class CultivationOneStopService {
                         String field = fieldByFamily.get(family);
                         if (field != null) result.put(field, List.of(option));
                     });
-                    return result;
+                    List<String> selectedFamilies = families.stream().filter(selected::containsKey).toList();
+                    List<String> blockedFamilies = families.stream().filter(family -> !selected.containsKey(family)).toList();
+                    return new MonsterRouteSelection(result, selectedFamilies, blockedFamilies);
                 }
             } catch (IOException exception) {
                 throw new IllegalStateException("无法读取 FullyAutoAndSemiAutoTools UID 路线设置", exception);
             }
         }
-        return Map.of();
+        return new MonsterRouteSelection(Map.of(), List.of(), List.copyOf(families));
     }
 
     private List<String> monsterRouteBundleDirectories(Path root, String family) throws IOException {
@@ -499,7 +521,8 @@ public class CultivationOneStopService {
                 }
                 return failures;
             } catch (IOException exception) {
-                return 0;
+                throw new IllegalStateException(
+                        "无法读取怪物路线失败记录，拒绝把未知历史当作零失败：" + recordFile, exception);
             }
         }
         return 0;
@@ -523,10 +546,7 @@ public class CultivationOneStopService {
                     .sorted(String::compareTo)
                     .toList();
             if (!safeOnly) return routes;
-            List<String> safe = routes.stream()
-                    .filter(route -> !route.matches(".*(低成功率|低效|不跑|不可用).*"))
-                    .toList();
-            return safe.isEmpty() ? routes : safe;
+            return safeGatherRouteNames(routes);
         } catch (IOException exception) {
             throw new IllegalStateException("无法读取地方特产路线：" + target.materialName(), exception);
         }
@@ -1051,6 +1071,31 @@ public class CultivationOneStopService {
         List<String> result = new ArrayList<>();
         value.forEach(item -> result.add(item.asText()));
         return result;
+    }
+
+    private static List<String> nonEmptyArraySettingSuffixes(ObjectNode settings, String prefix) {
+        List<String> result = new ArrayList<>();
+        settings.fields().forEachRemaining(entry -> {
+            if (entry.getKey().startsWith(prefix)
+                    && entry.getValue().isArray()
+                    && !entry.getValue().isEmpty()) {
+                result.add(entry.getKey().substring(prefix.length()));
+            }
+        });
+        return List.copyOf(result);
+    }
+
+    static List<String> safeGatherRouteNames(Collection<String> routes) {
+        return routes.stream()
+                .filter(route -> route != null
+                        && !route.matches(".*(低成功率|低效|不跑|不刷|不稳定|不可用|暂不可用).*"))
+                .toList();
+    }
+
+    private record MonsterRouteSelection(
+            Map<String, List<String>> settings,
+            List<String> families,
+            List<String> blockedFamilies) {
     }
 
     private record GroupDocument(Path path, ObjectNode root) {

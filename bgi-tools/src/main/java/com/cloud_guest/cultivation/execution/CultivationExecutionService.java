@@ -1,6 +1,7 @@
 package com.cloud_guest.cultivation.execution;
 
 import cn.hutool.core.util.StrUtil;
+import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
 import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
@@ -397,8 +398,7 @@ public class CultivationExecutionService {
     }
 
     private static String requireUid(String uid) {
-        if (uid == null || uid.isBlank()) throw new IllegalArgumentException("UID 不能为空");
-        return uid.trim();
+        return CultivationUid.normalize(uid);
     }
 
     private static String trim(String value) {

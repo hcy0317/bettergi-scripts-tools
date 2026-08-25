@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public record CultivationInventoryObservationRequest(
+        String actionId,
         String executorId,
         int expectedRevision,
         String idempotencyKey,

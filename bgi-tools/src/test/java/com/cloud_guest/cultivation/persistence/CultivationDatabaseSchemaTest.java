@@ -72,6 +72,32 @@ class CultivationDatabaseSchemaTest {
             assertThatThrownBy(() -> connection.createStatement()
                     .executeUpdate(actionInsert.formatted("action-2")))
                     .isInstanceOf(SQLException.class);
+
+            connection.createStatement().executeUpdate(
+                    "UPDATE cultivation_execution_action SET lease_key = NULL WHERE id = 'action-1'");
+            connection.createStatement().executeUpdate("""
+                    INSERT INTO cultivation_execution_action
+                    (id, uid, plan_revision, executor_id, lease_key, lease_expires_at, status, action_type,
+                     material_name, remaining_before, plan_json)
+                    VALUES ('inventory-batch', '123456789', 1, 'inventory-executor', '123456789:1',
+                            '2026-08-26 04:00:00', 'LEASED', 'INVENTORY_RECONCILE_BATCH',
+                            '__inventory_reconcile__', 234, '["沙脂蛹","织金红绸"]')
+                    """);
+            connection.createStatement().executeUpdate("""
+                    UPDATE cultivation_execution_action
+                    SET lease_key = NULL, status = 'COMPLETED',
+                        rewards_json = '{"沙脂蛹":48,"织金红绸":73}',
+                        result_idempotency_key = 'inventory-batch:result'
+                    WHERE id = 'inventory-batch' AND status = 'LEASED'
+                    """);
+            try (ResultSet result = connection.createStatement().executeQuery("""
+                    SELECT status, rewards_json FROM cultivation_execution_action
+                    WHERE id = 'inventory-batch'
+                    """)) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("status")).isEqualTo("COMPLETED");
+                assertThat(result.getString("rewards_json")).contains("沙脂蛹");
+            }
         }
     }
 

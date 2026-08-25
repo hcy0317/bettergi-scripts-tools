@@ -12,8 +12,12 @@ import com.cloud_guest.cultivation.execution.CultivationScriptGroupSyncService;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
 import com.cloud_guest.cultivation.plan.CultivationPlanApplicationService;
+import com.cloud_guest.cultivation.plan.ConfirmCultivationImportRequest;
+import com.cloud_guest.cultivation.plan.CultivationPlanRevisionResponse;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,6 +27,28 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CultivationPlanControllerTest {
+
+    @Test
+    void automaticallyGeneratesTheUidSpecificGroupAfterConfirmingANewLedgerRevision() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);
+        ConfirmCultivationImportRequest request = new ConfirmCultivationImportRequest(
+                42L, "102550550", List.of(
+                        new com.cloud_guest.cultivation.plan.CultivationRequirementEdit(0, "沙脂蛹", 168, 164)));
+        CultivationPlanRevisionResponse confirmed = new CultivationPlanRevisionResponse(
+                7L, "102550550", 4, "IMPORTED", "catalog", 42L, "hash", "engine", "model",
+                List.of(), LocalDateTime.now());
+        when(planService.confirm(request)).thenReturn(confirmed);
+        CultivationPlanController controller = new CultivationPlanController(
+                planService, mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                oneStopService, mock(CultivationPlanDrivenExecutionService.class));
+
+        var result = controller.confirm(request);
+
+        assertThat(result.getData()).isSameAs(confirmed);
+        verify(oneStopService).prepare("102550550");
+    }
 
     @Test
     void automaticallyResynchronizesTheUidSpecificPlanAfterAuthoritativeInventoryWriteback() {
@@ -104,7 +130,8 @@ class CultivationPlanControllerTest {
         CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
         CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);
         CultivationInventoryObservationRequest request = new CultivationInventoryObservationRequest(
-                "inventory-executor", 3, "inventory-run", Map.of("沙脂蛹", 48L));
+                "inventory-action", "inventory-executor", 3,
+                "inventory-action:result", Map.of("沙脂蛹", 48L));
         when(planDrivenService.recordInventoryObservations("102550550", request)).thenReturn(
                 new CultivationInventoryObservationResponse(
                         "REPLANNING", "已回写", "102550550", 3, 1));
@@ -116,5 +143,25 @@ class CultivationPlanControllerTest {
         controller.inventoryObservations("102550550", request);
 
         verify(oneStopService).prepare("102550550");
+    }
+
+    @Test
+    void unknownFinalInventoryBlocksWithoutRegeneratingRoutes() {
+        CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
+        CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);
+        CultivationInventoryObservationRequest request = new CultivationInventoryObservationRequest(
+                "inventory-action", "inventory-executor", 3,
+                "inventory-action:result", Map.of("沙脂蛹", -1L));
+        when(planDrivenService.recordInventoryObservations("102550550", request)).thenReturn(
+                new CultivationInventoryObservationResponse(
+                        "NEEDS_RECONCILE", "存在未知库存", "102550550", 3, 0));
+        CultivationPlanController controller = new CultivationPlanController(
+                mock(CultivationPlanApplicationService.class), mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                oneStopService, planDrivenService);
+
+        controller.inventoryObservations("102550550", request);
+
+        verifyNoInteractions(oneStopService);
     }
 }

@@ -48,6 +48,18 @@ class CultivationMonsterRouteSelectorTest {
                 .isEqualTo("甲族@稳定作者");
     }
 
+    @Test
+    void refusesToSelectAKnownInvalidRouteWhenNoValidCandidateExists() {
+        Map<String, List<CultivationMonsterRouteSelector.Candidate>> candidates = new LinkedHashMap<>();
+        candidates.put("镀金旅团", List.of(
+                new CultivationMonsterRouteSelector.Candidate(
+                        "镀金旅团@损坏路线", 0, 0, 0, false),
+                new CultivationMonsterRouteSelector.Candidate(
+                        "镀金旅团@不可用路线", 3, 0, 0, false)));
+
+        assertThat(CultivationMonsterRouteSelector.select(candidates)).isEmpty();
+    }
+
     private static CultivationMonsterRouteSelector.Candidate candidate(
             String option, int routeCount, int fightActions, int failures) {
         return new CultivationMonsterRouteSelector.Candidate(

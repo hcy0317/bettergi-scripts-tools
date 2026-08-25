@@ -1,6 +1,7 @@
 package com.cloud_guest.cultivation.execution.module;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.persistence.CultivationModuleConfigEntity;
 import com.cloud_guest.cultivation.persistence.CultivationModuleConfigMapper;
 import com.cloud_guest.cultivation.execution.BetterGiInstalledScriptSettingsReader;
@@ -218,7 +219,6 @@ public class CultivationModuleConfigurationService {
     }
 
     private static String requireUid(String uid) {
-        if (uid == null || uid.isBlank()) throw new IllegalArgumentException("UID 不能为空");
-        return uid.trim();
+        return CultivationUid.normalize(uid);
     }
 }

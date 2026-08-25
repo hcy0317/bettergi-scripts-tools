@@ -23,12 +23,34 @@ import java.util.Map;
 import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CultivationOneStopServiceTest {
     @TempDir
     Path temporaryRoot;
+
+    @Test
+    void rejectsPathTraversalUidBeforeResolvingOrWritingTheScriptGroup() throws Exception {
+        CultivationExecutionService executionService = mock(CultivationExecutionService.class);
+        CultivationOneStopService service = new CultivationOneStopService(
+                executionService, mock(CultivationModuleConfigurationService.class),
+                mock(CultivationMaterialSourceCatalog.class), mock(AutoPlanService.class), new ObjectMapper());
+
+        assertThatThrownBy(() -> service.prepare("..\\..\\outside"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("数字");
+        verifyNoInteractions(executionService);
+        assertThat(regularFileCount(temporaryRoot)).isZero();
+    }
+
+    @Test
+    void doesNotFallBackToKnownUnsafeGatherRoutes() {
+        assertThat(CultivationOneStopService.safeGatherRouteNames(List.of(
+                "低成功率路线", "2. 低效", "暂不可用"))).isEmpty();
+    }
 
     @Test
     void generatesDedicatedGroupFromOnlyNeededModules() throws Exception {

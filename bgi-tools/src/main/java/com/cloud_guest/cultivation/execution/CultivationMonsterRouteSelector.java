@@ -41,9 +41,9 @@ final class CultivationMonsterRouteSelector {
 
         Map<String, String> selected = new LinkedHashMap<>();
         candidatesByFamily.forEach((family, candidates) -> candidates.stream()
+                .filter(Candidate::valid)
                 .min(Comparator
-                        .comparing(Candidate::valid).reversed()
-                        .thenComparingInt(Candidate::historicalFailures)
+                        .comparingInt(Candidate::historicalFailures)
                         .thenComparing(
                                 candidate -> authorCoverage.getOrDefault(candidate.author(), 0L),
                                 Comparator.reverseOrder())
