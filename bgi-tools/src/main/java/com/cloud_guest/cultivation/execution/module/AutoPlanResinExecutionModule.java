@@ -40,11 +40,17 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
                 new CultivationModuleSettingField("talentDomainEnabled", "天赋书秘境", "switch", true, null),
                 new CultivationModuleSettingField("moraLeyLineEnabled", "摩拉地脉", "switch", true, null),
                 new CultivationModuleSettingField("experienceLeyLineEnabled", "大英雄经验地脉", "switch", true, null),
+                new CultivationModuleSettingField("resinPriority", "秘境树脂启用项与优先顺序",
+                        "ordered-multi-select", true, null,
+                        List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂")),
+                new CultivationModuleSettingField("craftingCountry", "材料合成台地区", "select", true, null,
+                        List.of("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱")),
                 new CultivationModuleSettingField("partyName", "秘境与地脉队伍", "party-select", true, "uid-parties"),
                 new CultivationModuleSettingField("leyLineCountry", "地脉地区", "select", true, null,
                         List.of("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱")),
                 new CultivationModuleSettingField("bossPartyName", "首领讨伐队伍", "party-select", true, "uid-parties"),
-                new CultivationModuleSettingField("bossStrategyName", "首领战斗策略", "text", true, null),
+                new CultivationModuleSettingField("bossStrategyName", "首领战斗策略", "strategy-select", true,
+                        "combat-strategies"),
                 new CultivationModuleSettingField("bossReviveRetryCount", "首领复苏重试次数", "number", true, null),
                 new CultivationModuleSettingField("bossReturnToStatueAfterEachRound", "每轮后返回七天神像", "switch", true, null),
                 new CultivationModuleSettingField("bossRewardRecognitionEnabled", "启用奖励识别", "switch", true, null),
@@ -72,6 +78,8 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
         result.put("talentDomainEnabled", true);
         result.put("moraLeyLineEnabled", true);
         result.put("experienceLeyLineEnabled", true);
+        result.put("resinPriority", List.of("浓缩树脂", "原粹树脂"));
+        result.put("craftingCountry", "枫丹");
         result.put("partyName", "");
         result.put("leyLineCountry", "挪德卡莱");
         result.put("bossPartyName", "");

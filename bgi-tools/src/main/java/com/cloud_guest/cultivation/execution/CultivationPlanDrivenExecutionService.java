@@ -88,12 +88,14 @@ public class CultivationPlanDrivenExecutionService {
             return status("COMPLETED", "当前养成计划已由权威库存确认完成", normalizedUid, projection.revision());
         }
         if ("NEEDS_RECONCILE".equals(projection.state())) {
-            return status("PLAN_NEEDS_RECONCILE", "库存低于导入基线，需重新导入或人工确认后再执行",
+            return status("PLAN_NEEDS_RECONCILE", "计划库存状态尚未闭合，请完成一次完整库存复核",
                     normalizedUid, projection.revision());
         }
         if ("NEEDS_CRAFT".equals(projection.state())) {
-            return status("PLAN_NEEDS_CRAFT", "实际低阶奖励已足够合成目标材料；完成合成闭环前不再消耗树脂",
-                    normalizedUid, projection.revision());
+            if (projection.craftingActions().isEmpty()) {
+                return status("PLAN_NEEDS_CRAFT", "存在可合成材料但尚未生成安全合成行动",
+                        normalizedUid, projection.revision());
+            }
         }
 
         if (existing != null) {
@@ -127,7 +129,7 @@ public class CultivationPlanDrivenExecutionService {
 
         String actionId = UUID.randomUUID().toString();
         AutoPlan plan = candidate.plan();
-        plan.setId(actionId);
+        if (plan != null) plan.setId(actionId);
         LocalDateTime expiresAt = LocalDateTime.now(clock).plus(LEASE_DURATION);
         CultivationExecutionActionEntity entity = new CultivationExecutionActionEntity();
         entity.setId(actionId);
@@ -140,7 +142,9 @@ public class CultivationPlanDrivenExecutionService {
         entity.setActionType(candidate.actionType());
         entity.setMaterialName(candidate.materialName());
         entity.setRemainingBefore(candidate.remaining());
-        entity.setPlanJson(write(plan));
+        entity.setPlanJson("CRAFT".equals(candidate.actionType())
+                ? write(new CraftPayload(candidate.craftMaterialType(), candidate.craftCountry(), candidate.batchLimit()))
+                : write(plan));
         try {
             actionMapper.insert(entity);
             return fromEntity(entity, "ACTION", candidate.reason());
@@ -237,7 +241,11 @@ public class CultivationPlanDrivenExecutionService {
         if (projection == null) {
             return inventoryStatus("NO_PLAN", "该 UID 尚未建立养成账本", normalizedUid, 0, List.of());
         }
-        List<String> materialNames = reconcileMaterialNames(projection);
+        Map<String, List<String>> materialNamesByGrid = executionService.inventoryReconcileTargets(normalizedUid);
+        if (materialNamesByGrid == null || materialNamesByGrid.isEmpty()) {
+            materialNamesByGrid = legacyReconcileTargets(projection);
+        }
+        List<String> materialNames = flattenReconcileTargets(materialNamesByGrid);
         if (materialNames.isEmpty()) {
             return inventoryStatus(
                     "NO_TARGETS", "当前没有需要组末复核的地方特产或怪物材料",
@@ -271,13 +279,16 @@ public class CultivationPlanDrivenExecutionService {
                             "BUSY", "组末复核租约刚被其他执行器接管或完成，请重新领取",
                             normalizedUid, projection.revision(), materialNames);
                 }
-                return inventoryResponse(existing, "NEEDS_RECONCILE", "上次组末库存存在未知值，请重新完整清点");
+                return inventoryResponse(existing, "NEEDS_RECONCILE", "上次组末库存存在未知值，请重新完整清点",
+                        materialNamesByGrid);
             }
             if (activeLease) {
                 if (!normalizedExecutor.equals(existing.getExecutorId())) {
-                    return inventoryResponse(existing, "BUSY", "该 UID 已有其他执行器持有行动租约");
+                    return inventoryResponse(existing, "BUSY", "该 UID 已有其他执行器持有行动租约",
+                            materialNamesByGrid);
                 }
-                return inventoryResponse(existing, "ACTION", "恢复尚未到期的组末库存复核");
+                return inventoryResponse(existing, "ACTION", "恢复尚未到期的组末库存复核",
+                        materialNamesByGrid);
             }
             existing.setStatus("EXPIRED");
             existing.setLeaseKey(null);
@@ -295,19 +306,20 @@ public class CultivationPlanDrivenExecutionService {
         entity.setActionType(INVENTORY_RECONCILE_BATCH);
         entity.setMaterialName("__inventory_reconcile__");
         entity.setRemainingBefore(reconcileRemaining(projection).values().stream().mapToLong(Long::longValue).sum());
-        entity.setPlanJson(write(materialNames));
+        entity.setPlanJson(write(materialNamesByGrid));
         try {
             actionMapper.insert(entity);
-            return inventoryResponse(entity, "ACTION", "已领取组末权威库存复核租约");
+            return inventoryResponse(entity, "ACTION", "已领取组末权威库存复核租约", materialNamesByGrid);
         } catch (DuplicateKeyException conflict) {
             CultivationExecutionActionEntity winner = actionMapper.findLeased(normalizedUid, projection.revision());
             if (winner == null) throw conflict;
             if (INVENTORY_RECONCILE_BATCH.equals(winner.getActionType())) {
-                return inventoryResponse(winner, "BUSY", "并发领取已由另一执行器成功");
+                return inventoryResponse(winner, "BUSY", "并发领取已由另一执行器成功", materialNamesByGrid);
             }
             return new CultivationInventoryReconcileTargetsResponse(
                     "BUSY", "并发领取时该 UID 已取得其他养成行动租约",
-                    normalizedUid, projection.revision(), winner.getId(), winner.getLeaseExpiresAt(), materialNames);
+                    normalizedUid, projection.revision(), winner.getId(), winner.getLeaseExpiresAt(),
+                    materialNames, materialNamesByGrid);
         }
     }
 
@@ -342,7 +354,7 @@ public class CultivationPlanDrivenExecutionService {
         if (observations.values().stream().anyMatch(java.util.Objects::isNull)) {
             throw new IllegalArgumentException("库存未知值必须使用负数显式上报");
         }
-        boolean complete = observations.values().stream().allMatch(value -> value >= 0);
+        boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0);
 
         if (entity.getResultIdempotencyKey() != null) {
             if (!idempotencyKey.equals(entity.getResultIdempotencyKey())) {
@@ -368,9 +380,11 @@ public class CultivationPlanDrivenExecutionService {
         String previousStatus = entity.getStatus();
         entity.setResultIdempotencyKey(idempotencyKey);
         entity.setRewardsJson(write(observations));
-        entity.setTerminationReason(complete ? "INVENTORY_RECONCILE" : "INVENTORY_RECONCILE_UNKNOWN");
-        entity.setStatus(complete ? COMPLETED : AWAITING_RECONCILE);
-        if (complete) entity.setLeaseKey(null);
+        entity.setTerminationReason(hasUnknown
+                ? "INVENTORY_RECONCILE_UNKNOWN_PRESERVED"
+                : "INVENTORY_RECONCILE");
+        entity.setStatus(COMPLETED);
+        entity.setLeaseKey(null);
         var update = Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
                 .eq(CultivationExecutionActionEntity::getId, actionId)
                 .eq(CultivationExecutionActionEntity::getStatus, previousStatus)
@@ -393,12 +407,22 @@ public class CultivationPlanDrivenExecutionService {
         return inventoryResult(entity, observations);
     }
 
-    private static List<String> reconcileMaterialNames(CultivationExecutionProjection projection) {
+    private static Map<String, List<String>> legacyReconcileTargets(CultivationExecutionProjection projection) {
+        Map<String, List<String>> targets = new LinkedHashMap<>();
+        List<String> specialties = projection.gatherAction().csvTargets().stream()
+                .map(CultivationExecutionProjection.GatherTarget::materialName).toList();
+        List<String> materials = projection.monsterAction().targets().stream()
+                .map(CultivationExecutionProjection.MonsterTarget::materialName).toList();
+        if (!specialties.isEmpty()) targets.put("Materials", specialties);
+        if (!materials.isEmpty()) targets.put("CharacterDevelopmentItems", materials);
+        return targets;
+    }
+
+    private static List<String> flattenReconcileTargets(Map<String, List<String>> targets) {
         LinkedHashSet<String> names = new LinkedHashSet<>();
-        projection.gatherAction().csvTargets().stream()
-                .map(CultivationExecutionProjection.GatherTarget::materialName).forEach(names::add);
-        projection.monsterAction().targets().stream()
-                .map(CultivationExecutionProjection.MonsterTarget::materialName).forEach(names::add);
+        List.of("Materials", "CharacterDevelopmentItems").forEach(grid ->
+                targets.getOrDefault(grid, List.of()).forEach(names::add));
+        targets.forEach((grid, values) -> values.forEach(names::add));
         return List.copyOf(names);
     }
 
@@ -413,7 +437,12 @@ public class CultivationPlanDrivenExecutionService {
 
     private List<String> readInventoryTargets(CultivationExecutionActionEntity entity) {
         try {
-            return objectMapper.readValue(entity.getPlanJson(), new TypeReference<>() {});
+            var json = objectMapper.readTree(entity.getPlanJson());
+            if (json.isArray()) {
+                return objectMapper.convertValue(json, new TypeReference<>() {});
+            }
+            Map<String, List<String>> grouped = objectMapper.convertValue(json, new TypeReference<>() {});
+            return flattenReconcileTargets(grouped);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("无法读取组末库存复核目标", exception);
         }
@@ -432,17 +461,23 @@ public class CultivationPlanDrivenExecutionService {
             CultivationExecutionActionEntity entity, Map<String, Long> observations) {
         int observedCount = (int) observations.values().stream().filter(value -> value >= 0).count();
         boolean completed = COMPLETED.equals(entity.getStatus());
+        boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0);
         return new CultivationInventoryObservationResponse(
-                completed ? "REPLANNING" : "NEEDS_RECONCILE",
-                completed ? "权威库存已回写，将自动重生成后续路线" : "存在未知库存，停止并等待完整重新清点",
+            completed ? "REPLANNING" : "NEEDS_RECONCILE",
+                completed
+                        ? hasUnknown
+                            ? "已回写可识别库存；未知项保留上次可信库存，将自动重生成后续路线"
+                            : "权威库存已回写，将自动重生成后续路线"
+                        : "库存复核尚未完成",
                 entity.getUid(), entity.getPlanRevision(), observedCount);
     }
 
     private CultivationInventoryReconcileTargetsResponse inventoryResponse(
-            CultivationExecutionActionEntity entity, String status, String message) {
+            CultivationExecutionActionEntity entity, String status, String message,
+            Map<String, List<String>> materialNamesByGrid) {
         return new CultivationInventoryReconcileTargetsResponse(
                 status, message, entity.getUid(), entity.getPlanRevision(), entity.getId(),
-                entity.getLeaseExpiresAt(), readInventoryTargets(entity));
+                entity.getLeaseExpiresAt(), readInventoryTargets(entity), materialNamesByGrid);
     }
 
     private static CultivationInventoryReconcileTargetsResponse inventoryStatus(
@@ -489,13 +524,24 @@ public class CultivationPlanDrivenExecutionService {
     }
 
     private Candidate choose(CultivationExecutionProjection projection) {
+        if (!projection.craftingActions().isEmpty()) {
+            CultivationCraftingAction action = projection.craftingActions().getFirst();
+            return new Candidate(
+                    "CRAFT", action.materialName(), action.quantity(), (int) action.quantity(), null,
+                    action.materialType(), executionService.craftingCountry(projection.uid()),
+                    "低阶库存可按 3:1 合成为当前缺口；合成并复核前不再消耗树脂");
+        }
         int today = LocalDate.now(clock).getDayOfWeek().getValue() % 7;
+        List<String> configuredResinPriority = executionService.resinPriority(projection.uid());
+        List<String> resinPriority = configuredResinPriority == null || configuredResinPriority.isEmpty()
+                ? List.of("浓缩树脂", "原粹树脂")
+                : configuredResinPriority;
         Candidate domain = projection.resinActions().stream()
                 .filter(action -> "秘境".equals(action.actionType()))
                 .filter(action -> action.availableDays().isEmpty() || action.availableDays().contains(today))
                 .filter(action -> !"已暂停".equals(action.actionState()))
                 .sorted(Comparator.comparingLong(CultivationExecutionProjection.ResinAction::remaining))
-                .map(this::domain).findFirst().orElse(null);
+                .map(action -> domain(action, resinPriority)).findFirst().orElse(null);
         if (domain != null) return domain;
 
         return projection.bossActions().stream()
@@ -504,12 +550,13 @@ public class CultivationPlanDrivenExecutionService {
                 .map(this::boss).findFirst().orElse(null);
     }
 
-    private Candidate domain(CultivationExecutionProjection.ResinAction action) {
+    private Candidate domain(CultivationExecutionProjection.ResinAction action,
+                             List<String> resinPriority) {
         AutoPlan plan = basePlan(action.availableDays(), action.sourceType(), "秘境");
         plan.setAutoDomain(new AutoDomain(
                 action.sourceName(), action.sourceMaterialIndex(), action.sourceMaterialName(),
-                action.partyName(), 1, defaultPhysical()));
-        return new Candidate("DOMAIN", action.materialName(), action.remaining(), plan,
+                action.partyName(), 1, physical(resinPriority)));
+        return new Candidate("DOMAIN", action.materialName(), action.remaining(), 1, plan, null, null,
                 "今天开放该材料秘境；按账本缺口发放一个安全批次，完成后强制清点并重规划");
     }
 
@@ -523,14 +570,21 @@ public class CultivationPlanDrivenExecutionService {
                 bool(settings, "bossReturnToStatueAfterEachRound", false),
                 bool(settings, "bossRewardRecognitionEnabled", true),
                 integer(settings, "bossTimeoutSeconds", 300)));
-        return new Candidate("WORLD_BOSS", action.materialName(), action.remaining(), plan,
+        return new Candidate("WORLD_BOSS", action.materialName(), action.remaining(), 1, plan, null, null,
                 "按突破材料缺口发放一个世界首领安全批次，完成后强制清点并重规划");
     }
 
     private CultivationNextActionResponse fromEntity(CultivationExecutionActionEntity entity,
                                                       String status, String message) {
         AutoPlan plan = null;
-        if (entity.getPlanJson() != null) {
+        CraftPayload craft = null;
+        if ("CRAFT".equals(entity.getActionType())) {
+            try {
+                craft = objectMapper.readValue(entity.getPlanJson(), CraftPayload.class);
+            } catch (JsonProcessingException exception) {
+                throw new IllegalStateException("无法恢复材料合成行动", exception);
+            }
+        } else if (entity.getPlanJson() != null) {
             try {
                 plan = objectMapper.readValue(entity.getPlanJson(), AutoPlan.class);
             } catch (JsonProcessingException exception) {
@@ -540,8 +594,12 @@ public class CultivationPlanDrivenExecutionService {
         return new CultivationNextActionResponse(
                 status, message, "PLAN_DRIVEN", entity.getUid(), entity.getPlanRevision(), entity.getId(),
                 entity.getLeaseExpiresAt(), entity.getActionType(), entity.getMaterialName(),
-                entity.getRemainingBefore() == null ? 0 : entity.getRemainingBefore(), 1,
-                "Materials", plan);
+                entity.getRemainingBefore() == null ? 0 : entity.getRemainingBefore(),
+                craft == null ? 1 : craft.quantity(),
+                "CharacterDevelopmentItems",
+                craft == null ? null : craft.materialType(),
+                craft == null ? null : craft.country(),
+                plan);
     }
 
     private static CultivationNextActionResponse status(String status, String message,
@@ -563,12 +621,21 @@ public class CultivationPlanDrivenExecutionService {
                 .setRecord(false);
     }
 
-    private static List<Physical> defaultPhysical() {
-        return List.of(
-                new Physical(0, "浓缩树脂", true, 1),
-                new Physical(1, "原粹树脂", true, 1),
-                new Physical(2, "须臾树脂", false, 0),
-                new Physical(3, "脆弱树脂", false, 0));
+    private static List<Physical> physical(List<String> resinPriority) {
+        List<String> all = List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂");
+        LinkedHashSet<String> selected = new LinkedHashSet<>();
+        if (resinPriority != null) {
+            resinPriority.stream().filter(all::contains).forEach(selected::add);
+        }
+        List<String> ordered = new java.util.ArrayList<>(selected);
+        all.stream().filter(name -> !selected.contains(name)).forEach(ordered::add);
+        List<Physical> result = new java.util.ArrayList<>();
+        for (int index = 0; index < ordered.size(); index++) {
+            String name = ordered.get(index);
+            boolean enabled = selected.contains(name);
+            result.add(new Physical(index, name, enabled, enabled ? 1 : 0));
+        }
+        return List.copyOf(result);
     }
 
     private String write(Object value) {
@@ -604,7 +671,10 @@ public class CultivationPlanDrivenExecutionService {
         return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
     }
 
-    private record Candidate(String actionType, String materialName, long remaining,
-                             AutoPlan plan, String reason) {
+    private record Candidate(String actionType, String materialName, long remaining, int batchLimit,
+                             AutoPlan plan, String craftMaterialType, String craftCountry, String reason) {
+    }
+
+    private record CraftPayload(String materialType, String country, int quantity) {
     }
 }

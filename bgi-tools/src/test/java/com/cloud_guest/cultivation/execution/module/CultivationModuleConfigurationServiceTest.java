@@ -23,6 +23,20 @@ import static org.mockito.Mockito.when;
 
 class CultivationModuleConfigurationServiceTest {
     @Test
+    void autoPlanExposesAnOrderedSelectionOfResinSources() {
+        AutoPlanResinExecutionModule module = new AutoPlanResinExecutionModule();
+
+        assertThat(module.settingsSchema()).anySatisfy(field -> {
+            assertThat(field.key()).isEqualTo("resinPriority");
+            assertThat(field.control()).isEqualTo("ordered-multi-select");
+            assertThat(field.options()).containsExactly(
+                    "浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂");
+        });
+        assertThat(module.defaultSettings("102550550").get("resinPriority"))
+                .isEqualTo(List.of("浓缩树脂", "原粹树脂"));
+    }
+
+    @Test
     void currentBackendPortOverridesStoredFullyAutoCdApi() {
         CultivationModuleConfigEntity stored = new CultivationModuleConfigEntity();
         stored.setUid("102550550");

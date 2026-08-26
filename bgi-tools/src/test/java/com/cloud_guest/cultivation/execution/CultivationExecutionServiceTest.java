@@ -36,7 +36,8 @@ class CultivationExecutionServiceTest {
 
         CultivationExecutionService service = new CultivationExecutionService(
                 planService, observationService, mock(AutoPlanService.class),
-                mock(CultivationModuleConfigurationService.class), mock(CultivationMaterialSourceCatalog.class));
+                mock(CultivationModuleConfigurationService.class), mock(CultivationMaterialSourceCatalog.class),
+                mock(BetterGiCombatOptionCatalog.class));
 
         CultivationPlanRevisionResponse result = service.latestLedger("102550550");
 
@@ -73,7 +74,9 @@ class CultivationExecutionServiceTest {
                 CdAwareAutoGatherExecutionModule.ID, true,
                 Map.of("partyName", "钟纳久万", "partyName2nd", "钟纳久万"));
         CultivationModuleConfiguration monster = configuration(
-                FullyAutoToolsExecutionModule.ID, true, Map.of("routeFamilies", List.of("巡陆艇")));
+                FullyAutoToolsExecutionModule.ID, true, Map.of(
+                        "routeFamilies", List.of("巡陆艇"),
+                        "visitStatueBeforeSwitchParty", false));
         CultivationModuleConfiguration weekly = configuration(
                 WeeklyBossExecutionModule.ID, true, Map.of("unfairContractTerms", true));
         when(configurationService.find("123456789", AutoPlanResinExecutionModule.ID)).thenReturn(autoPlan);
@@ -95,8 +98,11 @@ class CultivationExecutionServiceTest {
 
         CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
         when(observationService.effective(revision)).thenReturn(revision);
+        BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
+        when(optionCatalog.discover()).thenReturn(new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
         CultivationExecutionProjection result = new CultivationExecutionService(
-                planService, observationService, autoPlanService, configurationService, materialSourceCatalog)
+                planService, observationService, autoPlanService, configurationService, materialSourceCatalog,
+                optionCatalog)
                 .projection("123456789");
 
         assertThat(result.resinActions()).extracting(CultivationExecutionProjection.ResinAction::sourceName)
@@ -120,6 +126,15 @@ class CultivationExecutionServiceTest {
                 .isEqualTo("史莱姆");
         assertThat(result.monsterAction().settings()).containsEntry("routeFamilies", List.of("史莱姆"));
         assertThat(result.pendingMaterials()).isEmpty();
+        assertThat(result.partyOptions()).doesNotContain("false");
+        assertThat(result.materialProgress())
+                .filteredOn(progress -> progress.materialName().equals("沙脂蛹"))
+                .singleElement()
+                .satisfies(progress -> {
+                    assertThat(progress.currentOwned()).isEqualTo(24L);
+                    assertThat(progress.required()).isEqualTo(168L);
+                    assertThat(progress.remaining()).isEqualTo(144L);
+                });
     }
 
     private static CultivationLedgerEntry entry(String name, long required, long owned, long remaining) {

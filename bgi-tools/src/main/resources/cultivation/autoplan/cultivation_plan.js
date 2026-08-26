@@ -35,7 +35,7 @@ async function requestJson(method, url, body, token) {
 }
 
 async function observeOwned(materialName, reconcileGrid) {
-    if (reconcileGrid !== "Materials") {
+    if (reconcileGrid !== "CharacterDevelopmentItems") {
         log.warn(`[计划驱动] 暂不支持库存页 {0}，停止并等待重新清点`, reconcileGrid);
         return null;
     }
@@ -48,23 +48,54 @@ async function observeOwned(materialName, reconcileGrid) {
     return Math.trunc(observed);
 }
 
-async function observeOwnedBatch(materialNames) {
-    const names = Array.from(materialNames ?? []).map(String).filter(Boolean);
-    if (names.length === 0) return {};
-    let result = {};
-    try {
-        result = await dispatcher.runTask(new SoloTask("CountInventoryItem", {
-            gridScreenName: "Materials",
-            itemNames: names,
-        }));
-    } catch (error) {
-        log.error(`[计划驱动] 组末库存批量识别失败，将显式上报未知并停止：{0}`,
-            error?.message ?? String(error));
-    }
+async function countInventoryItems(names, gridScreenName) {
+    return await dispatcher.runTask(new SoloTask("CountInventoryItem", {
+        gridScreenName,
+        itemNames: names,
+    }));
+}
+
+async function observeOwnedByGrid(materialNamesByGrid, fallbackNames) {
+    const grouped = materialNamesByGrid && typeof materialNamesByGrid === "object"
+        ? materialNamesByGrid
+        : {CharacterDevelopmentItems: Array.from(fallbackNames ?? [])};
     const observedOwned = {};
-    for (const name of names) {
-        const count = Number(result?.[name]);
-        observedOwned[name] = Number.isFinite(count) && count >= 0 ? Math.trunc(count) : -1;
+    for (const [gridScreenName, namesValue] of Object.entries(grouped)) {
+        const names = Array.from(namesValue ?? []).map(String).filter(Boolean);
+        if (names.length === 0) continue;
+        let result = {};
+        log.info(`[计划驱动] 在 {0} 页复核 {1}`, gridScreenName, names.join("、"));
+        try {
+            result = await countInventoryItems(names, gridScreenName);
+        } catch (error) {
+            log.error(`[计划驱动] {0} 页库存批量识别失败，将该页缺失项显式上报未知：{1}`,
+                gridScreenName,
+                error?.message ?? String(error));
+        }
+        for (const name of names) {
+            const count = Number(result?.[name]);
+            observedOwned[name] = Number.isFinite(count) && count >= 0 ? Math.trunc(count) : -1;
+        }
+
+        const retryNames = names.filter(name => observedOwned[name] < 0);
+        if (retryNames.length > 0) {
+            log.warn(`[计划驱动] {0} 页首次识别未知，仅对缺失项再复查一次：{1}`,
+                gridScreenName,
+                retryNames.join("、"));
+            try {
+                const retryResult = await countInventoryItems(retryNames, gridScreenName);
+                for (const name of retryNames) {
+                    const count = Number(retryResult?.[name]);
+                    if (Number.isFinite(count) && count >= 0) {
+                        observedOwned[name] = Math.trunc(count);
+                    }
+                }
+            } catch (error) {
+                log.warn(`[计划驱动] {0} 页缺失项复查失败，未知项将保留上次可信库存：{1}`,
+                    gridScreenName,
+                    error?.message ?? String(error));
+            }
+        }
     }
     return observedOwned;
 }
@@ -103,15 +134,15 @@ export async function runCultivationInventoryReconcile(config) {
         null, config.bgi_tools.token);
     if (targets.status === "BUSY") {
         log.warn("[计划驱动] 组末库存复核未取得租约：{0}", targets.message);
-        return;
+        return false;
     }
     const materialNames = Array.from(targets?.materialNames ?? []);
     if (materialNames.length === 0) {
         log.info("[计划驱动] 当前没有需要组末复核的地方特产或怪物材料");
-        return;
+        return true;
     }
     log.info("[计划驱动] 组末权威库存复核：{0}", materialNames.join("、"));
-    const observedOwned = await observeOwnedBatch(materialNames);
+    const observedOwned = await observeOwnedByGrid(targets.materialNamesByGrid, materialNames);
     const response = await requestJson(
         "POST", `${baseUrl}/execution/inventory-observations?uid=${encodeURIComponent(uid)}`,
         {
@@ -122,11 +153,8 @@ export async function runCultivationInventoryReconcile(config) {
             observedOwned,
         },
         config.bgi_tools.token);
-    if (response.status === "NEEDS_RECONCILE") {
-        log.warn("[计划驱动] 组末库存存在未知值，已停止后续执行：{0}", response.message);
-        return;
-    }
     log.info("[计划驱动] 组末库存回写完成：{0} 项，{1}", response.observedCount, response.message);
+    return true;
 }
 
 async function executeAction(baseUrl, action, executorId, token) {
@@ -173,6 +201,60 @@ async function executeAction(baseUrl, action, executorId, token) {
     return result.status === "REPLANNING";
 }
 
+async function executeCraftAction(baseUrl, action, executorId, config) {
+    let craftResult = null;
+    let executionError = null;
+    try {
+        log.info(`[计划驱动] 前往 {0} 合成台，将合成 {1} x{2}`,
+            action.craftCountry, action.materialName, action.batchLimit);
+        await genshin.GoToCraftingBench(action.craftCountry);
+        craftResult = await genshin.CraftMaterial(
+            action.materialName, action.batchLimit, action.craftMaterialType);
+    } catch (error) {
+        executionError = error;
+        log.error(`[计划驱动] 材料合成失败：{0}`, error?.message ?? String(error));
+    } finally {
+        try {
+            await genshin.ReturnMainUi();
+        } catch (error) {
+            log.warn(`[计划驱动] 合成后返回主界面失败：{0}`, error?.message ?? String(error));
+        }
+    }
+
+    const actualQuantity = Number(craftResult?.actualQuantity ?? craftResult?.ActualQuantity ?? 0);
+    let observedOwned = null;
+    try {
+        observedOwned = await observeOwned(action.materialName, "CharacterDevelopmentItems");
+    } catch (error) {
+        log.error(`[计划驱动] 合成产物库存复核失败：{0}`, error?.message ?? String(error));
+    }
+    const rewards = Number.isFinite(actualQuantity) && actualQuantity > 0
+        ? {[action.materialName]: Math.trunc(actualQuantity)}
+        : {};
+    const result = await reportResult(
+        baseUrl, action, executorId, observedOwned,
+        executionError == null && Object.keys(rewards).length > 0,
+        executionError == null ? "CRAFT_COMPLETED" : `FAILED:${executionError?.message ?? executionError}`,
+        rewards, config.bgi_tools.token);
+    log.info(`[计划驱动] 合成回写状态：{0}，{1}`, result.status, result.message);
+    if (executionError) throw executionError;
+    if (Object.keys(rewards).length === 0) return false;
+    return result.status === "REPLANNING";
+}
+
+async function runInventoryReconcileOnce(config, state, reason) {
+    if (state.attempted) {
+        log.warn("[计划驱动] 本轮已完成一次完整库存复核，不再重复检查：{0}", reason);
+        return {performed: false, succeeded: true};
+    }
+    state.attempted = true;
+    log.warn("[计划驱动] 本轮执行一次完整库存复核：{0}", reason);
+    return {
+        performed: true,
+        succeeded: await runCultivationInventoryReconcile(config),
+    };
+}
+
 export async function runPlanDrivenCultivation(config) {
     const baseUrl = cultivationApiBase(config.bgi_tools.api.httpPullJsonConfig);
     const uid = String(config.user.uid ?? "").trim();
@@ -180,6 +262,7 @@ export async function runPlanDrivenCultivation(config) {
     const executorId = `autoplan-${uid}-${Date.now()}`;
     config.run.exclude_run_exception = false;
     config.run.loop_plan = false;
+    const inventoryReconcileState = {attempted: false};
     log.info(`[计划驱动] 已启用：每次只领取一个行动，权威库存回写后重新规划`);
 
     while (true) {
@@ -201,9 +284,37 @@ export async function runPlanDrivenCultivation(config) {
             log.info(`[计划驱动] 停止领取：{0}，{1}`, result.status, result.message);
             return;
         }
+        if (action.status === "PLAN_NEEDS_RECONCILE") {
+            const reconcile = await runInventoryReconcileOnce(
+                config, inventoryReconcileState, `计划请求复核：${action.message}`);
+            if (reconcile.succeeded && reconcile.performed) {
+                const afterReconcile = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
+                if (afterReconcile.status === "ACTION" || afterReconcile.status === "NEEDS_RECONCILE") {
+                    action.status = afterReconcile.status;
+                    Object.assign(action, afterReconcile);
+                } else {
+                    log.warn("[计划驱动] 完整库存复核后仍未开放行动，本轮停止：{0}，{1}",
+                        afterReconcile.status, afterReconcile.message);
+                    return;
+                }
+            } else if (!reconcile.succeeded) {
+                log.warn("[计划驱动] 完整库存复核未闭合，停止本轮执行");
+                return;
+            } else {
+                return;
+            }
+        }
         if (action.status !== "ACTION") {
             log.info(`[计划驱动] 停止领取：{0}，{1}`, action.status, action.message);
             return;
+        }
+        if (action.actionType === "CRAFT") {
+            const shouldContinue = await executeCraftAction(baseUrl, action, executorId, config);
+            if (!shouldContinue) return;
+            const reconcile = await runInventoryReconcileOnce(
+                config, inventoryReconcileState, `合成 ${action.materialName} 后复核`);
+            if (!reconcile.succeeded) return;
+            continue;
         }
         const shouldContinue = await executeAction(
             baseUrl, action, executorId, config.bgi_tools.token);

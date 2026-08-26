@@ -6,22 +6,35 @@ import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
 import com.cloud_guest.cultivation.plan.CultivationPlanRevisionResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class CultivationLedgerObservationService {
     private final CultivationExecutionActionMapper actionMapper;
     private final ObjectMapper objectMapper;
+    private final CultivationMaterialCraftingPlanner craftingPlanner;
 
+    @Autowired
     public CultivationLedgerObservationService(CultivationExecutionActionMapper actionMapper,
-                                               ObjectMapper objectMapper) {
+                                               ObjectMapper objectMapper,
+                                               CultivationMaterialCraftingPlanner craftingPlanner) {
         this.actionMapper = actionMapper;
         this.objectMapper = objectMapper;
+        this.craftingPlanner = craftingPlanner;
+    }
+
+    CultivationLedgerObservationService(CultivationExecutionActionMapper actionMapper,
+                                        ObjectMapper objectMapper) {
+        this.actionMapper = actionMapper;
+        this.objectMapper = objectMapper;
+        this.craftingPlanner = null;
     }
 
     public CultivationPlanRevisionResponse effective(CultivationPlanRevisionResponse imported) {
@@ -35,50 +48,66 @@ public class CultivationLedgerObservationService {
         }
 
         Map<String, Long> latestOwned = new LinkedHashMap<>();
-        Map<String, Long> historicalMaxOwned = new LinkedHashMap<>();
         Map<String, Long> actualRewards = new LinkedHashMap<>();
         for (CultivationExecutionActionEntity observation : observations) {
             if ("INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())) {
                 readInventoryBatch(observation.getRewardsJson()).forEach((materialName, observedOwned) -> {
                     if (materialName == null || observedOwned == null || observedOwned < 0) return;
                     latestOwned.putIfAbsent(materialName, observedOwned);
-                    historicalMaxOwned.merge(materialName, observedOwned, Math::max);
                 });
                 continue;
             }
             if (observation.getObservedOwned() == null || observation.getObservedOwned() < 0) continue;
             latestOwned.putIfAbsent(observation.getMaterialName(), observation.getObservedOwned());
-            historicalMaxOwned.merge(
-                    observation.getMaterialName(), observation.getObservedOwned(), Math::max);
             mergeRewards(actualRewards, observation.getRewardsJson());
         }
         if (latestOwned.isEmpty()) {
             return awaitingReconcile ? withState(imported, "NEEDS_RECONCILE", imported.requirements()) : imported;
         }
 
-        boolean unexplainedDecrease = imported.requirements().stream().anyMatch(entry -> {
-            Long observedOwned = latestOwned.get(entry.materialName());
-            Long historicalMaximum = historicalMaxOwned.get(entry.materialName());
-            return observedOwned != null
-                    && (observedOwned < entry.baselineOwned()
-                        || historicalMaximum != null && observedOwned < historicalMaximum);
-        });
         List<EntryProgress> progress = imported.requirements().stream()
                 .map(entry -> withEvidence(entry,
                         latestOwned.get(entry.materialName()),
-                        historicalMaxOwned.get(entry.materialName()),
-                        actualRewards,
-                        unexplainedDecrease))
+                        actualRewards))
                 .toList();
-        String state = awaitingReconcile || unexplainedDecrease
-                ? "NEEDS_RECONCILE"
-                : progress.stream().anyMatch(EntryProgress::needsCraft)
-                    ? "NEEDS_CRAFT"
-                    : progress.stream().allMatch(item -> item.entry().remaining() <= 0)
-                        ? "COMPLETED" : "ACTIVE";
         List<CultivationLedgerEntry> effectiveRequirements = progress.stream()
                 .map(EntryProgress::entry).toList();
+        CultivationMaterialCraftingPlan craftingPlan = craftingPlan(effectiveRequirements);
+        effectiveRequirements = effectiveRequirements.stream().map(entry -> new CultivationLedgerEntry(
+                entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(),
+                entry.currentOwned(), craftingPlan.remainingByMaterial().getOrDefault(
+                        entry.materialName(), entry.remaining()),
+                entry.remainingEvidence(), entry.ocrConfidence(), entry.manuallyCorrected(), entry.sourceBlocks()
+        )).toList();
+        boolean needsCraft = (craftingPlanner == null && progress.stream().anyMatch(EntryProgress::needsCraft))
+                || craftingPlan.needsCraft();
+        String state = awaitingReconcile
+                ? "NEEDS_RECONCILE"
+                : needsCraft
+                    ? "NEEDS_CRAFT"
+                    : effectiveRequirements.stream().allMatch(item -> item.remaining() <= 0)
+                        ? "COMPLETED" : "ACTIVE";
         return withState(imported, state, effectiveRequirements);
+    }
+
+    public CultivationMaterialCraftingPlan craftingPlan(List<CultivationLedgerEntry> entries) {
+        return craftingPlanner == null
+                ? new CultivationMaterialCraftingPlan(
+                        entries.stream().collect(java.util.stream.Collectors.toMap(
+                                CultivationLedgerEntry::materialName,
+                                CultivationLedgerEntry::remaining,
+                                (left, right) -> right,
+                                LinkedHashMap::new)),
+                        List.of())
+                : craftingPlanner.plan(entries);
+    }
+
+    public boolean isCraftable(String materialName) {
+        return craftingPlanner != null && craftingPlanner.isCraftable(materialName);
+    }
+
+    public Optional<CultivationMaterialCraftingCatalog.CraftFamily> craftingFamily(String materialName) {
+        return craftingPlanner == null ? Optional.empty() : craftingPlanner.family(materialName);
     }
 
     private static CultivationPlanRevisionResponse withState(
@@ -93,29 +122,27 @@ public class CultivationLedgerObservationService {
 
     private EntryProgress withEvidence(CultivationLedgerEntry entry,
                                        Long observedOwned,
-                                       Long historicalMaximum,
-                                       Map<String, Long> actualRewards,
-                                       boolean unexplainedDecrease) {
-        Long confirmedOwned = observedOwned;
-        if (unexplainedDecrease && historicalMaximum != null) {
-            confirmedOwned = Math.max(historicalMaximum, entry.baselineOwned());
-        }
+                                       Map<String, Long> actualRewards) {
+        long exactRewards = actualRewards.getOrDefault(entry.materialName(), 0L);
+        Long confirmedOwned = observedOwned == null && exactRewards > 0
+                ? Long.valueOf(Math.max(entry.currentOwned(), 0) + exactRewards)
+                : observedOwned;
         long observedGain = confirmedOwned == null
                 ? 0 : Math.max(confirmedOwned - entry.baselineOwned(), 0);
-        long exactRewards = actualRewards.getOrDefault(entry.materialName(), 0L);
         long convertibleRewards = convertibleTalentRewards(entry.materialName(), actualRewards);
         long alreadyCrafted = confirmedOwned == null
                 ? 0
                 : Math.min(convertibleRewards, Math.max(observedGain - exactRewards, 0));
         long uncraftedEquivalent = Math.max(convertibleRewards - alreadyCrafted, 0);
-        long eventGain = confirmedOwned == null ? exactRewards : 0;
-        long remainingAfterObservation = Math.max(entry.remaining() - observedGain - eventGain, 0);
+        long remainingAfterObservation = confirmedOwned == null
+                ? Math.max(entry.remaining() - exactRewards, 0)
+                : Math.max(entry.required() - confirmedOwned, 0);
         long remaining = Math.max(remainingAfterObservation - uncraftedEquivalent, 0);
         boolean needsCraft = remainingAfterObservation > 0
                 && remaining == 0
                 && uncraftedEquivalent > 0;
         CultivationLedgerEntry effective = new CultivationLedgerEntry(
-                entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(), observedOwned, remaining,
+                entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(), confirmedOwned, remaining,
                 entry.remainingEvidence(), entry.ocrConfidence(), entry.manuallyCorrected(), entry.sourceBlocks());
         return new EntryProgress(effective, needsCraft);
     }
