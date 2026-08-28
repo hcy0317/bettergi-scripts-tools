@@ -66,6 +66,35 @@ class ArtifactAnalysisEngineTest {
     }
 
     @Test
+    void compatibleMainBuildWinsBeforeDestructiveRejectDecision() {
+        ArtifactItem artifact = artifact(20, "hp_", List.of(
+                new ArtifactSubstat("critRate_", 11.7),
+                new ArtifactSubstat("critDMG_", 23.3),
+                new ArtifactSubstat("def", 23),
+                new ArtifactSubstat("atk", 19)));
+        ArtifactBuild compatible = new ArtifactBuild(
+                "compatible", "兼容主属性", "Furina",
+                List.of(new ArtifactSetRule("GoldenTroupe", 4)),
+                Map.of("circlet", Set.of("hp_")),
+                Map.of("def_", 0.1), true, false, "custom");
+        ArtifactBuild incompatible = new ArtifactBuild(
+                "incompatible", "高分错误主属性", "Furina",
+                List.of(new ArtifactSetRule("GoldenTroupe", 4)),
+                Map.of("circlet", Set.of("atk_")),
+                Map.of("critRate_", 1.0, "critDMG_", 1.0),
+                true, false, "custom");
+
+        ArtifactDecision decision = engine.analyze(
+                snapshot(artifact), List.of(compatible, incompatible),
+                new ArtifactAnalysisPolicy(0, 0, 0.2))
+                .decisions().getFirst();
+
+        assertThat(decision.kind()).isEqualTo(ArtifactDecisionKind.KEEP);
+        assertThat(decision.bestBuildId()).isEqualTo("compatible");
+        assertThat(decision.preferredMain()).isTrue();
+    }
+
+    @Test
     void historicalDecisionWithoutBuildScoresRemainsReadable() throws Exception {
         ArtifactDecision decision = new ObjectMapper().readValue("""
                 {

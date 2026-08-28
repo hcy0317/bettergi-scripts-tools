@@ -26,6 +26,7 @@ public class ArtifactBuildService {
         return repository.save(build);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public List<ArtifactBuild> importAll(List<ArtifactBuild> builds) {
         builds.forEach(repository::save);
         return repository.findAll();

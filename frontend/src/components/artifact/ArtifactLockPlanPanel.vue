@@ -41,6 +41,7 @@ const sort = ref('potential-desc')
 const pageSize = 30
 let visibilityObserver = null
 let detailGeneration = 0
+let loadGeneration = 0
 
 const analyzable = computed(() => jobs.value.filter(item => item.analysisResult))
 const rows = computed(() => artifactDecisionRows(job.value))
@@ -61,15 +62,17 @@ const loadJobDetail = async id => {
 }
 
 const load = async (silent = false) => {
-  if (refreshing.value) return
-  if (!props.uid.trim()) { jobs.value = []; jobId.value = ''; job.value = null; return }
+  const generation = ++loadGeneration
+  const requestedUid = props.uid.trim()
+  if (!requestedUid) { jobs.value = []; jobId.value = ''; job.value = null; return }
   refreshing.value = true
   if (!silent) loading.value = true
   const previousNewestId = analyzable.value[0]?.id || ''
   try {
     const [nextJobs, nextBuilds, nextSettings] = await Promise.all([
-      getArtifactJobs(props.uid.trim()), getArtifactBuilds(), getArtifactSettings(),
+      getArtifactJobs(requestedUid), getArtifactBuilds(), getArtifactSettings(),
     ])
+    if (generation !== loadGeneration || requestedUid !== props.uid.trim()) return
     const nextJobId = preferredArtifactJobId(nextJobs, jobId.value, previousNewestId)
     jobs.value = nextJobs
     builds.value = nextBuilds
@@ -78,7 +81,12 @@ const load = async (silent = false) => {
     await loadJobDetail(nextJobId)
   }
   catch { if (!silent) ElMessage.error('锁定方案加载失败，请稍后重试') }
-  finally { refreshing.value = false; if (!silent) loading.value = false }
+  finally {
+    if (generation === loadGeneration) {
+      refreshing.value = false
+      if (!silent) loading.value = false
+    }
+  }
 }
 const approve = async () => {
   try { await ElMessageBox.confirm('批准后方案将与当前扫描摘要绑定；数量变化会强制重新扫描。', '批准锁定方案', {type:'warning'}) } catch { return }

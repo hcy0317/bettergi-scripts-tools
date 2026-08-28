@@ -51,10 +51,10 @@ public class ArtifactAnalysisEngine {
         List<BuildEvaluation> evaluations = builds.stream()
                 .map(build -> evaluate(artifact, build))
                 .toList();
-        BuildEvaluation best = null;
-        for (BuildEvaluation candidate : evaluations) {
-            if (best == null || isBetter(artifact, candidate, best)) best = candidate;
-        }
+        BuildEvaluation best = selectBest(
+                artifact,
+                evaluations.stream().filter(BuildEvaluation::preferredMain).toList());
+        if (best == null) best = selectBest(artifact, evaluations);
         if (best == null) throw new IllegalStateException("no enabled artifact build could be evaluated");
 
         List<Integer> buildCurrentScores = evaluations.stream()
@@ -87,6 +87,16 @@ public class ArtifactAnalysisEngine {
                 currentScore, potentialScore, best.preferredMain(), best.setFit(),
                 buildCurrentScores, buildPotentialScores, buildPreferredMains, buildSetMatches,
                 kind, reasons);
+    }
+
+    private static BuildEvaluation selectBest(
+            ArtifactItem artifact,
+            List<BuildEvaluation> evaluations) {
+        BuildEvaluation best = null;
+        for (BuildEvaluation candidate : evaluations) {
+            if (best == null || isBetter(artifact, candidate, best)) best = candidate;
+        }
+        return best;
     }
 
     private static boolean isBetter(

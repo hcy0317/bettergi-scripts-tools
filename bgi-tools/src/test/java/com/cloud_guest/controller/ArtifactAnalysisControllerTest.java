@@ -105,6 +105,21 @@ class ArtifactAnalysisControllerTest {
                 .startsWith("BetterGIArtifact://characters?request=");
     }
 
+    @Test
+    void genericJobEndpointRejectsCharacterAndLockOperations() {
+        ArtifactAnalysisController controller = controller();
+
+        assertThatThrownBy(() -> controller.startJob(
+                "102550550", ArtifactLaunchOperation.SCAN_CHARACTER_ROSTER,
+                100, false, ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("only accepts ANALYZE");
+        assertThatThrownBy(() -> controller.startJob(
+                "102550550", ArtifactLaunchOperation.EXECUTE_LOCK_PLAN,
+                100, false, ""))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private ArtifactAnalysisController controller() {
         Clock clock = Clock.fixed(Instant.parse("2026-08-27T00:00:00Z"), ZoneOffset.UTC);
         ArtifactBuildService buildService = new ArtifactBuildService(new InMemoryArtifactBuildRepository());

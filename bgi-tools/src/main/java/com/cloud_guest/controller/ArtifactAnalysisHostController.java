@@ -95,12 +95,15 @@ public class ArtifactAnalysisHostController {
         if (request.characterLevelThreshold() == null || request.favoriteOverride() == null) {
             throw new IllegalStateException("character roster request is missing its activation settings");
         }
-        ArtifactBuildAutoActivationResult result = autoActivationService.apply(
-                roster,
-                new ArtifactBuildAutoActivationSettings(
-                        request.characterLevelThreshold(), request.favoriteOverride()));
-        jobService.reanalyzeLatest(
-                roster.uid(), buildService.list(), settingsService.get());
+        ArtifactBuildAutoActivationResult result =
+                jobService.mutateAnalysisConfigurationAndReanalyze(
+                        roster.uid(),
+                        () -> autoActivationService.apply(
+                                roster,
+                                new ArtifactBuildAutoActivationSettings(
+                                        request.characterLevelThreshold(), request.favoriteOverride())),
+                        buildService::list,
+                        settingsService::get);
         return ok(result);
     }
 

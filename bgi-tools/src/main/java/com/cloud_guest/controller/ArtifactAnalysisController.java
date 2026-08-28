@@ -14,7 +14,6 @@ import com.cloud_guest.artifact.job.ArtifactAnalysisJobSummary;
 import com.cloud_guest.artifact.job.ArtifactAnalysisJobService;
 import com.cloud_guest.artifact.job.ArtifactJobPreflightResponse;
 import com.cloud_guest.artifact.job.ArtifactJobStartResponse;
-import com.cloud_guest.artifact.execution.ArtifactExecutionObservation;
 import com.cloud_guest.artifact.launch.ArtifactLaunchOperation;
 import com.cloud_guest.artifact.nativeplan.ArtifactNativePlanCompiler;
 import com.cloud_guest.artifact.nativeplan.ArtifactNativeSyncPlan;
@@ -75,8 +74,8 @@ public class ArtifactAnalysisController {
             @PathVariable String buildId,
             @RequestBody ArtifactBuild build,
             @RequestParam String uid) {
-        ArtifactBuild saved = buildService.save(buildId, build);
-        refreshLatestLockPlan(uid);
+        ArtifactBuild saved = mutateAndRefresh(
+                uid, () -> buildService.save(buildId, build));
         return ok(saved);
     }
 
@@ -85,8 +84,8 @@ public class ArtifactAnalysisController {
     public Result<List<ArtifactBuild>> importBuilds(
             @RequestBody List<ArtifactBuild> builds,
             @RequestParam String uid) {
-        List<ArtifactBuild> imported = buildService.importAll(builds);
-        refreshLatestLockPlan(uid);
+        List<ArtifactBuild> imported = mutateAndRefresh(
+                uid, () -> buildService.importAll(builds));
         return ok(imported);
     }
 
@@ -95,8 +94,8 @@ public class ArtifactAnalysisController {
     public Result<List<ArtifactBuild>> updateBuildBulkState(
             @RequestBody ArtifactBuildBulkStateRequest request,
             @RequestParam String uid) {
-        List<ArtifactBuild> updated = buildService.updateBulkState(request);
-        refreshLatestLockPlan(uid);
+        List<ArtifactBuild> updated = mutateAndRefresh(
+                uid, () -> buildService.updateBulkState(request));
         return ok(updated);
     }
 
@@ -105,8 +104,8 @@ public class ArtifactAnalysisController {
     public Result<Boolean> deleteBuild(
             @PathVariable String buildId,
             @RequestParam String uid) {
-        boolean deleted = buildService.delete(buildId);
-        if (deleted) refreshLatestLockPlan(uid);
+        boolean deleted = mutateAndRefresh(
+                uid, () -> buildService.delete(buildId));
         return ok(deleted);
     }
 
@@ -121,8 +120,8 @@ public class ArtifactAnalysisController {
     public Result<ArtifactAnalysisPolicy> saveSettings(
             @RequestBody ArtifactAnalysisPolicy policy,
             @RequestParam String uid) {
-        ArtifactAnalysisPolicy saved = settingsService.save(policy);
-        refreshLatestLockPlan(uid);
+        ArtifactAnalysisPolicy saved = mutateAndRefresh(
+                uid, () -> settingsService.save(policy));
         return ok(saved);
     }
 
@@ -182,6 +181,10 @@ public class ArtifactAnalysisController {
             }
             return ok(jobService.startNative(uid, plan));
         }
+        if (operation != ArtifactLaunchOperation.ANALYZE) {
+            throw new IllegalArgumentException(
+                    "generic artifact job endpoint only accepts ANALYZE");
+        }
         return ok(jobService.start(uid, operation));
     }
 
@@ -220,19 +223,6 @@ public class ArtifactAnalysisController {
         return ok(jobService.approve(jobId, snapshotDigest));
     }
 
-    @PostMapping("jobs/{jobId}/preflight")
-    @Operation(summary = "执行前核验数量、指纹与当前锁状态")
-    public Result<ArtifactJobPreflightResponse> preflight(
-            @PathVariable String jobId,
-            @RequestBody ArtifactSnapshot liveSnapshot) {
-        return ok(jobService.preflight(
-                jobId,
-                new ArtifactExecutionObservation(
-                        liveSnapshot.uid(), liveSnapshot.artifactCount(),
-                        liveSnapshot.artifacts(), liveSnapshot),
-                buildService.list(), settingsService.get()));
-    }
-
     @PostMapping("jobs/{jobId}/launch")
     @Operation(summary = "从已批准分析启动原生锁定执行")
     public Result<ArtifactJobStartResponse> launchApprovedPlan(
@@ -249,8 +239,8 @@ public class ArtifactAnalysisController {
         return ok(nativePlanCompiler.compileReplaceAll(buildService.list(), capacity));
     }
 
-    private void refreshLatestLockPlan(String uid) {
-        jobService.reanalyzeLatest(
-                uid, buildService.list(), settingsService.get());
+    private <T> T mutateAndRefresh(String uid, java.util.function.Supplier<T> mutation) {
+        return jobService.mutateAnalysisConfigurationAndReanalyze(
+                uid, mutation, buildService::list, settingsService::get);
     }
 }

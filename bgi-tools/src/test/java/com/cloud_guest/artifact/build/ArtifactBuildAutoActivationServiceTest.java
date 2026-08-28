@@ -40,6 +40,11 @@ class ArtifactBuildAutoActivationServiceTest {
         assertThat(result.eligibleCharacterCount()).isEqualTo(3);
         assertThat(result.enabledBuildCount()).isEqualTo(3);
         assertThat(result.disabledBuildCount()).isEqualTo(1);
+        assertThat(result.applied()).isTrue();
+        assertThat(result.rosterDigest()).hasSize(64);
+        assertThat(result.characters())
+                .extracting(ArtifactCharacterRosterEntry::characterKey)
+                .containsExactly("Clorinde", "Furina", "Noelle");
         assertThat(buildService.list())
                 .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled, ArtifactBuild::nativeSyncEnabled)
                 .containsExactly(
@@ -64,6 +69,51 @@ class ArtifactBuildAutoActivationServiceTest {
 
         assertThat(buildService.list().getFirst().analysisEnabled()).isFalse();
         assertThat(buildService.list().getFirst().nativeSyncEnabled()).isFalse();
+    }
+
+    @Test
+    void changedRosterMustBeObservedTwiceBeforeItCanChangeBuilds() {
+        InMemoryArtifactBuildRepository repository = new InMemoryArtifactBuildRepository();
+        ArtifactBuildService buildService = new ArtifactBuildService(repository);
+        buildService.importAll(List.of(
+                build("furina", "Furina", false),
+                build("noelle", "Noelle", false)));
+        ArtifactBuildAutoActivationService service = new ArtifactBuildAutoActivationService(
+                buildService, new InMemoryArtifactBuildAutoActivationResultRepository());
+        ArtifactBuildAutoActivationSettings settings =
+                new ArtifactBuildAutoActivationSettings(80, true);
+        service.apply(
+                new ArtifactCharacterRoster("102550550", List.of(
+                        new ArtifactCharacterRosterEntry("Furina", 90, false))),
+                settings);
+
+        ArtifactBuildAutoActivationResult changed = service.apply(
+                new ArtifactCharacterRoster("102550550", List.of(
+                        new ArtifactCharacterRosterEntry("Noelle", 90, false))),
+                settings);
+
+        assertThat(changed.applied()).isFalse();
+        assertThat(changed.addedCharacterKeys()).containsExactly("Noelle");
+        assertThat(changed.removedCharacterKeys()).containsExactly("Furina");
+        assertThat(buildService.list())
+                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("furina", true),
+                        org.assertj.core.groups.Tuple.tuple("noelle", false));
+
+        ArtifactBuildAutoActivationResult confirmed = service.apply(
+                new ArtifactCharacterRoster("102550550", List.of(
+                        new ArtifactCharacterRosterEntry("Noelle", 90, false))),
+                settings);
+
+        assertThat(confirmed.applied()).isTrue();
+        assertThat(confirmed.addedCharacterKeys()).isEmpty();
+        assertThat(confirmed.removedCharacterKeys()).isEmpty();
+        assertThat(buildService.list())
+                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("furina", false),
+                        org.assertj.core.groups.Tuple.tuple("noelle", true));
     }
 
     private static ArtifactBuild build(String id, String characterKey, boolean enabled) {

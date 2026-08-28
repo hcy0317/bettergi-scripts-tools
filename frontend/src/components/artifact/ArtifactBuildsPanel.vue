@@ -50,6 +50,17 @@ const characterLaunchDialogOpen = ref(false)
 const characterScanJob = ref(null)
 const characterScanWatchJobId = ref('')
 const characterScanMeta = computed(() => artifactCharacterScanStatusMeta(characterScanJob.value))
+const rosterDifferenceText = computed(() => {
+  const result = autoActivationResult.value
+  if (!result || result.applied !== false) return ''
+  const sections = [
+    ['新增', result.addedCharacterKeys],
+    ['缺失', result.removedCharacterKeys],
+    ['等级或收藏变化', result.changedCharacterKeys],
+  ].filter(([, keys]) => keys?.length)
+    .map(([label, keys]) => `${label}：${keys.map(artifactCharacterLabel).join('、')}`)
+  return sections.join('；')
+})
 
 const sourceOptions = [
   {label: '全部', value: 'all'}, {label: '上游预设', value: 'upstream'}, {label: '自定义', value: 'custom'},
@@ -132,9 +143,13 @@ const waitForCharacterScan = async jobId => {
   if (completed?.status === 'COMPLETED') {
     await Promise.all([load(true), loadAutoActivationResult()])
     const result = autoActivationResult.value
-    ElMessage.success(result
-      ? `已识别 ${result.characterCount} 人，最终启用 ${result.eligibleCharacterCount} 人、${result.enabledBuildCount} 个配装`
-      : '已按游戏角色等级与收藏状态更新配装')
+    if (result?.applied === false) {
+      ElMessage.warning(`本次名单与上次不同，未修改配装；请核对后重新扫描。${rosterDifferenceText.value}`)
+    } else {
+      ElMessage.success(result
+        ? `已识别 ${result.characterCount} 人，最终启用 ${result.eligibleCharacterCount} 人、${result.enabledBuildCount} 个配装`
+        : '已按游戏角色等级与收藏状态更新配装')
+    }
     return
   }
   if (completed?.status === 'FAILED') {
@@ -314,6 +329,14 @@ onBeforeUnmount(() => {
         <strong>满足条件 {{ autoActivationResult.eligibleCharacterCount }} 人</strong>
         <span>启用配装 {{ autoActivationResult.enabledBuildCount }} 个</span>
       </div>
+      <el-alert
+        v-if="rosterDifferenceText"
+        title="本次识别名单与上次不同，尚未应用启停"
+        :description="`${rosterDifferenceText}。若变化正确，请再扫描一次；连续两次一致后才会应用。`"
+        type="warning"
+        show-icon
+        :closable="false"
+      />
     </section>
 
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false"/>

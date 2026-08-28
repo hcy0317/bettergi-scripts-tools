@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -131,11 +132,11 @@ class ArtifactAnalysisJobServiceTest {
                 job.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
         ArtifactAnalysisJob approved = service.approve(job.id(), source.snapshotDigest());
 
-        ArtifactAnalysisJob refreshed = service.reanalyzeLatest(
+        ArtifactAnalysisJob refreshed = service.reanalyzeReviewable(
                         source.uid(),
                         List.of(build().withStates(false, true)),
                         ArtifactAnalysisPolicy.defaults())
-                .orElseThrow();
+                .getFirst();
 
         assertThat(refreshed.status()).isEqualTo(ArtifactAnalysisJobStatus.READY_FOR_REVIEW);
         assertThat(refreshed.decisionPlan().approved()).isFalse();
@@ -144,6 +145,79 @@ class ArtifactAnalysisJobServiceTest {
         assertThat(refreshed.analysisResult().buildIds()).isEmpty();
         assertThat(refreshed.snapshot().snapshotDigest())
                 .isEqualTo(reviewed.snapshot().snapshotDigest());
+    }
+
+    @Test
+    void buildChangeRevokesEveryReviewablePlanForTheUid() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob first = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactAnalysisJob second = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.submitSnapshot(first.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(first.id(), source.snapshotDigest());
+        service.submitSnapshot(second.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(second.id(), source.snapshotDigest());
+
+        var refreshed = service.reanalyzeReviewable(
+                source.uid(), List.of(build().withStates(false, true)),
+                ArtifactAnalysisPolicy.defaults());
+
+        assertThat(refreshed).hasSize(2)
+                .allMatch(job -> job.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW)
+                .allMatch(job -> !job.decisionPlan().approved());
+    }
+
+    @Test
+    void buildChangeRevokesWaitingExecutionBeforeReanalyzing() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob analysis = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(analysis.id(), source.snapshotDigest());
+        ArtifactJobStartResponse execution = service.launch(
+                analysis.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+
+        ArtifactBuild changedBuild = build().withStates(false, true);
+        service.mutateAnalysisConfigurationAndReanalyze(
+                source.uid(), () -> changedBuild,
+                () -> List.of(changedBuild), ArtifactAnalysisPolicy::defaults);
+
+        assertThat(service.get(execution.job().id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.STALE_ABORT);
+        assertThat(service.get(analysis.id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.READY_FOR_REVIEW);
+        assertThatThrownBy(() -> launchRequestService().consume(
+                execution.launch().requestToken()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not found");
+    }
+
+    @Test
+    void buildChangeIsRejectedWhileHostOwnsAnExecution() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob analysis = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(analysis.id(), source.snapshotDigest());
+        ArtifactAnalysisJob execution = service.launch(
+                analysis.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        service.claim(execution.id(), source.uid(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+        AtomicBoolean mutated = new AtomicBoolean();
+
+        assertThatThrownBy(() -> service.mutateAnalysisConfigurationAndReanalyze(
+                source.uid(), () -> mutated.compareAndSet(false, true),
+                () -> List.of(build()), ArtifactAnalysisPolicy::defaults))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("正在执行");
+        assertThat(mutated).isFalse();
+        assertThat(service.get(analysis.id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.APPROVED);
     }
 
     @Test

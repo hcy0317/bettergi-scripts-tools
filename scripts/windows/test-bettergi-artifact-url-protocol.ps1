@@ -30,6 +30,8 @@ Assert-True ($registrationSource.Contains('-NoProfile -NonInteractive')) 'Artifa
 Assert-True (-not $registrationSource.Contains('cmd.exe')) 'Artifact protocol registration must not introduce a cmd.exe launcher'
 Assert-True ($handlerSource.Contains('Get-Process -Name BetterGI')) `
     'Artifact protocol handler must reuse an existing BetterGI process without starting another instance'
+Assert-True ($handlerSource.Contains('[System.IO.Path]::GetFullPath($_.Path)')) `
+    'Artifact protocol handler must match the running process to the selected BetterGI installation'
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("bettergi-artifact-protocol-{0}" -f [guid]::NewGuid())
 $requestRoot = Join-Path $tempRoot 'User\launch-requests\artifact-analysis'
