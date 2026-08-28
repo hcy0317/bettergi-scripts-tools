@@ -12,14 +12,14 @@ import java.util.Optional;
 public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRepository {
     private static final String TYPE = "artifact-analysis-job";
     private static final String SUMMARY_TYPE = "artifact-analysis-job-summary-v3";
-    private static final String ACTIVE_LOCK_TYPE = "artifact-analysis-active-lock-job";
+    private static final String ACTIVE_LOCK_TYPE = "artifact-analysis-active-lock-job-v2";
     private static final String SUMMARY_MIGRATION_TYPE = "artifact-analysis-job-summary-migration-v3";
     private static final String SUMMARY_MIGRATION_CURSOR_TYPE =
             "artifact-analysis-job-summary-migration-v3-cursor";
     private static final String ACTIVE_LOCK_MIGRATION_TYPE =
-            "artifact-analysis-active-lock-migration-v1";
+            "artifact-analysis-active-lock-migration-v2";
     private static final String ACTIVE_LOCK_MIGRATION_CURSOR_TYPE =
-            "artifact-analysis-active-lock-migration-v1-cursor";
+            "artifact-analysis-active-lock-migration-v2-cursor";
     private final ArtifactJsonStore store;
 
     public DbKvArtifactAnalysisJobRepository(ArtifactJsonStore store) {

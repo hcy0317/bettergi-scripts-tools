@@ -150,16 +150,16 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                 "2026-08-26T00:00:00Z", "2026-08-26T00:00:01Z", null);
         ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(claimed);
         when(store.get(
-                "artifact-analysis-active-lock-migration-v1", "default", Boolean.class))
+                "artifact-analysis-active-lock-migration-v2", "default", Boolean.class))
                 .thenReturn(Optional.of(false));
         when(store.get(
-                "artifact-analysis-active-lock-migration-v1-cursor", "default", Long.class))
+                "artifact-analysis-active-lock-migration-v2-cursor", "default", Long.class))
                 .thenReturn(Optional.of(0L));
         when(store.listAfterId(
                 "artifact-analysis-job", ArtifactAnalysisJob.class, 100, 0L))
                 .thenReturn(List.of(new ArtifactJsonStore.StoredValue<>(42L, claimed)));
         when(store.list(
-                "artifact-analysis-active-lock-job", ArtifactAnalysisJobSummary.class))
+                "artifact-analysis-active-lock-job-v2", ArtifactAnalysisJobSummary.class))
                 .thenReturn(List.of(summary));
 
         var result = new DbKvArtifactAnalysisJobRepository(store)
@@ -167,11 +167,46 @@ class DbKvArtifactAnalysisJobRepositoryTest {
 
         assertThat(result).containsExactly(summary);
         verify(store).put(
-                "artifact-analysis-active-lock-job", "102550550:claimed-old", summary);
+                "artifact-analysis-active-lock-job-v2", "102550550:claimed-old", summary);
         verify(store).put(
-                "artifact-analysis-active-lock-migration-v1-cursor", "default", 42L);
+                "artifact-analysis-active-lock-migration-v2-cursor", "default", 42L);
         verify(store).put(
-                "artifact-analysis-active-lock-migration-v1", "default", true);
+                "artifact-analysis-active-lock-migration-v2", "default", true);
+    }
+
+    @Test
+    void activeLockMigrationRebuildsLegacyIndexIntoANewPhysicalType() {
+        ArtifactJsonStore store = mock(ArtifactJsonStore.class);
+        ArtifactAnalysisJob claimed = new ArtifactAnalysisJob(
+                "claimed-v1", "102550550",
+                ArtifactLaunchOperation.EXECUTE_LOCK_PLAN,
+                ArtifactAnalysisJobStatus.HOST_CLAIMED,
+                null, null, null,
+                "2026-08-26T00:00:00Z", "2026-08-26T00:00:01Z", null);
+        ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(claimed);
+        when(store.get(
+                "artifact-analysis-active-lock-migration-v2", "default", Boolean.class))
+                .thenReturn(Optional.of(false));
+        when(store.get(
+                "artifact-analysis-active-lock-migration-v2-cursor", "default", Long.class))
+                .thenReturn(Optional.of(0L));
+        when(store.listAfterId(
+                "artifact-analysis-job", ArtifactAnalysisJob.class, 100, 0L))
+                .thenReturn(List.of(new ArtifactJsonStore.StoredValue<>(42L, claimed)));
+        when(store.list(
+                "artifact-analysis-active-lock-job-v2", ArtifactAnalysisJobSummary.class))
+                .thenReturn(List.of(summary));
+
+        var result = new DbKvArtifactAnalysisJobRepository(store)
+                .findActiveLockExecutionSummaries();
+
+        assertThat(result).containsExactly(summary);
+        verify(store).put(
+                "artifact-analysis-active-lock-job-v2",
+                "102550550:claimed-v1",
+                summary);
+        verify(store).put(
+                "artifact-analysis-active-lock-migration-v2", "default", true);
     }
 
     @Test
@@ -196,10 +231,10 @@ class DbKvArtifactAnalysisJobRepositoryTest {
         AtomicBoolean migrationReleased = new AtomicBoolean(false);
 
         when(store.get(
-                "artifact-analysis-active-lock-migration-v1", "default", Boolean.class))
+                "artifact-analysis-active-lock-migration-v2", "default", Boolean.class))
                 .thenReturn(Optional.of(false));
         when(store.get(
-                "artifact-analysis-active-lock-migration-v1-cursor", "default", Long.class))
+                "artifact-analysis-active-lock-migration-v2-cursor", "default", Long.class))
                 .thenReturn(Optional.of(0L));
         when(store.listAfterId(
                 "artifact-analysis-job", ArtifactAnalysisJob.class, 100, 0L))
@@ -215,7 +250,7 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                     return completed;
                 });
         when(store.list(
-                "artifact-analysis-active-lock-job", ArtifactAnalysisJobSummary.class))
+                "artifact-analysis-active-lock-job-v2", ArtifactAnalysisJobSummary.class))
                 .thenReturn(List.of());
 
         DbKvArtifactAnalysisJobRepository repository =
@@ -235,11 +270,11 @@ class DbKvArtifactAnalysisJobRepositoryTest {
             assertThat(saveRanBeforeMigrationFinished).isFalse();
             var writes = inOrder(store);
             writes.verify(store).put(
-                    "artifact-analysis-active-lock-job",
+                    "artifact-analysis-active-lock-job-v2",
                     "102550550:claimed-old",
                     claimedSummary);
             writes.verify(store).delete(
-                    "artifact-analysis-active-lock-job",
+                    "artifact-analysis-active-lock-job-v2",
                     "102550550:claimed-old");
         } finally {
             executor.shutdownNow();
