@@ -12,6 +12,7 @@ import java.util.Optional;
 public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRepository {
     private static final String TYPE = "artifact-analysis-job";
     private static final String SUMMARY_TYPE = "artifact-analysis-job-summary";
+    private static final String ACTIVE_LOCK_TYPE = "artifact-analysis-active-lock-job";
     private static final String SUMMARY_MIGRATION_TYPE = "artifact-analysis-job-summary-migration";
     private static final String SUMMARY_MIGRATION_CURSOR_TYPE =
             "artifact-analysis-job-summary-migration-cursor";
@@ -25,7 +26,14 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
     @Transactional(rollbackFor = Exception.class)
     public ArtifactAnalysisJob save(ArtifactAnalysisJob job) {
         store.put(TYPE, key(job.uid(), job.id()), job);
-        store.put(SUMMARY_TYPE, key(job.uid(), job.id()), ArtifactAnalysisJobSummary.from(job));
+        ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(job);
+        store.put(SUMMARY_TYPE, key(job.uid(), job.id()), summary);
+        boolean activeLock = job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
+                && (job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                    || job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
+                    || job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
+        if (activeLock) store.put(ACTIVE_LOCK_TYPE, key(job.uid(), job.id()), summary);
+        else store.delete(ACTIVE_LOCK_TYPE, key(job.uid(), job.id()));
         return job;
     }
 
@@ -53,17 +61,21 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
                 SUMMARY_MIGRATION_TYPE, uid, Boolean.class).orElse(false);
         int migratedThisCall = 0;
         while (!complete && migratedThisCall < requestedLimit) {
-            int cursor = store.get(
-                    SUMMARY_MIGRATION_CURSOR_TYPE, uid, Integer.class).orElse(0);
+            long cursor = store.get(
+                    SUMMARY_MIGRATION_CURSOR_TYPE, uid, Long.class)
+                    .orElse(Long.MAX_VALUE);
             int batchSize = Math.min(100, requestedLimit - migratedThisCall);
-            List<ArtifactAnalysisJob> batch = store.listByKeyPrefixPage(
+            List<ArtifactJsonStore.StoredValue<ArtifactAnalysisJob>> batch =
+                    store.listByKeyPrefixBeforeId(
                     TYPE, uid + ":", ArtifactAnalysisJob.class,
                     batchSize, cursor);
-            batch.forEach(job -> store.put(
+            batch.stream().map(ArtifactJsonStore.StoredValue::value).forEach(job -> store.put(
                     SUMMARY_TYPE,
                     key(job.uid(), job.id()),
                     ArtifactAnalysisJobSummary.from(job)));
-            int nextCursor = cursor + batch.size();
+            long nextCursor = batch.isEmpty()
+                    ? cursor
+                    : batch.getLast().id();
             store.put(SUMMARY_MIGRATION_CURSOR_TYPE, uid, nextCursor);
             migratedThisCall += batch.size();
             complete = batch.size() < batchSize;
@@ -98,14 +110,7 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
 
     @Override
     public List<ArtifactAnalysisJobSummary> findActiveLockExecutionSummaries() {
-        return store.listLimited(
-                        SUMMARY_TYPE, ArtifactAnalysisJobSummary.class, 1000)
-                .stream()
-                .filter(summary -> summary.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN)
-                .filter(summary -> summary.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
-                        || summary.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
-                        || summary.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE)
-                .toList();
+        return store.list(ACTIVE_LOCK_TYPE, ArtifactAnalysisJobSummary.class);
     }
 
     @Override
@@ -113,6 +118,7 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
     public boolean delete(String uid, String id) {
         boolean deleted = store.delete(TYPE, key(uid, id));
         store.delete(SUMMARY_TYPE, key(uid, id));
+        store.delete(ACTIVE_LOCK_TYPE, key(uid, id));
         return deleted;
     }
 

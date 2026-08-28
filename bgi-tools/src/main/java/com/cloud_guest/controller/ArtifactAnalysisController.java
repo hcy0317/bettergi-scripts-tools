@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -71,6 +72,7 @@ public class ArtifactAnalysisController {
 
     @PutMapping("builds/{buildId}")
     @Operation(summary = "保存一个圣遗物分析 Build")
+    @Transactional(rollbackFor = Exception.class)
     public Result<ArtifactBuild> saveBuild(
             @PathVariable String buildId,
             @RequestBody ArtifactBuild build,
@@ -85,6 +87,7 @@ public class ArtifactAnalysisController {
 
     @PostMapping("builds/import")
     @Operation(summary = "批量导入 analyzer Build")
+    @Transactional(rollbackFor = Exception.class)
     public Result<List<ArtifactBuild>> importBuilds(
             @RequestBody List<ArtifactBuild> builds,
             @RequestParam String uid) {
@@ -98,6 +101,7 @@ public class ArtifactAnalysisController {
 
     @PutMapping("builds/bulk-state")
     @Operation(summary = "按来源和状态字段批量更新圣遗物 Build")
+    @Transactional(rollbackFor = Exception.class)
     public Result<List<ArtifactBuild>> updateBuildBulkState(
             @RequestBody ArtifactBuildBulkStateRequest request,
             @RequestParam String uid) {
@@ -111,6 +115,7 @@ public class ArtifactAnalysisController {
 
     @DeleteMapping("builds/{buildId}")
     @Operation(summary = "删除一个自定义 Build")
+    @Transactional(rollbackFor = Exception.class)
     public Result<Boolean> deleteBuild(
             @PathVariable String buildId,
             @RequestParam String uid) {
@@ -130,6 +135,7 @@ public class ArtifactAnalysisController {
 
     @PutMapping("settings")
     @Operation(summary = "保存圣遗物评分设置")
+    @Transactional(rollbackFor = Exception.class)
     public Result<ArtifactAnalysisPolicy> saveSettings(
             @RequestBody ArtifactAnalysisPolicy policy,
             @RequestParam String uid) {
@@ -211,7 +217,9 @@ public class ArtifactAnalysisController {
     @GetMapping("jobs/{jobId}")
     @Operation(summary = "读取一个圣遗物分析任务")
     public Result<ArtifactAnalysisJob> job(@PathVariable String jobId) {
-        return ok(jobService.get(jobId));
+        ArtifactAnalysisJob raw = jobService.get(jobId);
+        return ok(jobService.get(
+                jobId, buildsForUid(raw.uid()), settingsService.get()));
     }
 
     @DeleteMapping("jobs/{jobId}")

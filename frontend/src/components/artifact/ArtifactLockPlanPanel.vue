@@ -27,6 +27,7 @@ const settings = ref({...DEFAULT_ARTIFACT_ANALYSIS_THRESHOLDS})
 const jobId = ref('')
 const loading = ref(false)
 const refreshing = ref(false)
+const detailLoading = ref(false)
 const approving = ref(false)
 const launching = ref(false)
 const launchDialogOpen = ref(false)
@@ -61,12 +62,18 @@ const loadJobDetail = async (
 ) => {
   const generation = ++detailGeneration
   if (!id) { job.value = null; return }
-  const detail = await getArtifactJob(id)
-  if (generation === detailGeneration
-    && parentGeneration === loadGeneration
-    && requestedUid === props.uid.trim()
-    && detail?.uid === requestedUid
-    && id === jobId.value) job.value = detail
+  job.value = null
+  detailLoading.value = true
+  try {
+    const detail = await getArtifactJob(id)
+    if (generation === detailGeneration
+      && parentGeneration === loadGeneration
+      && requestedUid === props.uid.trim()
+      && detail?.uid === requestedUid
+      && id === jobId.value) job.value = detail
+  } finally {
+    if (generation === detailGeneration) detailLoading.value = false
+  }
 }
 
 const load = async (silent = false) => {
@@ -97,12 +104,14 @@ const load = async (silent = false) => {
   }
 }
 const approve = async () => {
+  if (!job.value || job.value.id !== jobId.value) return
   try { await ElMessageBox.confirm('批准后方案将与当前扫描摘要绑定；数量变化会强制重新扫描。', '批准锁定方案', {type:'warning'}) } catch { return }
   approving.value = true
   try { await approveArtifactJob(job.value.id, job.value.snapshot.snapshotDigest); ElMessage.success('方案已批准'); await load() }
   finally { approving.value = false }
 }
 const execute = async () => {
+  if (!job.value || job.value.id !== jobId.value) return
   if (!executionTargets.value.length) { ElMessage.info('当前筛选没有需要加解锁的目标'); return }
   try { await ElMessageBox.confirm(`当前筛选将锁定 ${executionSummary.value.lock} 件、解锁 ${executionSummary.value.unlock} 件。BetterGI 会先核对圣遗物总数；数量不变就直接执行，数量变化则全量复扫并返回审核。`, '执行筛选后的锁定方案', {type:'warning'}) } catch { return }
   launching.value = true
@@ -122,6 +131,7 @@ const execute = async () => {
 }
 watch(() => props.uid, () => {
   detailGeneration++
+  detailLoading.value = false
   job.value = null
   jobId.value = ''
   jobs.value = []
@@ -146,8 +156,8 @@ onBeforeUnmount(() => visibilityObserver?.disconnect())
       <div class="commands">
         <el-select v-model="jobId" placeholder="选择分析记录" @change="loadJobDetail"><el-option v-for="item in analyzable" :key="item.id" :label="`${formatArtifactDate(item.createdAtUtc)} · ${artifactJobStatusMeta(item.status).label}`" :value="item.id"/></el-select>
         <el-tooltip content="刷新最新方案"><el-button circle :icon="Refresh" :loading="refreshing" :disabled="!uid" aria-label="刷新最新锁定方案" @click="load()"/></el-tooltip>
-        <el-button :icon="Check" :loading="approving" :disabled="refreshing || !canApproveArtifactJob(job)" @click="approve">批准方案</el-button>
-        <el-tooltip :content="executionTargets.length ? `执行当前筛选的 ${executionTargets.length} 个目标` : '当前筛选没有加解锁目标'"><span><el-button type="primary" :icon="VideoPlay" :loading="launching" :disabled="refreshing || !canExecuteArtifactJob(job) || !executionTargets.length" @click="execute">执行方案</el-button></span></el-tooltip>
+        <el-button :icon="Check" :loading="approving || detailLoading" :disabled="refreshing || detailLoading || !canApproveArtifactJob(job)" @click="approve">批准方案</el-button>
+        <el-tooltip :content="executionTargets.length ? `执行当前筛选的 ${executionTargets.length} 个目标` : '当前筛选没有加解锁目标'"><span><el-button type="primary" :icon="VideoPlay" :loading="launching || detailLoading" :disabled="refreshing || detailLoading || !canExecuteArtifactJob(job) || !executionTargets.length" @click="execute">执行方案</el-button></span></el-tooltip>
       </div>
     </header>
     <el-empty v-if="!uid" description="请选择 UID"/>

@@ -350,6 +350,15 @@ public class ArtifactAnalysisJobService {
         return presentPolicyStatus(require(jobId));
     }
 
+    public ArtifactAnalysisJob get(
+            String jobId,
+            List<ArtifactBuild> builds,
+            ArtifactAnalysisPolicy policy) {
+        return presentPolicyStatus(
+                require(jobId),
+                ArtifactAnalysisEngine.analysisInputDigest(builds, policy));
+    }
+
     public ArtifactAnalysisJob complete(
             String jobId,
             ArtifactLaunchOperation operation,
@@ -421,9 +430,9 @@ public class ArtifactAnalysisJobService {
             Supplier<ArtifactAnalysisPolicy> policy) {
         requireNoActiveLockExecutionGlobally();
         T result = mutation.get();
+        reanalyzeReviewableInternal(uid, builds.get(), policy.get());
         invalidateWaitingLockExecutionsGlobally();
         invalidateWaitingLockExecutions(uid);
-        reanalyzeReviewableInternal(uid, builds.get(), policy.get());
         return result;
     }
 
@@ -434,8 +443,8 @@ public class ArtifactAnalysisJobService {
             Supplier<ArtifactAnalysisPolicy> policy) {
         requireNoActiveLockExecution(uid);
         T result = mutation.get();
-        invalidateWaitingLockExecutions(uid);
         reanalyzeReviewableInternal(uid, builds.get(), policy.get());
+        invalidateWaitingLockExecutions(uid);
         return result;
     }
 
@@ -482,11 +491,16 @@ public class ArtifactAnalysisJobService {
         repository.findNonTerminalLockExecutions(uid).stream()
                 .filter(job -> job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST)
                 .forEach(job -> {
-                    launchRequestService.revokeForJob(job.uid(), job.id());
                     repository.save(copy(
                             job, ArtifactAnalysisJobStatus.STALE_ABORT,
                             job.snapshot(), job.analysisResult(), job.decisionPlan(),
                             "Build 或评分设置已变化，待执行的旧锁定方案已撤销"));
+                    try {
+                        launchRequestService.revokeForJob(job.uid(), job.id());
+                    } catch (RuntimeException ignored) {
+                        // The stale DB state remains authoritative; an orphaned
+                        // request can no longer be claimed or execute game input.
+                    }
                 });
     }
 
@@ -497,11 +511,15 @@ public class ArtifactAnalysisJobService {
                 .map(summary -> repository.findById(summary.id()).orElse(null))
                 .filter(java.util.Objects::nonNull)
                 .forEach(job -> {
-                    launchRequestService.revokeForJob(job.uid(), job.id());
                     repository.save(copy(
                             job, ArtifactAnalysisJobStatus.STALE_ABORT,
                             job.snapshot(), job.analysisResult(), job.decisionPlan(),
                             "全局 Build 或评分设置已变化，待执行的旧锁定方案已撤销"));
+                    try {
+                        launchRequestService.revokeForJob(job.uid(), job.id());
+                    } catch (RuntimeException ignored) {
+                        // Fail closed on the persisted stale state.
+                    }
                 });
     }
 
@@ -547,13 +565,26 @@ public class ArtifactAnalysisJobService {
     }
 
     private ArtifactAnalysisJob presentPolicyStatus(ArtifactAnalysisJob job) {
+        return presentPolicyStatus(job, null);
+    }
+
+    private ArtifactAnalysisJob presentPolicyStatus(
+            ArtifactAnalysisJob job,
+            String currentInputDigest) {
         boolean reviewable = job.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
                 || job.status() == ArtifactAnalysisJobStatus.APPROVED;
-        if (!reviewable || usesCurrentScoringPolicy(job)) return job;
+        boolean currentPolicy = usesCurrentScoringPolicy(job);
+        boolean currentInputs = currentInputDigest == null
+                || job.analysisResult() != null
+                && currentInputDigest.equals(job.analysisResult().analysisInputDigest());
+        if (!reviewable || currentPolicy && currentInputs) return job;
         return new ArtifactAnalysisJob(
                 job.id(), job.uid(), job.operation(), ArtifactAnalysisJobStatus.RESCAN_REQUIRED,
                 job.snapshot(), job.analysisResult(), job.decisionPlan(),
-                job.createdAtUtc(), job.updatedAtUtc(), "评分算法已更新，请重新扫描后再审核。");
+                job.createdAtUtc(), job.updatedAtUtc(),
+                currentPolicy
+                        ? "Build 或评分设置已更新，请重新计算后再审核。"
+                        : "评分算法已更新，请重新扫描后再审核。");
     }
 
     private ArtifactAnalysisJobSummary presentPolicyStatus(

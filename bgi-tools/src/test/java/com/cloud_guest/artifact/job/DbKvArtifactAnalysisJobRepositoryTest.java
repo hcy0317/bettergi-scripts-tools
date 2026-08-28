@@ -75,12 +75,13 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                 "artifact-analysis-job-summary-migration", "102550550", Boolean.class))
                 .thenReturn(Optional.of(false));
         when(store.get(
-                "artifact-analysis-job-summary-migration-cursor", "102550550", Integer.class))
-                .thenReturn(Optional.of(100));
-        when(store.listByKeyPrefixPage(
+                "artifact-analysis-job-summary-migration-cursor", "102550550", Long.class))
+                .thenReturn(Optional.of(500L));
+        when(store.listByKeyPrefixBeforeId(
                 "artifact-analysis-job", "102550550:",
-                ArtifactAnalysisJob.class, 100, 100))
-                .thenReturn(List.of(legacy));
+                ArtifactAnalysisJob.class, 100, 500L))
+                .thenReturn(List.of(
+                        new ArtifactJsonStore.StoredValue<>(499L, legacy)));
         when(store.put(
                 "artifact-analysis-job-summary", "102550550:legacy-101", summary))
                 .thenReturn(summary);
@@ -94,7 +95,7 @@ class DbKvArtifactAnalysisJobRepositoryTest {
 
         assertThat(result).containsExactly(summary);
         verify(store).put(
-                "artifact-analysis-job-summary-migration-cursor", "102550550", 101);
+                "artifact-analysis-job-summary-migration-cursor", "102550550", 499L);
         verify(store).put(
                 "artifact-analysis-job-summary-migration", "102550550", true);
     }
