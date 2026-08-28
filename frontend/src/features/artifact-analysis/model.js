@@ -107,14 +107,18 @@ export const waitForArtifactJobCompletion = async (
     delay = 1000,
     sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
     onUpdate = () => {},
+    terminalStatuses = ['COMPLETED', 'FAILED'],
+    shouldContinue = () => true,
   } = {}
 ) => {
   let job = null
   for (let attempt = 0; attempt < attempts; attempt++) {
+    if (!shouldContinue()) return job
     if (attempt > 0) await sleep(delay)
+    if (!shouldContinue()) return job
     job = await getJob(jobId)
     onUpdate(job)
-    if (['COMPLETED', 'FAILED'].includes(job?.status)) return job
+    if (terminalStatuses.includes(job?.status)) return job
   }
   return job
 }

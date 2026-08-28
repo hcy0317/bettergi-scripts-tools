@@ -45,7 +45,7 @@ class ArtifactBuildAutoActivationServiceTest {
         assertThat(result.characters())
                 .extracting(ArtifactCharacterRosterEntry::characterKey)
                 .containsExactly("Clorinde", "Furina", "Noelle");
-        assertThat(buildService.list())
+        assertThat(service.resolve("102550550", buildService.list()))
                 .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled, ArtifactBuild::nativeSyncEnabled)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("clorinde", true, true),
@@ -60,15 +60,18 @@ class ArtifactBuildAutoActivationServiceTest {
         ArtifactBuildService buildService = new ArtifactBuildService(repository);
         buildService.importAll(List.of(build("noelle", "Noelle", true)));
 
-        new ArtifactBuildAutoActivationService(
+        ArtifactBuildAutoActivationService service = new ArtifactBuildAutoActivationService(
                 buildService,
-                new InMemoryArtifactBuildAutoActivationResultRepository()).apply(
+                new InMemoryArtifactBuildAutoActivationResultRepository());
+        service.apply(
                 new ArtifactCharacterRoster("102550550", List.of(
                         new ArtifactCharacterRosterEntry("Noelle", 79, true))),
                 new ArtifactBuildAutoActivationSettings(80, false));
 
-        assertThat(buildService.list().getFirst().analysisEnabled()).isFalse();
-        assertThat(buildService.list().getFirst().nativeSyncEnabled()).isFalse();
+        assertThat(service.resolve("102550550", buildService.list()).getFirst()
+                .analysisEnabled()).isFalse();
+        assertThat(service.resolve("102550550", buildService.list()).getFirst()
+                .nativeSyncEnabled()).isFalse();
     }
 
     @Test
@@ -95,7 +98,7 @@ class ArtifactBuildAutoActivationServiceTest {
         assertThat(changed.applied()).isFalse();
         assertThat(changed.addedCharacterKeys()).containsExactly("Noelle");
         assertThat(changed.removedCharacterKeys()).containsExactly("Furina");
-        assertThat(buildService.list())
+        assertThat(service.resolve("102550550", buildService.list()))
                 .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("furina", true),
@@ -109,7 +112,40 @@ class ArtifactBuildAutoActivationServiceTest {
         assertThat(confirmed.applied()).isTrue();
         assertThat(confirmed.addedCharacterKeys()).isEmpty();
         assertThat(confirmed.removedCharacterKeys()).isEmpty();
-        assertThat(buildService.list())
+        assertThat(service.resolve("102550550", buildService.list()))
+                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("furina", false),
+                        org.assertj.core.groups.Tuple.tuple("noelle", true));
+    }
+
+    @Test
+    void activationOverlayIsIsolatedByUid() {
+        InMemoryArtifactBuildRepository repository = new InMemoryArtifactBuildRepository();
+        ArtifactBuildService buildService = new ArtifactBuildService(repository);
+        buildService.importAll(List.of(
+                build("furina", "Furina", false),
+                build("noelle", "Noelle", false)));
+        ArtifactBuildAutoActivationService service = new ArtifactBuildAutoActivationService(
+                buildService, new InMemoryArtifactBuildAutoActivationResultRepository());
+        ArtifactBuildAutoActivationSettings settings =
+                new ArtifactBuildAutoActivationSettings(80, false);
+
+        service.apply(
+                new ArtifactCharacterRoster("102550550", List.of(
+                        new ArtifactCharacterRosterEntry("Furina", 90, false))),
+                settings);
+        service.apply(
+                new ArtifactCharacterRoster("123456789", List.of(
+                        new ArtifactCharacterRosterEntry("Noelle", 90, false))),
+                settings);
+
+        assertThat(service.resolve("102550550", buildService.list()))
+                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("furina", true),
+                        org.assertj.core.groups.Tuple.tuple("noelle", false));
+        assertThat(service.resolve("123456789", buildService.list()))
                 .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("furina", false),

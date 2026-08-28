@@ -47,7 +47,7 @@ class ArtifactAnalysisControllerTest {
         ArtifactBuild build = build();
 
         assertThat(controller.saveBuild(build.id(), build, "102550550").getData()).isEqualTo(build);
-        assertThat(controller.builds().getData()).containsExactly(build);
+        assertThat(controller.builds("102550550").getData()).containsExactly(build);
 
         ArtifactAnalysisPolicy policy = new ArtifactAnalysisPolicy(78, 83, 0.25);
         assertThat(controller.saveSettings(policy, "102550550").getData()).isEqualTo(policy);
@@ -67,7 +67,7 @@ class ArtifactAnalysisControllerTest {
         ArtifactAnalysisController controller = controller();
         controller.saveBuild(build().id(), build(), "102550550");
 
-        var preview = controller.previewNativeSync(100).getData();
+        var preview = controller.previewNativeSync(100, "102550550").getData();
 
         assertThat(preview.status()).isEqualTo(ArtifactNativeSyncStatus.READY);
         assertThat(preview.replaceAll()).isTrue();

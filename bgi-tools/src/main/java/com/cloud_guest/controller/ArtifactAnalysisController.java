@@ -64,8 +64,9 @@ public class ArtifactAnalysisController {
 
     @GetMapping("builds")
     @Operation(summary = "读取全部圣遗物分析 Build")
-    public Result<List<ArtifactBuild>> builds() {
-        return ok(buildService.list());
+    public Result<List<ArtifactBuild>> builds(
+            @RequestParam(defaultValue = "") String uid) {
+        return ok(buildsForUid(uid));
     }
 
     @PutMapping("builds/{buildId}")
@@ -171,7 +172,7 @@ public class ArtifactAnalysisController {
                         "native replacement requires explicit destructive confirmation");
             }
             ArtifactNativeSyncPlan plan = nativePlanCompiler.compileReplaceAll(
-                    buildService.list(), capacity);
+                    buildsForUid(uid), capacity);
             if (plan.status() != ArtifactNativeSyncStatus.READY) {
                 throw new IllegalStateException("native artifact plan is not ready: " + plan.message());
             }
@@ -212,7 +213,7 @@ public class ArtifactAnalysisController {
             @PathVariable String jobId,
             @RequestBody ArtifactSnapshot snapshot) {
         return ok(jobService.submitSnapshot(
-                jobId, snapshot, buildService.list(), settingsService.get()));
+                jobId, snapshot, buildsForUid(snapshot.uid()), settingsService.get()));
     }
 
     @PostMapping("jobs/{jobId}/approve")
@@ -220,7 +221,10 @@ public class ArtifactAnalysisController {
     public Result<ArtifactAnalysisJob> approve(
             @PathVariable String jobId,
             @RequestParam String snapshotDigest) {
-        return ok(jobService.approve(jobId, snapshotDigest));
+        ArtifactAnalysisJob job = jobService.get(jobId);
+        return ok(jobService.approve(
+                jobId, snapshotDigest,
+                buildsForUid(job.uid()), settingsService.get()));
     }
 
     @PostMapping("jobs/{jobId}/launch")
@@ -229,18 +233,28 @@ public class ArtifactAnalysisController {
             @PathVariable String jobId,
             @RequestParam(defaultValue = "EXECUTE_LOCK_PLAN") ArtifactLaunchOperation operation,
             @RequestBody(required = false) List<Integer> scanIndices) {
-        return ok(jobService.launch(jobId, operation, scanIndices));
+        ArtifactAnalysisJob job = jobService.get(jobId);
+        return ok(jobService.launch(
+                jobId, operation, scanIndices,
+                buildsForUid(job.uid()), settingsService.get()));
     }
 
     @PostMapping("native-sync/preview")
     @Operation(summary = "预检完整替换式原神 Lock Assistance 方案")
     public Result<ArtifactNativeSyncPlan> previewNativeSync(
-            @RequestParam(defaultValue = "100") int capacity) {
-        return ok(nativePlanCompiler.compileReplaceAll(buildService.list(), capacity));
+            @RequestParam(defaultValue = "100") int capacity,
+            @RequestParam String uid) {
+        return ok(nativePlanCompiler.compileReplaceAll(
+                buildsForUid(uid), capacity));
     }
 
     private <T> T mutateAndRefresh(String uid, java.util.function.Supplier<T> mutation) {
         return jobService.mutateAnalysisConfigurationAndReanalyze(
-                uid, mutation, buildService::list, settingsService::get);
+                uid, mutation, () -> buildsForUid(uid), settingsService::get);
+    }
+
+    private List<ArtifactBuild> buildsForUid(String uid) {
+        if (uid == null || uid.isBlank()) return buildService.list();
+        return autoActivationService.resolve(uid, buildService.list());
     }
 }

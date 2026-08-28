@@ -29,6 +29,16 @@ public class InMemoryArtifactAnalysisJobRepository implements ArtifactAnalysisJo
     }
 
     @Override
+    public List<ArtifactAnalysisJobSummary> findSummariesByUid(
+            String uid,
+            int limit) {
+        return findByUid(uid).stream()
+                .limit(limit)
+                .map(ArtifactAnalysisJobSummary::from)
+                .toList();
+    }
+
+    @Override
     public boolean delete(String uid, String id) {
         ArtifactAnalysisJob job = jobs.get(id);
         return job != null && job.uid().equals(uid) && jobs.remove(id, job);

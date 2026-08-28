@@ -9,6 +9,7 @@ import java.util.Optional;
 @Repository
 public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRepository {
     private static final String TYPE = "artifact-analysis-job";
+    private static final String SUMMARY_TYPE = "artifact-analysis-job-summary";
     private final ArtifactJsonStore store;
 
     public DbKvArtifactAnalysisJobRepository(ArtifactJsonStore store) {
@@ -17,7 +18,9 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
 
     @Override
     public ArtifactAnalysisJob save(ArtifactAnalysisJob job) {
-        return store.put(TYPE, key(job.uid(), job.id()), job);
+        store.put(TYPE, key(job.uid(), job.id()), job);
+        store.put(SUMMARY_TYPE, key(job.uid(), job.id()), ArtifactAnalysisJobSummary.from(job));
+        return job;
     }
 
     @Override
@@ -31,7 +34,28 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
     }
 
     @Override
+    public List<ArtifactAnalysisJobSummary> findSummariesByUid(
+            String uid,
+            int limit) {
+        List<ArtifactAnalysisJobSummary> summaries = store.listByKeyPrefixLimited(
+                SUMMARY_TYPE, uid + ":", ArtifactAnalysisJobSummary.class, limit);
+        if (!summaries.isEmpty()) return summaries;
+
+        // Bounded one-time migration for installations created before summaries
+        // were stored separately. Never deserialize unbounded historical snapshots.
+        return store.listByKeyPrefixLimited(
+                        TYPE, uid + ":", ArtifactAnalysisJob.class, limit)
+                .stream()
+                .map(job -> store.put(
+                        SUMMARY_TYPE,
+                        key(job.uid(), job.id()),
+                        ArtifactAnalysisJobSummary.from(job)))
+                .toList();
+    }
+
+    @Override
     public boolean delete(String uid, String id) {
+        store.delete(SUMMARY_TYPE, key(uid, id));
         return store.delete(TYPE, key(uid, id));
     }
 

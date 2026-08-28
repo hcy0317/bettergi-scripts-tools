@@ -61,6 +61,24 @@ public class ArtifactJsonStore {
                 .toList();
     }
 
+    public <T> List<T> listByKeyPrefixLimited(
+            String type,
+            String prefix,
+            Class<T> valueType,
+            int limit) {
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("limit must be in [1, 1000]");
+        }
+        return mapper.selectList(Wrappers.lambdaQuery(DbKV.class)
+                        .eq(DbKV::getType, type)
+                        .likeRight(DbKV::getKeyName, prefix)
+                        .orderByDesc(DbKV::getId)
+                        .last("LIMIT " + limit))
+                .stream()
+                .map(entity -> read(entity.getValue(), valueType))
+                .toList();
+    }
+
     public synchronized boolean delete(String type, String key) {
         return mapper.delete(Wrappers.lambdaQuery(DbKV.class)
                 .eq(DbKV::getType, type)

@@ -10,5 +10,14 @@ public interface ArtifactAnalysisJobRepository {
 
     List<ArtifactAnalysisJob> findByUid(String uid);
 
+    default List<ArtifactAnalysisJobSummary> findSummariesByUid(
+            String uid,
+            int limit) {
+        return findByUid(uid).stream()
+                .limit(limit)
+                .map(ArtifactAnalysisJobSummary::from)
+                .toList();
+    }
+
     boolean delete(String uid, String id);
 }

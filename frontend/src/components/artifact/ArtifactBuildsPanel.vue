@@ -103,7 +103,7 @@ const load = async (silent = false) => {
   if (!silent) loading.value = true
   error.value = ''
   try {
-    const nextBuilds = await getArtifactBuilds()
+    const nextBuilds = await getArtifactBuilds(props.uid.trim())
     if (generation === loadGeneration) builds.value = nextBuilds
   }
   catch { error.value = '配装数据加载失败，请稍后重试' }

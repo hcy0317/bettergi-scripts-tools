@@ -50,13 +50,14 @@ public class ArtifactBuildAutoActivationService {
                 .map(character -> character.characterKey())
                 .collect(Collectors.toUnmodifiableSet());
         List<ArtifactBuild> current = buildService.list();
-        List<ArtifactBuild> updated = applied
-                ? current.stream()
-                        .map(build -> build.withActivation(
-                                eligibleCharacters.contains(build.characterKey())))
-                        .toList()
-                : current;
-        if (applied) buildService.importAll(updated);
+        List<String> appliedEligibleCharacterKeys = applied
+                ? eligibleCharacters.stream().sorted().toList()
+                : previous == null ? List.of() : previous.appliedEligibleCharacterKeys();
+        Set<String> appliedEligibleCharacters = Set.copyOf(appliedEligibleCharacterKeys);
+        List<ArtifactBuild> updated = current.stream()
+                .map(build -> build.withActivation(
+                        appliedEligibleCharacters.contains(build.characterKey())))
+                .toList();
         int enabledBuilds = (int) updated.stream()
                 .filter(ArtifactBuild::analysisEnabled).count();
         var result = new ArtifactBuildAutoActivationResult(
@@ -64,12 +65,29 @@ public class ArtifactBuildAutoActivationService {
                 eligibleCharacters.size(),
                 enabledBuilds, updated.size() - enabledBuilds, settings,
                 applied, digest(characters), characters,
+                appliedEligibleCharacterKeys,
                 difference.added(), difference.removed(), difference.changed());
         return resultRepository.save(roster.uid(), result);
     }
 
     public ArtifactBuildAutoActivationResult latest(String uid) {
         return resultRepository.find(uid).orElse(null);
+    }
+
+    public List<ArtifactBuild> resolve(
+            String uid,
+            List<ArtifactBuild> builds) {
+        ArtifactBuildAutoActivationResult result = latest(uid);
+        if (result == null || result.rosterDigest() == null
+                || result.rosterDigest().isBlank()) {
+            return List.copyOf(builds);
+        }
+        Set<String> enabledCharacters = Set.copyOf(
+                result.appliedEligibleCharacterKeys());
+        return builds.stream()
+                .map(build -> build.withActivation(
+                        enabledCharacters.contains(build.characterKey())))
+                .toList();
     }
 
     private static RosterDifference compare(

@@ -1,5 +1,5 @@
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, ref, watch} from 'vue'
 import {Delete, Refresh, VideoPlay} from '@element-plus/icons-vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {deleteArtifactJob, getArtifactJob, getArtifactJobs, startArtifactJob} from '@api/artifact/artifactAnalysis.js'
@@ -16,6 +16,7 @@ import {
   shouldRefreshArtifactJobs,
   validateArtifactLaunch,
   waitForArtifactHostClaim,
+  waitForArtifactJobCompletion,
 } from '@/features/artifact-analysis/model.js'
 import {artifactHostErrorLabel, formatArtifactDate} from '@/features/artifact-analysis/buildModel.js'
 import ArtifactLaunchDialog from './ArtifactLaunchDialog.vue'
@@ -30,9 +31,10 @@ const pendingLaunch = ref(null)
 const deletingIds = ref(new Set())
 const manualNonFiveStarCount = ref(null)
 const selected = computed(() => jobs.value.find(job => job.id === selectedId.value) || jobs.value[0])
-let timer = null
 let restoringManualCount = false
 let refreshing = false
+let watchGeneration = 0
+const watchedJobIds = new Set()
 
 const restoreManualCount = () => {
   restoringManualCount = true
@@ -74,6 +76,7 @@ const load = async (silent = false) => {
     jobs.value = await getArtifactJobs(props.uid.trim())
     if (!selectedId.value && jobs.value.length) selectedId.value = jobs.value[0].id
     warnIfCountsNeedReview(jobs.value)
+    resumeActiveWatches()
   } catch {
     if (!silent) ElMessage.error('分析记录加载失败，请稍后重试')
   } finally {
@@ -105,8 +108,35 @@ const start = async () => {
       if (artifactJobWasStopped(claimed)) ElMessage.info('扫描已停止')
       else if (claimed.status === 'FAILED') ElMessage.error('BetterGI 已接收扫描任务，但执行失败')
       else ElMessage.success('BetterGI 已接收扫描任务')
+      if (hasActiveArtifactJobs([claimed])) watchActiveJob(claimed.id)
     } else launchDialogOpen.value = true
   } finally { starting.value = false }
+}
+
+const watchActiveJob = jobId => {
+  if (!jobId || watchedJobIds.has(jobId)) return
+  watchedJobIds.add(jobId)
+  const generation = watchGeneration
+  void waitForArtifactJobCompletion(jobId, getArtifactJob, {
+    attempts: 1800,
+    terminalStatuses: [
+      'READY_FOR_REVIEW', 'RESCAN_REQUIRED', 'STALE_ABORT',
+      'COMPLETED', 'FAILED',
+    ],
+    shouldContinue: () => generation === watchGeneration,
+    onUpdate: next => {
+      if (generation !== watchGeneration) return
+      const index = jobs.value.findIndex(job => job.id === next?.id)
+      if (index >= 0) jobs.value[index] = next
+    },
+  }).then(() => {
+    if (generation === watchGeneration) void load(true)
+  }).finally(() => watchedJobIds.delete(jobId))
+}
+
+const resumeActiveWatches = () => {
+  jobs.value.filter(job => hasActiveArtifactJobs([job]))
+    .forEach(job => watchActiveJob(job.id))
 }
 
 const remove = async job => {
@@ -122,7 +152,12 @@ const remove = async job => {
   finally { const done = new Set(deletingIds.value); done.delete(job.id); deletingIds.value = done }
 }
 
-watch(() => props.uid, () => { restoreManualCount(); void load() }, {immediate: true})
+watch(() => props.uid, () => {
+  watchGeneration++
+  watchedJobIds.clear()
+  restoreManualCount()
+  void load()
+}, {immediate: true})
 watch(manualNonFiveStarCount, value => {
   if (restoringManualCount || !props.uid.trim()) return
   const key = artifactNonFiveStarCountStorageKey(props.uid)
@@ -131,12 +166,7 @@ watch(manualNonFiveStarCount, value => {
   else window.localStorage.setItem(key, String(normalized))
   warnIfCountsNeedReview(jobs.value)
 })
-onMounted(() => {
-  timer = window.setInterval(() => {
-    if (hasActiveArtifactJobs(jobs.value)) void load(true)
-  }, 5000)
-})
-onBeforeUnmount(() => { if (timer) window.clearInterval(timer) })
+onBeforeUnmount(() => { watchGeneration++ })
 </script>
 
 <template>

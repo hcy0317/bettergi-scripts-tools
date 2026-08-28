@@ -21,13 +21,13 @@ const previewMeta = computed(() => artifactNativeSyncStatusMeta(preview.value?.s
 const statListLabel = values => [...(values || [])].map(artifactStatLabel).join(' / ') || '无'
 const check = async () => {
   loading.value = true
-  try { preview.value = await previewArtifactNativeSync(capacity.value) }
+  try { preview.value = await previewArtifactNativeSync(props.uid.trim(), capacity.value) }
   catch { preview.value = null; ElMessage.error('预检失败，请确认服务已启动后重试') }
   finally { loading.value = false }
 }
 const rebuild = async () => {
   if (!props.uid.trim()) { ElMessage.warning('请选择 UID'); return }
-  try { await ElMessageBox.confirm('将保存操作前证据后删除全部原神默认、推荐和旧自定义方案。原神不提供旧自定义方案导出，失败时无法自动恢复；写入规则是已启用配装的保守套装并集。', '完整重建原神方案', {confirmButtonText:'接受并重建',cancelButtonText:'取消',type:'warning'}) } catch { return }
+  try { await ElMessageBox.confirm('将保存目标方案和阶段日志后删除全部原神默认、推荐和旧自定义方案。删除后执行不再响应普通取消，并可用目标方案继续完成前向恢复；写入规则是该 UID 已启用配装的保守套装并集。', '完整重建原神方案', {confirmButtonText:'接受并重建',cancelButtonText:'取消',type:'warning'}) } catch { return }
   starting.value = true
   try {
     const response = await startArtifactJob(
@@ -42,7 +42,7 @@ const rebuild = async () => {
     } else launchDialogOpen.value = true
   } finally { starting.value = false }
 }
-watch(capacity, () => { preview.value = null })
+watch([capacity, () => props.uid], () => { preview.value = null })
 </script>
 
 <template>

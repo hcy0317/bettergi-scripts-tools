@@ -349,6 +349,24 @@ class ArtifactAnalysisJobServiceTest {
     }
 
     @Test
+    void approvedPlanCannotLaunchAgainstDifferentBuildInputs() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob analysis = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(analysis.id(), source.snapshotDigest());
+
+        assertThatThrownBy(() -> service.launch(
+                analysis.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN, null,
+                List.of(build().withStates(false, false)),
+                ArtifactAnalysisPolicy.defaults()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outdated Build");
+    }
+
+    @Test
     void waitingJobCanBeDeletedAndItsLaunchRequestIsRevoked() {
         ArtifactAnalysisJobService service = service();
         ArtifactJobStartResponse start = service.start("102550550", ArtifactLaunchOperation.ANALYZE);
@@ -389,6 +407,9 @@ class ArtifactAnalysisJobServiceTest {
                 start.job().id(), start.job().uid(), ArtifactLaunchOperation.ANALYZE);
 
         assertThat(claimed.status()).isEqualTo(ArtifactAnalysisJobStatus.HOST_CLAIMED);
+        assertThat(service.claim(
+                claimed.id(), claimed.uid(), ArtifactLaunchOperation.ANALYZE))
+                .isEqualTo(claimed);
         assertThatThrownBy(() -> service.delete(claimed.id()))
                 .hasMessageContaining("正在执行");
         ArtifactAnalysisJob reviewed = service.submitSnapshot(

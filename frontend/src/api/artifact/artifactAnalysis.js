@@ -1,7 +1,7 @@
 import service from '@utils/request.js'
 
-export async function getArtifactBuilds() {
-  const {data} = await service.get('/jwt/artifacts/builds')
+export async function getArtifactBuilds(uid = '') {
+  const {data} = await service.get('/jwt/artifacts/builds', {params: {uid}})
   return data
 }
 
@@ -93,7 +93,7 @@ export async function launchArtifactPlan(jobId, scanIndices = null) {
   return data
 }
 
-export async function previewArtifactNativeSync(capacity = 100) {
-  const {data} = await service.post('/jwt/artifacts/native-sync/preview', null, {params: {capacity}})
+export async function previewArtifactNativeSync(uid, capacity = 100) {
+  const {data} = await service.post('/jwt/artifacts/native-sync/preview', null, {params: {uid, capacity}})
   return data
 }

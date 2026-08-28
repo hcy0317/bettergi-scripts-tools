@@ -72,7 +72,9 @@ public class ArtifactAnalysisHostController {
             @RequestBody ArtifactSnapshot snapshot) {
         authorize(requestToken, snapshot.uid(), jobId, ArtifactLaunchOperation.ANALYZE);
         return ok(jobService.submitSnapshot(
-                jobId, snapshot, buildService.list(), settingsService.get()));
+                jobId, snapshot,
+                autoActivationService.resolve(snapshot.uid(), buildService.list()),
+                settingsService.get()));
     }
 
     @PostMapping("jobs/{jobId}/preflight")
@@ -102,7 +104,8 @@ public class ArtifactAnalysisHostController {
                                 roster,
                                 new ArtifactBuildAutoActivationSettings(
                                         request.characterLevelThreshold(), request.favoriteOverride())),
-                        buildService::list,
+                        () -> autoActivationService.resolve(
+                                roster.uid(), buildService.list()),
                         settingsService::get);
         return ok(result);
     }
@@ -118,7 +121,8 @@ public class ArtifactAnalysisHostController {
             throw new IllegalStateException("native launch request is missing its reviewed plan binding");
         }
         ArtifactNativeSyncPlan plan = nativePlanCompiler.compileReplaceAll(
-                buildService.list(), request.nativeCapacity());
+                autoActivationService.resolve(uid, buildService.list()),
+                request.nativeCapacity());
         if (!request.nativePlanDigest().equals(plan.planDigest())) {
             throw new IllegalStateException("native artifact plan changed after web review");
         }

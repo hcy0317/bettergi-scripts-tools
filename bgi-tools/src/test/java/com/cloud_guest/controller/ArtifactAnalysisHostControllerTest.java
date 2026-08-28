@@ -50,11 +50,13 @@ class ArtifactAnalysisHostControllerTest {
         ArtifactAnalysisJobService jobService = new ArtifactAnalysisJobService(
                 new InMemoryArtifactAnalysisJobRepository(), new ArtifactAnalysisEngine(),
                 new ArtifactExecutionGuard(), launchService, clock);
-        ArtifactAnalysisHostController controller = new ArtifactAnalysisHostController(
-                launchService, jobService, buildService,
+        ArtifactBuildAutoActivationService autoActivationService =
                 new ArtifactBuildAutoActivationService(
                         buildService,
-                        new InMemoryArtifactBuildAutoActivationResultRepository()),
+                        new InMemoryArtifactBuildAutoActivationResultRepository());
+        ArtifactAnalysisHostController controller = new ArtifactAnalysisHostController(
+                launchService, jobService, buildService,
+                autoActivationService,
                 new ArtifactAnalysisSettingsService(new InMemoryArtifactAnalysisSettingsRepository()),
                 new ArtifactNativePlanCompiler());
         var start = jobService.startCharacterRoster(
@@ -78,7 +80,7 @@ class ArtifactAnalysisHostControllerTest {
         assertThat(result.levelEligibleCharacterCount()).isEqualTo(2);
         assertThat(result.eligibleCharacterCount()).isEqualTo(2);
         assertThat(result.enabledBuildCount()).isEqualTo(2);
-        assertThat(buildService.list())
+        assertThat(autoActivationService.resolve("102550550", buildService.list()))
                 .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("furina", true),

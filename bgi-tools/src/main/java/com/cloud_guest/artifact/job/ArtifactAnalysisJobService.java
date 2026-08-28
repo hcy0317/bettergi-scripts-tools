@@ -133,9 +133,13 @@ public class ArtifactAnalysisJobService {
                 snapshot, result, plan, null));
     }
 
-    public ArtifactAnalysisJob approve(String jobId, String snapshotDigest) {
+    public ArtifactAnalysisJob approve(
+            String jobId,
+            String snapshotDigest,
+            List<ArtifactBuild> builds,
+            ArtifactAnalysisPolicy policy) {
         ArtifactAnalysisJob job = require(jobId);
-        requireCurrentScoringPolicy(job);
+        requireCurrentAnalysisInputs(job, builds, policy);
         if (job.status() != ArtifactAnalysisJobStatus.READY_FOR_REVIEW || job.decisionPlan() == null) {
             throw new IllegalStateException("job is not ready for review");
         }
@@ -151,6 +155,10 @@ public class ArtifactAnalysisJobService {
                 job.snapshot(), job.analysisResult(), approved, null));
     }
 
+    ArtifactAnalysisJob approve(String jobId, String snapshotDigest) {
+        return approve(jobId, snapshotDigest, null, null);
+    }
+
     public synchronized ArtifactAnalysisJob claim(
             String jobId,
             String uid,
@@ -161,6 +169,9 @@ public class ArtifactAnalysisJobService {
                 && job.operation() == ArtifactLaunchOperation.ANALYZE);
         if (!job.uid().equals(uid) || !operationMatches) {
             throw new IllegalStateException("BetterGI 领取信息与任务不一致");
+        }
+        if (job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED) {
+            return job;
         }
         boolean claimable = job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
                 || (operation == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
@@ -177,6 +188,7 @@ public class ArtifactAnalysisJobService {
             List<ArtifactBuild> builds,
             ArtifactAnalysisPolicy policy) {
         ArtifactAnalysisJob job = require(jobId);
+        requireCurrentAnalysisInputs(job, builds, policy);
         if ((job.status() != ArtifactAnalysisJobStatus.APPROVED
                 && job.status() != ArtifactAnalysisJobStatus.HOST_CLAIMED)
                 || job.decisionPlan() == null) {
@@ -215,14 +227,23 @@ public class ArtifactAnalysisJobService {
         return new ArtifactJobPreflightResponse(updated, preflight);
     }
 
-    public ArtifactJobStartResponse launch(String jobId, ArtifactLaunchOperation operation) {
-        return launch(jobId, operation, null);
+    ArtifactJobStartResponse launch(String jobId, ArtifactLaunchOperation operation) {
+        return launch(jobId, operation, null, null, null);
+    }
+
+    ArtifactJobStartResponse launch(
+            String jobId,
+            ArtifactLaunchOperation operation,
+            List<Integer> requestedScanIndices) {
+        return launch(jobId, operation, requestedScanIndices, null, null);
     }
 
     public synchronized ArtifactJobStartResponse launch(
             String jobId,
             ArtifactLaunchOperation operation,
-            List<Integer> requestedScanIndices) {
+            List<Integer> requestedScanIndices,
+            List<ArtifactBuild> builds,
+            ArtifactAnalysisPolicy policy) {
         ArtifactAnalysisJob sourceJob = require(jobId);
         if (operation != ArtifactLaunchOperation.EXECUTE_LOCK_PLAN) {
             throw new IllegalArgumentException("only lock-plan execution can be launched from an existing analysis");
@@ -230,7 +251,7 @@ public class ArtifactAnalysisJobService {
         if (sourceJob.decisionPlan() == null || !sourceJob.decisionPlan().approved()) {
             throw new IllegalStateException("artifact analysis must have an approved plan before execution");
         }
-        requireCurrentScoringPolicy(sourceJob);
+        requireCurrentAnalysisInputs(sourceJob, builds, policy);
         boolean activeAttemptExists = repository.findByUid(sourceJob.uid()).stream()
                 .filter(candidate -> candidate.decisionPlan() != null)
                 .filter(candidate -> sourceJob.decisionPlan().planId()
@@ -284,7 +305,8 @@ public class ArtifactAnalysisJobService {
         ArtifactAnalysisJob attempt = new ArtifactAnalysisJob(
                 UUID.randomUUID().toString(), sourceJob.uid(), operation,
                 ArtifactAnalysisJobStatus.WAITING_FOR_HOST,
-                sourceJob.snapshot(), null, executionPlan, now, now, null);
+                sourceJob.snapshot(), sourceJob.analysisResult(), executionPlan,
+                now, now, null);
         repository.save(attempt);
         try {
             ArtifactLaunchResult launch = launchRequestService.create(
@@ -342,7 +364,12 @@ public class ArtifactAnalysisJobService {
     }
 
     public List<ArtifactAnalysisJobSummary> listSummaries(String uid) {
-        return list(uid).stream().map(ArtifactAnalysisJobSummary::from).toList();
+        return repository.findSummariesByUid(uid, 100).stream()
+                .sorted(Comparator
+                        .comparing(ArtifactAnalysisJobSummary::createdAtUtc)
+                        .thenComparing(ArtifactAnalysisJobSummary::id)
+                        .reversed())
+                .toList();
     }
 
     public synchronized List<ArtifactAnalysisJob> reanalyzeReviewable(
@@ -438,6 +465,20 @@ public class ArtifactAnalysisJobService {
         if (!usesCurrentScoringPolicy(job)) {
             throw new IllegalStateException(
                     "artifact analysis uses an outdated scoring policy; rescan is required");
+        }
+    }
+
+    private static void requireCurrentAnalysisInputs(
+            ArtifactAnalysisJob job,
+            List<ArtifactBuild> builds,
+            ArtifactAnalysisPolicy policy) {
+        requireCurrentScoringPolicy(job);
+        if (builds == null || policy == null) return;
+        String currentDigest = ArtifactAnalysisEngine.analysisInputDigest(builds, policy);
+        if (job.analysisResult() == null
+                || !currentDigest.equals(job.analysisResult().analysisInputDigest())) {
+            throw new IllegalStateException(
+                    "artifact analysis uses outdated Build or scoring settings; reanalysis is required");
         }
     }
 

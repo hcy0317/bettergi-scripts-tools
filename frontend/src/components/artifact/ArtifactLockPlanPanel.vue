@@ -70,7 +70,7 @@ const load = async (silent = false) => {
   const previousNewestId = analyzable.value[0]?.id || ''
   try {
     const [nextJobs, nextBuilds, nextSettings] = await Promise.all([
-      getArtifactJobs(requestedUid), getArtifactBuilds(), getArtifactSettings(),
+      getArtifactJobs(requestedUid), getArtifactBuilds(requestedUid), getArtifactSettings(),
     ])
     if (generation !== loadGeneration || requestedUid !== props.uid.trim()) return
     const nextJobId = preferredArtifactJobId(nextJobs, jobId.value, previousNewestId)

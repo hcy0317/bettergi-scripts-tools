@@ -12,6 +12,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 public class ArtifactAnalysisEngine {
     public static final String POLICY_VERSION = "gaa-766b1a6a-public-score-v2-dormant-substat";
@@ -29,8 +33,49 @@ public class ArtifactAnalysisEngine {
                 .toList();
         return new ArtifactAnalysisResult(
                 snapshot.snapshotDigest(), POLICY_VERSION,
+                analysisInputDigest(builds, policy),
                 enabledBuilds.stream().map(ArtifactBuild::id).toList(),
                 decisions, summarize(decisions));
+    }
+
+    public static String analysisInputDigest(
+            List<ArtifactBuild> builds,
+            ArtifactAnalysisPolicy policy) {
+        StringBuilder canonical = new StringBuilder(POLICY_VERSION)
+                .append('|').append(policy.unfinishedPotentialThreshold())
+                .append('|').append(policy.finishedScoreThreshold())
+                .append('|').append(policy.fourLineStartProbability());
+        builds.stream()
+                .filter(ArtifactBuild::analysisEnabled)
+                .sorted(Comparator.comparing(ArtifactBuild::id))
+                .forEach(build -> {
+                    canonical.append("\nbuild=").append(build.id())
+                            .append('|').append(build.characterKey());
+                    build.allSetRecipes().forEach(recipe -> {
+                        canonical.append("|recipe=");
+                        recipe.forEach(rule -> canonical
+                                .append(rule.setKey()).append(':')
+                                .append(rule.pieces()).append(','));
+                    });
+                    build.mainStatsBySlot().entrySet().stream()
+                            .sorted(Map.Entry.comparingByKey())
+                            .forEach(entry -> canonical.append("|main=")
+                                    .append(entry.getKey()).append(':')
+                                    .append(entry.getValue().stream().sorted()
+                                            .collect(java.util.stream.Collectors.joining(","))));
+                    build.substatWeights().entrySet().stream()
+                            .sorted(Map.Entry.comparingByKey())
+                            .forEach(entry -> canonical.append("|weight=")
+                                    .append(entry.getKey()).append(':')
+                                    .append(entry.getValue()));
+                });
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(
+                            canonical.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     private ArtifactDecision decide(
