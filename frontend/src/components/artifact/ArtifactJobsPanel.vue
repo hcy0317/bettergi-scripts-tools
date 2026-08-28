@@ -33,6 +33,7 @@ const manualNonFiveStarCount = ref(null)
 const selected = computed(() => jobs.value.find(job => job.id === selectedId.value) || jobs.value[0])
 let restoringManualCount = false
 let refreshing = false
+let loadGeneration = 0
 let watchGeneration = 0
 const watchedJobIds = new Set()
 
@@ -67,21 +68,27 @@ const warnIfCountsNeedReview = nextJobs => {
 
 const load = async (silent = false) => {
   if (!shouldRefreshArtifactJobs({
-    silent, refreshing, documentHidden: typeof document !== 'undefined' && document.hidden,
+    silent, refreshing: false, documentHidden: typeof document !== 'undefined' && document.hidden,
   })) return
-  if (!props.uid.trim()) { jobs.value = []; return }
+  const generation = ++loadGeneration
+  const requestedUid = props.uid.trim()
+  if (!requestedUid) { jobs.value = []; return }
   refreshing = true
   if (!silent) loading.value = true
   try {
-    jobs.value = await getArtifactJobs(props.uid.trim())
+    const nextJobs = await getArtifactJobs(requestedUid)
+    if (generation !== loadGeneration || requestedUid !== props.uid.trim()) return
+    jobs.value = nextJobs
     if (!selectedId.value && jobs.value.length) selectedId.value = jobs.value[0].id
     warnIfCountsNeedReview(jobs.value)
     resumeActiveWatches()
   } catch {
     if (!silent) ElMessage.error('分析记录加载失败，请稍后重试')
   } finally {
-    refreshing = false
-    if (!silent) loading.value = false
+    if (generation === loadGeneration) {
+      refreshing = false
+      if (!silent) loading.value = false
+    }
   }
 }
 

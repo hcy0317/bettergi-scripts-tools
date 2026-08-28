@@ -163,6 +163,22 @@ public class ArtifactAnalysisJobService {
             String jobId,
             String uid,
             ArtifactLaunchOperation operation) {
+        return claimInternal(jobId, uid, operation);
+    }
+
+    public synchronized ArtifactAnalysisJob claimAuthorized(
+            String jobId,
+            String uid,
+            ArtifactLaunchOperation operation,
+            Runnable authorize) {
+        authorize.run();
+        return claimInternal(jobId, uid, operation);
+    }
+
+    private ArtifactAnalysisJob claimInternal(
+            String jobId,
+            String uid,
+            ArtifactLaunchOperation operation) {
         ArtifactAnalysisJob job = require(jobId);
         boolean operationMatches = job.operation() == operation
                 || (operation == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
@@ -365,6 +381,7 @@ public class ArtifactAnalysisJobService {
 
     public List<ArtifactAnalysisJobSummary> listSummaries(String uid) {
         return repository.findSummariesByUid(uid, 100).stream()
+                .map(this::presentPolicyStatus)
                 .sorted(Comparator
                         .comparing(ArtifactAnalysisJobSummary::createdAtUtc)
                         .thenComparing(ArtifactAnalysisJobSummary::id)
@@ -386,6 +403,18 @@ public class ArtifactAnalysisJobService {
             Supplier<T> mutation,
             Supplier<List<ArtifactBuild>> builds,
             Supplier<ArtifactAnalysisPolicy> policy) {
+        requireNoActiveLockExecutionGlobally();
+        T result = mutation.get();
+        invalidateWaitingLockExecutions(uid);
+        reanalyzeReviewableInternal(uid, builds.get(), policy.get());
+        return result;
+    }
+
+    public synchronized <T> T mutateUidActivationAndReanalyze(
+            String uid,
+            Supplier<T> mutation,
+            Supplier<List<ArtifactBuild>> builds,
+            Supplier<ArtifactAnalysisPolicy> policy) {
         requireNoActiveLockExecution(uid);
         T result = mutation.get();
         invalidateWaitingLockExecutions(uid);
@@ -397,12 +426,7 @@ public class ArtifactAnalysisJobService {
             String uid,
             List<ArtifactBuild> builds,
             ArtifactAnalysisPolicy policy) {
-        return repository.findByUid(uid).stream()
-                .filter(job -> job.operation() == ArtifactLaunchOperation.ANALYZE)
-                .filter(job -> job.snapshot() != null && job.analysisResult() != null)
-                .filter(job -> job.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
-                        || job.status() == ArtifactAnalysisJobStatus.APPROVED
-                        || job.status() == ArtifactAnalysisJobStatus.RESCAN_REQUIRED)
+        return repository.findReviewableByUid(uid).stream()
                 .map(job -> {
                     ArtifactAnalysisResult result = analysisEngine.analyze(
                             job.snapshot(), builds, policy);
@@ -418,8 +442,7 @@ public class ArtifactAnalysisJobService {
     }
 
     private void requireNoActiveLockExecution(String uid) {
-        boolean hostOwnsExecution = repository.findByUid(uid).stream()
-                .filter(job -> job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN)
+        boolean hostOwnsExecution = repository.findNonTerminalLockExecutions(uid).stream()
                 .anyMatch(job -> job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
                         || job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
         if (hostOwnsExecution) {
@@ -428,9 +451,15 @@ public class ArtifactAnalysisJobService {
         }
     }
 
+    private void requireNoActiveLockExecutionGlobally() {
+        if (!repository.findActiveLockExecutionSummaries().isEmpty()) {
+            throw new IllegalStateException(
+                    "BetterGI 正在执行锁定方案，全部账号完成或停止后才能修改全局 Build 或评分设置");
+        }
+    }
+
     private void invalidateWaitingLockExecutions(String uid) {
-        repository.findByUid(uid).stream()
-                .filter(job -> job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN)
+        repository.findNonTerminalLockExecutions(uid).stream()
                 .filter(job -> job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST)
                 .forEach(job -> {
                     launchRequestService.revokeForJob(job.uid(), job.id());
@@ -490,6 +519,23 @@ public class ArtifactAnalysisJobService {
                 job.id(), job.uid(), job.operation(), ArtifactAnalysisJobStatus.RESCAN_REQUIRED,
                 job.snapshot(), job.analysisResult(), job.decisionPlan(),
                 job.createdAtUtc(), job.updatedAtUtc(), "评分算法已更新，请重新扫描后再审核。");
+    }
+
+    private ArtifactAnalysisJobSummary presentPolicyStatus(
+            ArtifactAnalysisJobSummary summary) {
+        boolean reviewable = summary.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
+                || summary.status() == ArtifactAnalysisJobStatus.APPROVED;
+        if (!reviewable || summary.analysisResult() == null
+                || ArtifactAnalysisEngine.POLICY_VERSION.equals(
+                        summary.analysisResult().policyVersion())) {
+            return summary;
+        }
+        return new ArtifactAnalysisJobSummary(
+                summary.id(), summary.uid(), summary.operation(),
+                ArtifactAnalysisJobStatus.RESCAN_REQUIRED,
+                summary.snapshot(), summary.analysisResult(), summary.decisionPlan(),
+                summary.createdAtUtc(), summary.updatedAtUtc(),
+                "评分算法已更新，请重新扫描后再审核。");
     }
 
     private ArtifactAnalysisJob copy(

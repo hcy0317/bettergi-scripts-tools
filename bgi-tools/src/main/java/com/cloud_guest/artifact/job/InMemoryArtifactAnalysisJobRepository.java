@@ -1,5 +1,7 @@
 package com.cloud_guest.artifact.job;
 
+import com.cloud_guest.artifact.launch.ArtifactLaunchOperation;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +36,16 @@ public class InMemoryArtifactAnalysisJobRepository implements ArtifactAnalysisJo
             int limit) {
         return findByUid(uid).stream()
                 .limit(limit)
+                .map(ArtifactAnalysisJobSummary::from)
+                .toList();
+    }
+
+    @Override
+    public List<ArtifactAnalysisJobSummary> findActiveLockExecutionSummaries() {
+        return jobs.values().stream()
+                .filter(job -> job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN)
+                .filter(job -> job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
+                        || job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE)
                 .map(ArtifactAnalysisJobSummary::from)
                 .toList();
     }

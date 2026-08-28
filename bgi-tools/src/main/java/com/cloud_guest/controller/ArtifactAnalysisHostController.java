@@ -60,8 +60,10 @@ public class ArtifactAnalysisHostController {
             @RequestParam String uid,
             @RequestParam ArtifactLaunchOperation operation,
             @RequestParam String requestToken) {
-        launchRequestService.consume(requestToken, uid, jobId, operation);
-        jobService.claim(jobId, uid, operation);
+        jobService.claimAuthorized(
+                jobId, uid, operation,
+                () -> launchRequestService.consume(
+                        requestToken, uid, jobId, operation));
         return ok(true);
     }
 
@@ -84,7 +86,10 @@ public class ArtifactAnalysisHostController {
             @RequestBody ArtifactExecutionObservation observation) {
         authorize(requestToken, observation.uid(), jobId, ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
         return ok(jobService.preflight(
-                jobId, observation, buildService.list(), settingsService.get()));
+                jobId, observation,
+                autoActivationService.resolve(
+                        observation.uid(), buildService.list()),
+                settingsService.get()));
     }
 
     @PostMapping("jobs/{jobId}/characters")
@@ -98,7 +103,7 @@ public class ArtifactAnalysisHostController {
             throw new IllegalStateException("character roster request is missing its activation settings");
         }
         ArtifactBuildAutoActivationResult result =
-                jobService.mutateAnalysisConfigurationAndReanalyze(
+                jobService.mutateUidActivationAndReanalyze(
                         roster.uid(),
                         () -> autoActivationService.apply(
                                 roster,

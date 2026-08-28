@@ -46,6 +46,9 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                 "artifact-analysis-job-summary", "102550550:",
                 ArtifactAnalysisJobSummary.class, 100))
                 .thenReturn(List.of(summary));
+        when(store.get(
+                "artifact-analysis-job-summary-migration", "102550550", Boolean.class))
+                .thenReturn(Optional.of(true));
 
         var result = new DbKvArtifactAnalysisJobRepository(store)
                 .findSummariesByUid("102550550", 100);
