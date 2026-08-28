@@ -163,7 +163,7 @@ public class ArtifactAnalysisJobService {
             String jobId,
             String uid,
             ArtifactLaunchOperation operation) {
-        return claimInternal(jobId, uid, operation);
+        return claimInternal(jobId, uid, operation, null);
     }
 
     public synchronized ArtifactAnalysisJob claimAuthorized(
@@ -171,14 +171,14 @@ public class ArtifactAnalysisJobService {
             String uid,
             ArtifactLaunchOperation operation,
             Runnable authorize) {
-        authorize.run();
-        return claimInternal(jobId, uid, operation);
+        return claimInternal(jobId, uid, operation, authorize);
     }
 
     private ArtifactAnalysisJob claimInternal(
             String jobId,
             String uid,
-            ArtifactLaunchOperation operation) {
+            ArtifactLaunchOperation operation,
+            Runnable authorize) {
         ArtifactAnalysisJob job = require(jobId);
         boolean operationMatches = job.operation() == operation
                 || (operation == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
@@ -187,6 +187,7 @@ public class ArtifactAnalysisJobService {
             throw new IllegalStateException("BetterGI 领取信息与任务不一致");
         }
         if (job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED) {
+            if (authorize != null) authorize.run();
             return job;
         }
         boolean resumablePhase = operation == ArtifactLaunchOperation.ANALYZE
@@ -196,6 +197,7 @@ public class ArtifactAnalysisJobService {
                 && job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
                 && job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE;
         if (resumablePhase) {
+            if (authorize != null) authorize.run();
             return repository.save(copy(
                     job, ArtifactAnalysisJobStatus.HOST_CLAIMED,
                     job.snapshot(), job.analysisResult(), job.decisionPlan(), null));
@@ -204,6 +206,7 @@ public class ArtifactAnalysisJobService {
                 || (operation == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
                 && job.status() == ArtifactAnalysisJobStatus.APPROVED);
         if (!claimable) throw new IllegalStateException("任务当前不能被 BetterGI 领取");
+        if (authorize != null) authorize.run();
         return repository.save(copy(
                 job, ArtifactAnalysisJobStatus.HOST_CLAIMED,
                 job.snapshot(), job.analysisResult(), job.decisionPlan(), null));

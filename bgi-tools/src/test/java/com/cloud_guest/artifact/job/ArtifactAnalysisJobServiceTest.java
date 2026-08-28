@@ -267,6 +267,30 @@ class ArtifactAnalysisJobServiceTest {
     }
 
     @Test
+    void staleJobIsRejectedBeforeConsumingItsLaunchAuthorization() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob analysis = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(analysis.id(), source.snapshotDigest());
+        ArtifactAnalysisJob execution = service.launch(
+                analysis.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        service.mutateAnalysisConfigurationAndReanalyze(
+                "123456789", () -> true,
+                () -> List.of(build()), ArtifactAnalysisPolicy::defaults);
+        AtomicBoolean authorizationConsumed = new AtomicBoolean();
+
+        assertThatThrownBy(() -> service.claimAuthorized(
+                execution.id(), source.uid(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN,
+                () -> authorizationConsumed.set(true)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("不能被");
+        assertThat(authorizationConsumed).isFalse();
+    }
+
+    @Test
     void onlyAnApprovedAnalysisCanLaunchItsLockExecution() {
         ArtifactAnalysisJobService service = service();
         ArtifactAnalysisJob job = service.start("102550550", ArtifactLaunchOperation.ANALYZE).job();
