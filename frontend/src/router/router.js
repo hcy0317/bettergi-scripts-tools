@@ -115,6 +115,20 @@ const routes = [
     }
     ,
     {
+        path: '/Artifacts/Analysis',
+        name: 'ArtifactAnalysis',
+        component: () => import('@views/ArtifactAnalysisView.vue'),
+        meta: {
+            group: 'JS扩展功能',
+            isRoot: true,
+            title: '圣遗物分析',
+            desc: '扫描、Build、评分与锁定方案',
+            asSubParentTitle: '圣遗物分析',
+            icon: 'Domain'
+        },
+    }
+    ,
+    {
         name: 'SyntaxKey',
         path: '/SyntaxKey',
         component: () => import('@views/SyntaxKeyView.vue'),

@@ -77,6 +77,7 @@ import router from "@router/router";
 import {iconAsMapDefault} from "@utils/defaultdata.js";
 import {ElMessage, ElMessageBox} from "element-plus";
 import {restart} from "@api/web/web.js";
+import {resolveMenuEnvironment, routeGroupOrder, visibleRouteGroups} from "@/features/home/menuModel.js";
 
 let iconAsMap = iconAsMapDefault()
 
@@ -103,6 +104,7 @@ const lightColors = [
 ];
 
 async function loadUi() {
+  const activeEnvironment = resolveMenuEnvironment(import.meta.env.VITE_BASE_ENV, import.meta.env.DEV)
   const order_group_map_json = new Map([
     ['JS扩展功能', {order:3,env:['prod','dev']}],
     ['系统', {order:1,env: ['prod','dev']}],
@@ -149,10 +151,9 @@ async function loadUi() {
   });
   // console.log('group_list:'+JSON.stringify(group_list))
 
-  const group = [...new Set(group_list.map(item => item?.group).filter(item => item))].sort((a, b) => {
-    return  (order_group_map_json.get(a).order || 999) - (order_group_map_json.get(b).order || 999)
-  });
-  group.filter(o => order_group_map_json.get(o).env.includes(import.meta.env.VITE_BASE_ENV)).forEach((groupName) => {
+  const group = [...new Set(group_list.map(item => item?.group).filter(item => item))]
+      .sort((a, b) => routeGroupOrder(order_group_map_json, a) - routeGroupOrder(order_group_map_json, b));
+  visibleRouteGroups(group, order_group_map_json, activeEnvironment).forEach((groupName) => {
     let groupJson = {
       title: groupName,
       children: []

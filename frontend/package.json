@@ -8,7 +8,8 @@
     "dev": "npx vite --mode dev",
     "prod": "npx vite --mode prod",
     "build": "npx vite build --mode prod",
-    "preview": "npx vite preview"
+    "preview": "npx vite preview",
+    "test:artifact": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
