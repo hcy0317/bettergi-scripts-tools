@@ -8,10 +8,13 @@ $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $deploymentScript = Join-Path $BetterGIRoot 'scripts\bettergi-scheduler\Deploy-BetterGIScriptsToolsAutoPlan.ps1'
+$artifactProtocolRegistration = Join-Path $PSScriptRoot 'Register-BetterGIArtifactUrlProtocol.ps1'
+$artifactProtocolHandler = Join-Path $PSScriptRoot 'Invoke-BetterGIArtifactUrl.ps1'
+$deployedArtifactProtocolHandler = Join-Path $BetterGIRoot 'scripts\bettergi-scripts-tools\Invoke-BetterGIArtifactUrl.ps1'
 $logRoot = Join-Path $BetterGIRoot 'scripts\bettergi-scripts-tools\logs'
 $toolchains = Join-Path $BetterGIRoot 'toolchains'
 
-foreach ($requiredPath in @($repositoryRoot, $deploymentScript, $toolchains)) {
+foreach ($requiredPath in @($repositoryRoot, $deploymentScript, $artifactProtocolRegistration, $artifactProtocolHandler, $toolchains)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Required deployment path is missing: $requiredPath"
     }
@@ -67,6 +70,15 @@ try {
         -ExpectedLocalJarHash $jarHash
     if ($LASTEXITCODE -ne 0) {
         throw "Deployment script failed with exit code $LASTEXITCODE."
+    }
+
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $deployedArtifactProtocolHandler) | Out-Null
+    Copy-Item -LiteralPath $artifactProtocolHandler -Destination $deployedArtifactProtocolHandler -Force
+    & $artifactProtocolRegistration `
+        -BetterGIRoot $BetterGIRoot `
+        -HandlerPath $deployedArtifactProtocolHandler
+    if ($LASTEXITCODE -ne 0) {
+        throw "BetterGI artifact URL protocol registration failed with exit code $LASTEXITCODE."
     }
 }
 finally {

@@ -37,6 +37,10 @@ public class UidInfoConfig extends BaseEntity {
     private String uid;
     @TableField(COL_AS)
     private String asName;
+    @TableField(COL_GAME_NICKNAME)
+    private String gameNickname;
+    @TableField(COL_MILIASTRA_NICKNAME)
+    private String miliastraNickname;
     @TableField(COL_USERNAME)
     private String username;
     @TableField(COL_PASSWORD)
@@ -51,9 +55,13 @@ public class UidInfoConfig extends BaseEntity {
     public static final String COL_PASSWORD = "password";
     public static final String COL_SALT = "salt";
     public static final String COL_AS = "col_as";
+    public static final String COL_GAME_NICKNAME = "game_nickname";
+    public static final String COL_MILIASTRA_NICKNAME = "miliastra_nickname";
     public static final String COL_DEFAULT_UID = "is_default";
 
     public static final String REMARK_COL_USERNAME = "用户名";
+    public static final String REMARK_COL_GAME_NICKNAME = "游戏内昵称";
+    public static final String REMARK_COL_MILIASTRA_NICKNAME = "千星奇域昵称";
     public static final String REMARK_COL_PASSWORD = "密码";
     public static final String REMARK_COL_SALT = "盐值";
     public static final String REMARK_COL_DEFAULT_UID = "是否为默认UID";
@@ -62,13 +70,33 @@ public class UidInfoConfig extends BaseEntity {
     @SneakyThrows
     public UidInfo toUidInfo() {
         String decryptedPassword = StrUtil.isBlankIfStr(password) ? password : decryptPassword(password, salt);
-        return new UidInfo(uid, asName, username, decryptedPassword, defaultUid);
+        return new UidInfo(
+                uid, asName, gameNickname, miliastraNickname,
+                username, decryptedPassword, defaultUid);
     }
 
     @SneakyThrows
     public UidInfoConfig(String uid, String asName, String username, String password) {
+        this(uid, asName, null, username, password);
+    }
+
+    @SneakyThrows
+    public UidInfoConfig(String uid, String asName, String gameNickname, String username, String password) {
+        this(uid, asName, gameNickname, null, username, password);
+    }
+
+    @SneakyThrows
+    public UidInfoConfig(
+            String uid,
+            String asName,
+            String gameNickname,
+            String miliastraNickname,
+            String username,
+            String password) {
         this.uid = uid;
         this.asName = asName;
+        this.gameNickname = gameNickname;
+        this.miliastraNickname = miliastraNickname;
         this.username = username;
         this.salt = UUID.randomUUID().toString();
         String encryptPassword = StrUtil.isBlankIfStr(password) ? password : encryptPassword(password, salt);

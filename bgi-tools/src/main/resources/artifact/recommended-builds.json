@@ -1,0 +1,7595 @@
+[
+  {
+    "id": "preset-001-dehya-花海",
+    "name": "花海",
+    "characterKey": "Dehya",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "hp_": 0.7,
+      "enerRech_": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-002-dehya-千岩",
+    "name": "千岩",
+    "characterKey": "Dehya",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "hp_": 0.7,
+      "enerRech_": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-003-hu-tao-重击",
+    "name": "重击",
+    "characterKey": "HuTao",
+    "sets": [
+      {
+        "setKey": "CrimsonWitchOfFlames",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.5,
+      "hp_": 0.8,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-004-thoma-盾辅",
+    "name": "盾辅",
+    "characterKey": "Thoma",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "VourukashasGlow",
+          "pieces": 4
+        },
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-005-thoma-烈绽放",
+    "name": "烈绽放",
+    "characterKey": "Thoma",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "FlowerOfParadiseLost",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "eleMas": 1,
+      "hp": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-006-yoimiya-主c",
+    "name": "主力输出",
+    "characterKey": "Yoimiya",
+    "sets": [
+      {
+        "setKey": "ShimenawasReminiscence",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EchoesOfAnOffering",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "RetracingBolide",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-007-yanfei-主c",
+    "name": "主力输出",
+    "characterKey": "Yanfei",
+    "sets": [
+      {
+        "setKey": "CrimsonWitchOfFlames",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "RetracingBolide",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-008-yanfei-烈绽放",
+    "name": "烈绽放",
+    "characterKey": "Yanfei",
+    "sets": [
+      {
+        "setKey": "FlowerOfParadiseLost",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.6,
+      "critRate_": 0.5,
+      "critDMG_": 0.5,
+      "atk_": 0.4
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-009-klee-反应",
+    "name": "反应",
+    "characterKey": "Klee",
+    "sets": [
+      {
+        "setKey": "CrimsonWitchOfFlames",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "CrimsonWitchOfFlames",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-010-klee-纯火",
+    "name": "纯火",
+    "characterKey": "Klee",
+    "sets": [
+      {
+        "setKey": "Lavawalker",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-011-diluc-主c",
+    "name": "主力输出",
+    "characterKey": "Diluc",
+    "sets": [
+      {
+        "setKey": "CrimsonWitchOfFlames",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "CrimsonWitchOfFlames",
+          "pieces": 4
+        },
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-012-diluc-烈绽放",
+    "name": "烈绽放",
+    "characterKey": "Diluc",
+    "sets": [
+      {
+        "setKey": "FlowerOfParadiseLost",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.4,
+      "eleMas": 1,
+      "critRate_": 0.5,
+      "critDMG_": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-013-xinyan-辅助",
+    "name": "辅助",
+    "characterKey": "Xinyan",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "def_"
+      ]
+    },
+    "substatWeights": {
+      "def_": 1,
+      "enerRech_": 1,
+      "def": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-014-xinyan-六命主c",
+    "name": "六命主力输出",
+    "characterKey": "Xinyan",
+    "sets": [
+      {
+        "setKey": "RetracingBolide",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "BloodstainedChivalry",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "physical_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 0.5,
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-015-amber-通用",
+    "name": "通用",
+    "characterKey": "Amber",
+    "sets": [
+      {
+        "setKey": "WanderersTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EchoesOfAnOffering",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-016-xiangling-通用",
+    "name": "通用",
+    "characterKey": "Xiangling",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.7,
+      "eleMas": 0.9,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-017-bennett-通用辅助",
+    "name": "通用辅助",
+    "characterKey": "Bennett",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-018-bennett-半辅助半输出",
+    "name": "半辅助半输出",
+    "characterKey": "Bennett",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 0.7,
+      "eleMas": 0.8,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-019-bennett-烈绽放",
+    "name": "烈绽放",
+    "characterKey": "Bennett",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 0.8,
+      "hp": 0.5,
+      "hp_": 0.8,
+      "eleMas": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-020-lyney-通用",
+    "name": "通用",
+    "characterKey": "Lyney",
+    "sets": [
+      {
+        "setKey": "MarechausseeHunter",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "Lavawalker",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "atk": 0.7,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-021-gaming-输出",
+    "name": "输出",
+    "characterKey": "Gaming",
+    "sets": [
+      {
+        "setKey": "MarechausseeHunter",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "CrimsonWitchOfFlames",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.8,
+      "atk_": 0.8,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-022-nilou-妮绽放",
+    "name": "妮绽放",
+    "characterKey": "Nilou",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "VourukashasGlow",
+          "pieces": 4
+        },
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "eleMas": 0.8,
+      "enerRech_": 0.7,
+      "hp": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-023-candace-副c",
+    "name": "副输出",
+    "characterKey": "Candace",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      },
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "hp": 0.6,
+      "enerRech_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-024-barbara-治疗",
+    "name": "治疗",
+    "characterKey": "Barbara",
+    "sets": [
+      {
+        "setKey": "MaidenBeloved",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "OceanHuedClam",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        },
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-025-barbara-妮绽放",
+    "name": "妮绽放",
+    "characterKey": "Barbara",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "eleMas"
+      ],
+      "goblet": [
+        "hp_",
+        "eleMas"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 0.8,
+      "hp": 0.6,
+      "eleMas": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-026-tartaglia-通用",
+    "name": "通用",
+    "characterKey": "Tartaglia",
+    "sets": [
+      {
+        "setKey": "NymphsDream",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NymphsDream",
+          "pieces": 4
+        },
+        {
+          "setKey": "HeartOfDepth",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-027-xingqiu-通用",
+    "name": "通用",
+    "characterKey": "Xingqiu",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 2
+      },
+      {
+        "setKey": "HeartOfDepth",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-028-mona-辅助",
+    "name": "辅助",
+    "characterKey": "Mona",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "Instructor",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "TheExile",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "hydro_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.9,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-029-mona-核爆",
+    "name": "核爆",
+    "characterKey": "Mona",
+    "sets": [
+      {
+        "setKey": "HeartOfDepth",
+        "pieces": 4
+      },
+      {
+        "setKey": "WanderersTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "HeartOfDepth",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.9,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.9
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-030-yelan-通用",
+    "name": "通用",
+    "characterKey": "Yelan",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "hp_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 0.8,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-031-kamisato-ayato-通用",
+    "name": "通用",
+    "characterKey": "KamisatoAyato",
+    "sets": [
+      {
+        "setKey": "EchoesOfAnOffering",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "HeartOfDepth",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NymphsDream",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "hp_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-032-kamisato-ayato-妮绽放",
+    "name": "妮绽放",
+    "characterKey": "KamisatoAyato",
+    "sets": [
+      {
+        "setKey": "EchoesOfAnOffering",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "hp_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "eleMas": 0.9
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-033-sangonomiya-kokomi-站场",
+    "name": "站场",
+    "characterKey": "SangonomiyaKokomi",
+    "sets": [
+      {
+        "setKey": "OceanHuedClam",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "hp_": 1,
+      "enerRech_": 0.9
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-034-sangonomiya-kokomi-辅助",
+    "name": "辅助",
+    "characterKey": "SangonomiyaKokomi",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "hp": 0.5,
+      "enerRech_": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-035-sangonomiya-kokomi-妮绽放",
+    "name": "妮绽放",
+    "characterKey": "SangonomiyaKokomi",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "hp_",
+        "eleMas"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "hp": 0.5,
+      "enerRech_": 0.8,
+      "eleMas": 1,
+      "atk_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-036-neuvillette-主c",
+    "name": "主力输出",
+    "characterKey": "Neuvillette",
+    "sets": [
+      {
+        "setKey": "MarechausseeHunter",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "HeartOfDepth",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "VourukashasGlow",
+          "pieces": 4
+        },
+        {
+          "setKey": "NymphsDream",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_",
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "hp_": 0.8,
+      "enerRech_": 0.7,
+      "hp": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-037-furina-通用",
+    "name": "通用",
+    "characterKey": "Furina",
+    "sets": [
+      {
+        "setKey": "GoldenTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_",
+        "hydro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "hp_": 0.8,
+      "enerRech_": 0.8,
+      "hp": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-038-venti-通用",
+    "name": "通用",
+    "characterKey": "Venti",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "critDMG_": 0.8,
+      "atk_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-039-venti-副c",
+    "name": "副输出",
+    "characterKey": "Venti",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 0.7,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-040-kaedehara-kazuha-通用",
+    "name": "  通用",
+    "characterKey": "KaedeharaKazuha",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "critDMG_": 0.8,
+      "atk_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-041-kaedehara-kazuha-副c",
+    "name": "副输出",
+    "characterKey": "KaedeharaKazuha",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.9,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-042-xiao-主c",
+    "name": "主力输出",
+    "characterKey": "Xiao",
+    "sets": [
+      {
+        "setKey": "VermillionHereafter",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "DesertPavilionChronicle",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "anemo_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-043-jean-纯奶",
+    "name": "纯奶",
+    "characterKey": "Jean",
+    "sets": [
+      {
+        "setKey": "MaidenBeloved",
+        "pieces": 4
+      },
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "enerRech_": 0.9,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-044-jean-通用",
+    "name": "通用",
+    "characterKey": "Jean",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ViridescentVenerer",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_",
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.9,
+      "enerRech_": 0.8,
+      "atk": 0.6,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-045-sucrose-通用",
+    "name": "通用",
+    "characterKey": "Sucrose",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "Instructor",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 1,
+      "critRate_": 0.7,
+      "critDMG_": 0.7,
+      "atk_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-046-sucrose-副c",
+    "name": "副输出",
+    "characterKey": "Sucrose",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ViridescentVenerer",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ViridescentVenerer",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "atk_"
+      ],
+      "goblet": [
+        "eleMas",
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.8,
+      "eleMas": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-047-sayu-扩散",
+    "name": "扩散",
+    "characterKey": "Sayu",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "eleMas": 1,
+      "enerRech_": 1,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-048-sayu-通用",
+    "name": "通用",
+    "characterKey": "Sayu",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        },
+        {
+          "setKey": "OceanHuedClam",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas",
+        "atk_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-049-shikanoin-heizou-输出",
+    "name": "输出",
+    "characterKey": "ShikanoinHeizou",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "DesertPavilionChronicle",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ViridescentVenerer",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-050-shikanoin-heizou-辅助-发射器",
+    "name": "辅助/发射器",
+    "characterKey": "ShikanoinHeizou",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_",
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "eleMas": 1,
+      "critRate_": 0.7,
+      "critDMG_": 0.7,
+      "atk_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-051-wanderer-主c",
+    "name": "主力输出",
+    "characterKey": "Wanderer",
+    "sets": [
+      {
+        "setKey": "DesertPavilionChronicle",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EchoesOfAnOffering",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "anemo_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.7,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-052-faruzan-通用",
+    "name": "通用",
+    "characterKey": "Faruzan",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_",
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 1,
+      "atk_": 0.8
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-053-lynette-通用",
+    "name": "通用",
+    "characterKey": "Lynette",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MarechausseeHunter",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.7,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-054-xianyun-辅助",
+    "name": "辅助",
+    "characterKey": "Xianyun",
+    "sets": [
+      {
+        "setKey": "SongOfDaysPast",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ViridescentVenerer",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        },
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_",
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "enerRech_": 0.9,
+      "critRate_": 0.7,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-055-ganyu-通用",
+    "name": "通用",
+    "characterKey": "Ganyu",
+    "sets": [
+      {
+        "setKey": "WanderersTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-056-ganyu-永冻",
+    "name": "永冻",
+    "characterKey": "Ganyu",
+    "sets": [
+      {
+        "setKey": "BlizzardStrayer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-057-ganyu-融化",
+    "name": "融化",
+    "characterKey": "Ganyu",
+    "sets": [
+      {
+        "setKey": "WanderersTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critDMG_",
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.6,
+      "eleMas": 0.8
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-058-kamisato-ayaka-永冻",
+    "name": "永冻",
+    "characterKey": "KamisatoAyaka",
+    "sets": [
+      {
+        "setKey": "BlizzardStrayer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.9,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-059-shenhe-通用",
+    "name": "通用",
+    "characterKey": "Shenhe",
+    "sets": [
+      {
+        "setKey": "ShimenawasReminiscence",
+        "pieces": 2
+      },
+      {
+        "setKey": "ShimenawasReminiscence",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-060-qiqi-通用",
+    "name": "通用",
+    "characterKey": "Qiqi",
+    "sets": [
+      {
+        "setKey": "OceanHuedClam",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        },
+        {
+          "setKey": "OceanHuedClam",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "enerRech_": 1,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-061-eula-通用",
+    "name": "通用",
+    "characterKey": "Eula",
+    "sets": [
+      {
+        "setKey": "PaleFlame",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "PaleFlame",
+          "pieces": 4
+        },
+        {
+          "setKey": "BloodstainedChivalry",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "physical_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-062-chongyun-通用",
+    "name": "通用",
+    "characterKey": "Chongyun",
+    "sets": [
+      {
+        "setKey": "BlizzardStrayer",
+        "pieces": 2
+      },
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "Lavawalker",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-063-rosaria-通用",
+    "name": "通用",
+    "characterKey": "Rosaria",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "BlizzardStrayer",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-064-kaeya-通用",
+    "name": "通用",
+    "characterKey": "Kaeya",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "BlizzardStrayer",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.8
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-065-diona-通用",
+    "name": "通用",
+    "characterKey": "Diona",
+    "sets": [
+      {
+        "setKey": "MaidenBeloved",
+        "pieces": 2
+      },
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-066-aloy-通用",
+    "name": "通用",
+    "characterKey": "Aloy",
+    "sets": [
+      {
+        "setKey": "BlizzardStrayer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.8,
+      "atk_": 0.8,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-067-layla-辅助",
+    "name": "辅助",
+    "characterKey": "Layla",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "VourukashasGlow",
+          "pieces": 4
+        },
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.6,
+      "critRate_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-068-mika-辅助",
+    "name": "辅助",
+    "characterKey": "Mika",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        },
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_",
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.6,
+      "critRate_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-069-freminet-物理",
+    "name": "物理",
+    "characterKey": "Freminet",
+    "sets": [
+      {
+        "setKey": "PaleFlame",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "PaleFlame",
+          "pieces": 4
+        },
+        {
+          "setKey": "BloodstainedChivalry",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "PaleFlame",
+          "pieces": 4
+        },
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "physical_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 1,
+      "atk": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-070-wriothesley-主c",
+    "name": "主力输出",
+    "characterKey": "Wriothesley",
+    "sets": [
+      {
+        "setKey": "MarechausseeHunter",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "BlizzardStrayer",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "VermillionHereafter",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-071-charlotte-治疗",
+    "name": "治疗",
+    "characterKey": "Charlotte",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "OceanHuedClam",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 1,
+      "atk": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-072-raiden-shogun-通用",
+    "name": "通用",
+    "characterKey": "RaidenShogun",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "electro_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-073-raiden-shogun-种堕",
+    "name": "种堕",
+    "characterKey": "RaidenShogun",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        },
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "critRate_": 0.7,
+      "critDMG_": 0.7,
+      "atk_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-074-yae-miko-通用",
+    "name": "通用",
+    "characterKey": "YaeMiko",
+    "sets": [
+      {
+        "setKey": "ThunderingFury",
+        "pieces": 2
+      },
+      {
+        "setKey": "ShimenawasReminiscence",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GoldenTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-075-cyno-通用",
+    "name": "通用",
+    "characterKey": "Cyno",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-076-keqing-激化",
+    "name": "激化",
+    "characterKey": "Keqing",
+    "sets": [
+      {
+        "setKey": "ThunderingFury",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ThunderingFury",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ThunderingFury",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-077-fischl-激化",
+    "name": "激化",
+    "characterKey": "Fischl",
+    "sets": [
+      {
+        "setKey": "ThunderingFury",
+        "pieces": 2
+      },
+      {
+        "setKey": "ShimenawasReminiscence",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ThunderingFury",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GoldenTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-078-kujou-sara-雷副c",
+    "name": "雷系副输出",
+    "characterKey": "KujouSara",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-079-razor-通用",
+    "name": "通用",
+    "characterKey": "Razor",
+    "sets": [
+      {
+        "setKey": "PaleFlame",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "PaleFlame",
+          "pieces": 4
+        },
+        {
+          "setKey": "BloodstainedChivalry",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "PaleFlame",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "physical_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-080-razor-超绽放",
+    "name": "超绽放",
+    "characterKey": "Razor",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "critRate_",
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.9,
+      "critRate_": 0.7,
+      "critDMG_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-081-beidou-通用",
+    "name": "通用",
+    "characterKey": "Beidou",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ThunderingFury",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ThunderingFury",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-082-lisa-通用",
+    "name": "通用",
+    "characterKey": "Lisa",
+    "sets": [
+      {
+        "setKey": "ThunderingFury",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ThunderingFury",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-083-lisa-超绽放",
+    "name": "超绽放",
+    "characterKey": "Lisa",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-084-kuki-shinobu-超绽放",
+    "name": "超绽放",
+    "characterKey": "KukiShinobu",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "hp_": 1,
+      "enerRech_": 0.6,
+      "critRate_": 0.5,
+      "critDMG_": 0.5
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-085-kuki-shinobu-治疗",
+    "name": "治疗",
+    "characterKey": "KukiShinobu",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "OceanHuedClam",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 0.7,
+      "eleMas": 0.8
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-086-dori-治疗",
+    "name": "治疗",
+    "characterKey": "Dori",
+    "sets": [
+      {
+        "setKey": "OceanHuedClam",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "MaidenBeloved",
+          "pieces": 4
+        },
+        {
+          "setKey": "OceanHuedClam",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-087-chevreuse-辅助",
+    "name": "辅助",
+    "characterKey": "Chevreuse",
+    "sets": [
+      {
+        "setKey": "SongOfDaysPast",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        },
+        {
+          "setKey": "VourukashasGlow",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_",
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.7,
+      "hp": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-088-tighnari-通用",
+    "name": "通用",
+    "characterKey": "Tighnari",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "dendro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.9,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-089-collei-辅助副c",
+    "name": "辅助副输出",
+    "characterKey": "Collei",
+    "sets": [
+      {
+        "setKey": "DeepwoodMemories",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "Instructor",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "dendro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-090-nahida-通用",
+    "name": "通用",
+    "characterKey": "Nahida",
+    "sets": [
+      {
+        "setKey": "DeepwoodMemories",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas",
+        "dendro_dmg_"
+      ],
+      "circlet": [
+        "eleMas",
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.7,
+      "eleMas": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-091-alhaitham-通用",
+    "name": "通用",
+    "characterKey": "Alhaitham",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "DeepwoodMemories",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "DeepwoodMemories",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "dendro_dmg_",
+        "eleMas"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.8,
+      "atk_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-092-yaoyao-治疗",
+    "name": "治疗",
+    "characterKey": "Yaoyao",
+    "sets": [
+      {
+        "setKey": "MaidenBeloved",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "DeepwoodMemories",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "eleMas"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 0.9,
+      "eleMas": 0.8,
+      "critRate_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-093-baizhu-通用",
+    "name": "通用",
+    "characterKey": "Baizhu",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 4
+      },
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "VourukashasGlow",
+          "pieces": 4
+        },
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "Instructor",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "DeepwoodMemories",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_",
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "eleMas": 0.6,
+      "critRate_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-094-kaveh-绽放",
+    "name": "绽放",
+    "characterKey": "Kaveh",
+    "sets": [
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GildedDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "WanderersTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 1,
+      "critRate_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-095-zhongli-盾辅",
+    "name": "盾辅",
+    "characterKey": "Zhongli",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 2
+      },
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "Instructor",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "DeepwoodMemories",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 1,
+      "hp": 0.6,
+      "critRate_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-096-zhongli-副c",
+    "name": "副输出",
+    "characterKey": "Zhongli",
+    "sets": [
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        },
+        {
+          "setKey": "ShimenawasReminiscence",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "atk_"
+      ],
+      "goblet": [
+        "hp_",
+        "geo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "hp_": 0.7,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-097-ningguang-通用",
+    "name": "通用",
+    "characterKey": "Ningguang",
+    "sets": [
+      {
+        "setKey": "ArchaicPetra",
+        "pieces": 2
+      },
+      {
+        "setKey": "ShimenawasReminiscence",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        },
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "geo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.6,
+      "atk": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-098-arataki-itto-通用",
+    "name": "通用",
+    "characterKey": "AratakiItto",
+    "sets": [
+      {
+        "setKey": "HuskOfOpulentDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "HuskOfOpulentDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "geo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 0.7,
+      "def_": 0.9,
+      "enerRech_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-099-albedo-副c",
+    "name": "副输出",
+    "characterKey": "Albedo",
+    "sets": [
+      {
+        "setKey": "HuskOfOpulentDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "HuskOfOpulentDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "TenacityOfTheMillelith",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GoldenTroupe",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "geo_dmg_",
+        "def_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "def_": 0.8,
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.7,
+      "def": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-100-yun-jin-通用",
+    "name": "通用",
+    "characterKey": "YunJin",
+    "sets": [
+      {
+        "setKey": "HuskOfOpulentDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "HuskOfOpulentDreams",
+          "pieces": 4
+        },
+        {
+          "setKey": "EmblemOfSeveredFate",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "def_"
+      ]
+    },
+    "substatWeights": {
+      "def_": 1,
+      "enerRech_": 1,
+      "def": 0.6,
+      "critRate_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-101-noelle-通用",
+    "name": "通用",
+    "characterKey": "Noelle",
+    "sets": [
+      {
+        "setKey": "HuskOfOpulentDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "RetracingBolide",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "geo_dmg_",
+        "def_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "def_": 0.8,
+      "enerRech_": 0.7,
+      "critRate_": 1,
+      "critDMG_": 1
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-102-gorou-辅助",
+    "name": "辅助",
+    "characterKey": "Gorou",
+    "sets": [
+      {
+        "setKey": "HuskOfOpulentDreams",
+        "pieces": 4
+      },
+      {
+        "setKey": "EmblemOfSeveredFate",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "TheExile",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "def_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "def_",
+        "heal_"
+      ]
+    },
+    "substatWeights": {
+      "def_": 1,
+      "enerRech_": 1,
+      "critRate_": 0.6,
+      "def": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-103-navia-主c",
+    "name": "主力输出",
+    "characterKey": "Navia",
+    "sets": [
+      {
+        "setKey": "NighttimeWhispersInTheEchoingWoods",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ArchaicPetra",
+          "pieces": 4
+        },
+        {
+          "setKey": "NighttimeWhispersInTheEchoingWoods",
+          "pieces": 4
+        }
+      ],
+      [
+        {
+          "setKey": "GoldenTroupe",
+          "pieces": 4
+        },
+        {
+          "setKey": "GladiatorsFinale",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "geo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.9,
+      "enerRech_": 0.8
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-104-chiori-副c",
+    "name": "副输出",
+    "characterKey": "Chiori",
+    "sets": [
+      {
+        "setKey": "GoldenTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "HuskOfOpulentDreams",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "def_",
+        "geo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "def_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "def_": 0.9,
+      "atk_": 0.8,
+      "enerRech_": 0.7
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-105-kirara-shield-support",
+    "name": "护盾辅助",
+    "characterKey": "Kirara",
+    "sets": [
+      {
+        "setKey": "TenacityOfTheMillelith",
+        "pieces": 2
+      },
+      {
+        "setKey": "VourukashasGlow",
+        "pieces": 2
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.6,
+      "hp": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-106-sigewinne-off-field-healer",
+    "name": "后台治疗",
+    "characterKey": "Sigewinne",
+    "sets": [
+      {
+        "setKey": "OceanHuedClam",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "hp_": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.4,
+      "critDMG_": 0.4,
+      "hp": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-107-arlecchino-general-on-field-dps",
+    "name": "通用站场输出",
+    "characterKey": "Arlecchino",
+    "sets": [
+      {
+        "setKey": "FragmentOfHarmonicWhimsy",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-108-arlecchino-vaporize-dps",
+    "name": "蒸发输出",
+    "characterKey": "Arlecchino",
+    "sets": [
+      {
+        "setKey": "FragmentOfHarmonicWhimsy",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-109-sethos-charged-attack-quickswap",
+    "name": "重击速切输出",
+    "characterKey": "Sethos",
+    "sets": [
+      {
+        "setKey": "WanderersTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "eleMas": 0.8,
+      "atk_": 0.4
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-110-sethos-burst-normal-attack-dps",
+    "name": "爆发普攻输出",
+    "characterKey": "Sethos",
+    "sets": [
+      {
+        "setKey": "DesertPavilionChronicle",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.8,
+      "enerRech_": 0.6,
+      "atk_": 0.4
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-111-clorinde-bond-of-life-dps",
+    "name": "生命之契输出",
+    "characterKey": "Clorinde",
+    "sets": [
+      {
+        "setKey": "FragmentOfHarmonicWhimsy",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.6,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-112-clorinde-aggravate-dps",
+    "name": "激化输出",
+    "characterKey": "Clorinde",
+    "sets": [
+      {
+        "setKey": "ThunderingFury",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-113-emilie-burning-off-field-dps",
+    "name": "燃烧后台输出",
+    "characterKey": "Emilie",
+    "sets": [
+      {
+        "setKey": "UnfinishedReverie",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "dendro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-114-kachina-scroll-support",
+    "name": "绘卷辅助",
+    "characterKey": "Kachina",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "geo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "critDMG_": 0.8,
+      "def_": 0.8,
+      "def": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-115-kinich-skill-cannon-dps",
+    "name": "战技炮台输出",
+    "characterKey": "Kinich",
+    "sets": [
+      {
+        "setKey": "ObsidianCodex",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "dendro_dmg_"
+      ],
+      "circlet": [
+        "critDMG_",
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-116-mualani-vaporize-dps",
+    "name": "蒸发输出",
+    "characterKey": "Mualani",
+    "sets": [
+      {
+        "setKey": "ObsidianCodex",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "eleMas"
+      ],
+      "goblet": [
+        "hydro_dmg_",
+        "hp_"
+      ],
+      "circlet": [
+        "critDMG_",
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "hp_": 0.8,
+      "eleMas": 0.8,
+      "hp": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-117-ororon-electro-charged-dps",
+    "name": "感电输出",
+    "characterKey": "Ororon",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-118-ororon-overloaded-trigger",
+    "name": "超载触发",
+    "characterKey": "Ororon",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.4,
+      "critDMG_": 0.4,
+      "atk_": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-119-xilonen-res-shred-healing",
+    "name": "减抗治疗",
+    "characterKey": "Xilonen",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "def_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "heal_",
+        "def_",
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "def_": 0.6,
+      "def": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-120-chasca-multi-element-charged-dps",
+    "name": "多元素重击输出",
+    "characterKey": "Chasca",
+    "sets": [
+      {
+        "setKey": "ObsidianCodex",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "enerRech_": 0.4,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-121-mavuika-on-field-burst-dps",
+    "name": "站场爆发输出",
+    "characterKey": "Mavuika",
+    "sets": [
+      {
+        "setKey": "ObsidianCodex",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-122-mavuika-off-field-pyro-dps",
+    "name": "后台火伤输出",
+    "characterKey": "Mavuika",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "pyro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.8,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-123-citlali-melt-shield-support",
+    "name": "融化护盾辅助",
+    "characterKey": "Citlali",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-124-lan-yan-shield-support",
+    "name": "护盾辅助",
+    "characterKey": "LanYan",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 0.8,
+      "critRate_": 0.6,
+      "eleMas": 0.4,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-125-lan-yan-swirl-driver",
+    "name": "扩散站场驱动",
+    "characterKey": "LanYan",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.6,
+      "critRate_": 0.4,
+      "critDMG_": 0.4
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-126-yumemizuki-mizuki-swirl-driver",
+    "name": "扩散站场驱动",
+    "characterKey": "YumemizukiMizuki",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-127-iansan-atk-support",
+    "name": "攻击辅助",
+    "characterKey": "Iansan",
+    "sets": [
+      {
+        "setKey": "ScrollOfTheHeroOfCinderCity",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 0.8,
+      "critRate_": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-128-varesa-plunging-attack-dps",
+    "name": "下落攻击输出",
+    "characterKey": "Varesa",
+    "sets": [
+      {
+        "setKey": "LongNightsOath",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ObsidianCodex",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "electro_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-129-ifa-swirl-driver",
+    "name": "扩散站场驱动",
+    "characterKey": "Ifa",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-130-ifa-anemo-dps",
+    "name": "风伤输出",
+    "characterKey": "Ifa",
+    "sets": [
+      {
+        "setKey": "ObsidianCodex",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "anemo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "critDMG_": 0.8,
+      "atk_": 0.6,
+      "eleMas": 0.3,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-131-escoffier-cryo-off-field-dps-healer",
+    "name": "后台冰伤治疗",
+    "characterKey": "Escoffier",
+    "sets": [
+      {
+        "setKey": "GoldenTroupe",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.8,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-132-skirk-quickswap-burst-dps",
+    "name": "速切爆发输出",
+    "characterKey": "Skirk",
+    "sets": [
+      {
+        "setKey": "FinaleOfTheDeepGalleries",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-133-skirk-on-field-normal-attack-dps",
+    "name": "站场普攻输出",
+    "characterKey": "Skirk",
+    "sets": [
+      {
+        "setKey": "MarechausseeHunter",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "cryo_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critDMG_",
+        "critRate_",
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-134-dahlia-shield-atk-speed-support",
+    "name": "护盾攻速辅助",
+    "characterKey": "Dahlia",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "hp_": 0.6,
+      "hp": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-135-ineffa-lunar-charged-dps",
+    "name": "月感电输出",
+    "characterKey": "Ineffa",
+    "sets": [
+      {
+        "setKey": "AubadeOfMorningstarAndMoon",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.6,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-136-ineffa-hyperbloom-trigger",
+    "name": "超绽放触发",
+    "characterKey": "Ineffa",
+    "sets": [
+      {
+        "setKey": "GildedDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.6,
+      "atk_": 0.4,
+      "critRate_": 0.3,
+      "critDMG_": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-137-lauma-bloom-support",
+    "name": "绽放辅助",
+    "characterKey": "Lauma",
+    "sets": [
+      {
+        "setKey": "SilkenMoonsSerenade",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "eleMas": 1,
+      "enerRech_": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.6
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-138-flins-lunar-charged-dps",
+    "name": "月感电输出",
+    "characterKey": "Flins",
+    "sets": [
+      {
+        "setKey": "NightOfTheSkysUnveiling",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-139-aino-off-field-hydro-support",
+    "name": "后台水系辅助",
+    "characterKey": "Aino",
+    "sets": [
+      {
+        "setKey": "SilkenMoonsSerenade",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "critRate_": 0.8,
+      "eleMas": 0.6,
+      "critDMG_": 0.4,
+      "atk_": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-140-nefer-lunar-bloom-charged-dps",
+    "name": "月绽放重击输出",
+    "characterKey": "Nefer",
+    "sets": [
+      {
+        "setKey": "NightOfTheSkysUnveiling",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "eleMas"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "eleMas": 0.8,
+      "enerRech_": 0.4
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-141-durin-white-dragon-support",
+    "name": "白龙辅助",
+    "characterKey": "Durin",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "pyro_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "enerRech_": 0.6,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-142-durin-dark-dragon-reaction-dps",
+    "name": "黑龙反应输出",
+    "characterKey": "Durin",
+    "sets": [
+      {
+        "setKey": "CrimsonWitchOfFlames",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "pyro_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "enerRech_": 0.8,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-143-jahoda-off-field-healer",
+    "name": "后台治疗",
+    "characterKey": "Jahoda",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "heal_",
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.3,
+      "eleMas": 0.3,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-144-columbina-off-field-lunar-support",
+    "name": "后台月反应辅助",
+    "characterKey": "Columbina",
+    "sets": [
+      {
+        "setKey": "SilkenMoonsSerenade",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "hp_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "hp_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "hp_": 0.8,
+      "enerRech_": 0.8,
+      "eleMas": 0.6,
+      "hp": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-145-columbina-on-field-lunar-bloom-dps",
+    "name": "站场月绽放输出",
+    "characterKey": "Columbina",
+    "sets": [
+      {
+        "setKey": "NightOfTheSkysUnveiling",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "hp_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "hp_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "hp_": 0.8,
+      "enerRech_": 0.6,
+      "eleMas": 0.4,
+      "hp": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-146-zibai-lunar-crystallize-dps",
+    "name": "月结晶输出",
+    "characterKey": "Zibai",
+    "sets": [
+      {
+        "setKey": "NightOfTheSkysUnveiling",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "def_": 0.8,
+      "eleMas": 0.6,
+      "enerRech_": 0.3,
+      "def": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-147-illuga-lunar-crystallize-support",
+    "name": "月结晶辅助",
+    "characterKey": "Illuga",
+    "sets": [
+      {
+        "setKey": "SilkenMoonsSerenade",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas",
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "eleMas": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.3,
+      "def_": 0.3,
+      "def": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-148-illuga-geo-dps-support",
+    "name": "岩系输出辅助",
+    "characterKey": "Illuga",
+    "sets": [
+      {
+        "setKey": "NoblesseOblige",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "eleMas",
+        "enerRech_"
+      ],
+      "goblet": [
+        "eleMas"
+      ],
+      "circlet": [
+        "eleMas",
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "eleMas": 0.8,
+      "critRate_": 0.6,
+      "critDMG_": 0.3,
+      "def_": 0.3,
+      "def": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-149-varka-dual-element-dps",
+    "name": "双元素输出",
+    "characterKey": "Varka",
+    "sets": [
+      {
+        "setKey": "ADayCarvedFromRisingWinds",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "pyro_dmg_",
+        "hydro_dmg_",
+        "electro_dmg_",
+        "cryo_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.4,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-150-linnea-off-field-lunar-crystallize-dps",
+    "name": "后台月结晶输出",
+    "characterKey": "Linnea",
+    "sets": [
+      {
+        "setKey": "HuskOfOpulentDreams",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "def_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "def_": 0.8,
+      "enerRech_": 0.6,
+      "eleMas": 0.4,
+      "def": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-151-linnea-quickswap-lunar-crystallize",
+    "name": "速切月结晶",
+    "characterKey": "Linnea",
+    "sets": [
+      {
+        "setKey": "AubadeOfMorningstarAndMoon",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "def_"
+      ],
+      "goblet": [
+        "def_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "def_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "def_": 0.8,
+      "eleMas": 0.4,
+      "def": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-152-lohen-cryo-on-field-dps",
+    "name": "站场冰伤输出",
+    "characterKey": "Lohen",
+    "sets": [
+      {
+        "setKey": "ADayCarvedFromRisingWinds",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "eleMas"
+      ],
+      "goblet": [
+        "cryo_dmg_",
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "enerRech_": 0.3,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-153-nicole-shield-atk-support",
+    "name": "护盾攻击辅助",
+    "characterKey": "Nicole",
+    "sets": [
+      {
+        "setKey": "CelestialGift",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "atk_": 1,
+      "enerRech_": 0.8,
+      "atk": 0.3
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-154-prune-elemental-res-shred-support",
+    "name": "元素减抗辅助",
+    "characterKey": "Prune",
+    "sets": [
+      {
+        "setKey": "ViridescentVenerer",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 0.8,
+      "critRate_": 0.4,
+      "atk": 0.3,
+      "critDMG_": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-155-prune-anemo-dps-support",
+    "name": "风伤辅助",
+    "characterKey": "Prune",
+    "sets": [
+      {
+        "setKey": "CelestialGift",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_",
+        "enerRech_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 0.8,
+      "critRate_": 0.4,
+      "atk": 0.3,
+      "critDMG_": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-156-sandrone-stellar-conduct-charged-dps",
+    "name": "星辉传导重击输出",
+    "characterKey": "Sandrone",
+    "sets": [
+      {
+        "setKey": "DisenchantmentInDeepShadow",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "enerRech_": 0.4,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-157-alyosha-stellar-conduct-support-healer",
+    "name": "星辉传导辅助治疗",
+    "characterKey": "Alyosha",
+    "sets": [
+      {
+        "setKey": "HeartOfTheFurnace",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "NoblesseOblige",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "enerRech_",
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "atk_",
+        "critRate_"
+      ]
+    },
+    "substatWeights": {
+      "enerRech_": 1,
+      "atk_": 0.8,
+      "critRate_": 0.4,
+      "critDMG_": 0.3,
+      "eleMas": 0.2,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  },
+  {
+    "id": "preset-158-odette-stellar-glimmer-support",
+    "name": "星辉闪耀辅助",
+    "characterKey": "Odette",
+    "sets": [
+      {
+        "setKey": "HeartOfTheFurnace",
+        "pieces": 4
+      }
+    ],
+    "alternativeSetRecipes": [
+      [
+        {
+          "setKey": "ScarletProof",
+          "pieces": 4
+        }
+      ]
+    ],
+    "mainStatsBySlot": {
+      "flower": [
+        "hp"
+      ],
+      "plume": [
+        "atk"
+      ],
+      "sands": [
+        "atk_"
+      ],
+      "goblet": [
+        "atk_"
+      ],
+      "circlet": [
+        "critRate_",
+        "critDMG_",
+        "atk_"
+      ]
+    },
+    "substatWeights": {
+      "critRate_": 1,
+      "critDMG_": 1,
+      "atk_": 0.8,
+      "eleMas": 0.6,
+      "enerRech_": 0.4,
+      "atk": 0.2
+    },
+    "analysisEnabled": true,
+    "nativeSyncEnabled": true,
+    "sourceVersion": "genshin-artifact-analyzer@766b1a6af0757afce1938da2b25f306ef8079838"
+  }
+]

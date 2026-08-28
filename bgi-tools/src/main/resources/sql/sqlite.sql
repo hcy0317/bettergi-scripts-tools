@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS auto_plan_uid_global_config
 CREATE TABLE IF NOT EXISTS uid_info_config (
     uid         TEXT PRIMARY KEY,                               -- 用户唯一标识
     col_as        TEXT,                                           -- AS字段（as 是保留字，需用双引号）
+    game_nickname TEXT,
+    miliastra_nickname TEXT,
     username   TEXT,
     password    TEXT,
     salt        TEXT,

@@ -109,6 +109,8 @@ COMMENT ON COLUMN auto_plan_uid_global_config.remark      IS '备注';
 CREATE TABLE IF NOT EXISTS uid_info_config (
     uid         VARCHAR(64) NOT NULL PRIMARY KEY,
     col_as    VARCHAR(64),                                 -- 双引号转义保留字 as
+    game_nickname VARCHAR(255),
+    miliastra_nickname VARCHAR(255),
     username VARCHAR(255),
     password  VARCHAR(255),
     salt      VARCHAR(255),
@@ -125,6 +127,8 @@ COMMENT ON TABLE uid_info_config IS 'UID信息配置表';
 
 COMMENT ON COLUMN uid_info_config.uid         IS '用户唯一标识';
 COMMENT ON COLUMN uid_info_config.col_as     IS 'AS字段';
+COMMENT ON COLUMN uid_info_config.game_nickname IS '游戏内昵称';
+COMMENT ON COLUMN uid_info_config.miliastra_nickname IS '千星奇域昵称';
 COMMENT ON COLUMN uid_info_config.username  IS '用户名';
 COMMENT ON COLUMN uid_info_config.password   IS '密码';
 COMMENT ON COLUMN uid_info_config.salt       IS '盐值';

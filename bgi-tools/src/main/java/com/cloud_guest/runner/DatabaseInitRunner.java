@@ -129,6 +129,22 @@ public class DatabaseInitRunner {
         SqlTable uidSQL = new SqlTable(UidInfoConfig.TABLE_NAME,
                 List.of(
                         new SqlColumn(
+                                UidInfoConfig.COL_GAME_NICKNAME, UidInfoConfig.REMARK_COL_GAME_NICKNAME,
+                                List.of(
+                                        new DbSqlType(SQLite, "TEXT", "NULL"),
+                                        new DbSqlType(MySQL, "VARCHAR(255)", "NULL"),
+                                        new DbSqlType(PostgreSQL, "VARCHAR(255)", "NULL")
+                                )
+                        ),
+                        new SqlColumn(
+                                UidInfoConfig.COL_MILIASTRA_NICKNAME, UidInfoConfig.REMARK_COL_MILIASTRA_NICKNAME,
+                                List.of(
+                                        new DbSqlType(SQLite, "TEXT", "NULL"),
+                                        new DbSqlType(MySQL, "VARCHAR(255)", "NULL"),
+                                        new DbSqlType(PostgreSQL, "VARCHAR(255)", "NULL")
+                                )
+                        ),
+                        new SqlColumn(
                                 UidInfoConfig.COL_USERNAME, UidInfoConfig.REMARK_COL_USERNAME,
                                 List.of(
                                         new DbSqlType(SQLite, "TEXT", "NULL"),
