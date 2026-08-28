@@ -81,20 +81,39 @@ public class ArtifactJsonStore {
 
     public record StoredValue<T>(long id, T value) {}
 
-    public <T> List<StoredValue<T>> listByKeyPrefixBeforeId(
+    public <T> List<StoredValue<T>> listByKeyPrefixAfterId(
             String type,
             String prefix,
             Class<T> valueType,
             int limit,
-            long beforeId) {
-        if (limit < 1 || limit > 1000 || beforeId < 1) {
+            long afterId) {
+        if (limit < 1 || limit > 1000 || afterId < 0) {
             throw new IllegalArgumentException("invalid keyset page bounds");
         }
         return mapper.selectList(Wrappers.lambdaQuery(DbKV.class)
                         .eq(DbKV::getType, type)
                         .likeRight(DbKV::getKeyName, prefix)
-                        .lt(DbKV::getId, beforeId)
-                        .orderByDesc(DbKV::getId)
+                        .gt(DbKV::getId, afterId)
+                        .orderByAsc(DbKV::getId)
+                        .last("LIMIT " + limit))
+                .stream()
+                .map(entity -> new StoredValue<>(
+                        entity.getId(), read(entity.getValue(), valueType)))
+                .toList();
+    }
+
+    public <T> List<StoredValue<T>> listAfterId(
+            String type,
+            Class<T> valueType,
+            int limit,
+            long afterId) {
+        if (limit < 1 || limit > 1000 || afterId < 0) {
+            throw new IllegalArgumentException("invalid keyset page bounds");
+        }
+        return mapper.selectList(Wrappers.lambdaQuery(DbKV.class)
+                        .eq(DbKV::getType, type)
+                        .gt(DbKV::getId, afterId)
+                        .orderByAsc(DbKV::getId)
                         .last("LIMIT " + limit))
                 .stream()
                 .map(entity -> new StoredValue<>(

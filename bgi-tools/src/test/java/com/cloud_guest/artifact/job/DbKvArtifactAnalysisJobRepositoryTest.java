@@ -47,7 +47,7 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                 ArtifactAnalysisJobSummary.class, 100))
                 .thenReturn(List.of(summary));
         when(store.get(
-                "artifact-analysis-job-summary-migration", "102550550", Boolean.class))
+                "artifact-analysis-job-summary-migration-v2", "102550550", Boolean.class))
                 .thenReturn(Optional.of(true));
 
         var result = new DbKvArtifactAnalysisJobRepository(store)
@@ -72,16 +72,16 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                 "2026-08-27T00:00:00Z", "2026-08-27T00:00:01Z", null);
         ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(legacy);
         when(store.get(
-                "artifact-analysis-job-summary-migration", "102550550", Boolean.class))
+                "artifact-analysis-job-summary-migration-v2", "102550550", Boolean.class))
                 .thenReturn(Optional.of(false));
         when(store.get(
-                "artifact-analysis-job-summary-migration-cursor", "102550550", Long.class))
+                "artifact-analysis-job-summary-migration-v2-cursor", "102550550", Long.class))
                 .thenReturn(Optional.of(500L));
-        when(store.listByKeyPrefixBeforeId(
+        when(store.listByKeyPrefixAfterId(
                 "artifact-analysis-job", "102550550:",
                 ArtifactAnalysisJob.class, 100, 500L))
                 .thenReturn(List.of(
-                        new ArtifactJsonStore.StoredValue<>(499L, legacy)));
+                        new ArtifactJsonStore.StoredValue<>(501L, legacy)));
         when(store.put(
                 "artifact-analysis-job-summary", "102550550:legacy-101", summary))
                 .thenReturn(summary);
@@ -95,8 +95,43 @@ class DbKvArtifactAnalysisJobRepositoryTest {
 
         assertThat(result).containsExactly(summary);
         verify(store).put(
-                "artifact-analysis-job-summary-migration-cursor", "102550550", 499L);
+                "artifact-analysis-job-summary-migration-v2-cursor", "102550550", 501L);
         verify(store).put(
-                "artifact-analysis-job-summary-migration", "102550550", true);
+                "artifact-analysis-job-summary-migration-v2", "102550550", true);
+    }
+
+    @Test
+    void activeLockMigrationBackfillsPreUpgradeClaimedJobs() {
+        ArtifactJsonStore store = mock(ArtifactJsonStore.class);
+        ArtifactAnalysisJob claimed = new ArtifactAnalysisJob(
+                "claimed-old", "102550550",
+                ArtifactLaunchOperation.EXECUTE_LOCK_PLAN,
+                ArtifactAnalysisJobStatus.HOST_CLAIMED,
+                null, null, null,
+                "2026-08-26T00:00:00Z", "2026-08-26T00:00:01Z", null);
+        ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(claimed);
+        when(store.get(
+                "artifact-analysis-active-lock-migration-v1", "default", Boolean.class))
+                .thenReturn(Optional.of(false));
+        when(store.get(
+                "artifact-analysis-active-lock-migration-v1-cursor", "default", Long.class))
+                .thenReturn(Optional.of(0L));
+        when(store.listAfterId(
+                "artifact-analysis-job", ArtifactAnalysisJob.class, 100, 0L))
+                .thenReturn(List.of(new ArtifactJsonStore.StoredValue<>(42L, claimed)));
+        when(store.list(
+                "artifact-analysis-active-lock-job", ArtifactAnalysisJobSummary.class))
+                .thenReturn(List.of(summary));
+
+        var result = new DbKvArtifactAnalysisJobRepository(store)
+                .findActiveLockExecutionSummaries();
+
+        assertThat(result).containsExactly(summary);
+        verify(store).put(
+                "artifact-analysis-active-lock-job", "102550550:claimed-old", summary);
+        verify(store).put(
+                "artifact-analysis-active-lock-migration-v1-cursor", "default", 42L);
+        verify(store).put(
+                "artifact-analysis-active-lock-migration-v1", "default", true);
     }
 }

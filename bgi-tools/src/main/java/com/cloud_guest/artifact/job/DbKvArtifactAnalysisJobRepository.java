@@ -13,9 +13,13 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
     private static final String TYPE = "artifact-analysis-job";
     private static final String SUMMARY_TYPE = "artifact-analysis-job-summary";
     private static final String ACTIVE_LOCK_TYPE = "artifact-analysis-active-lock-job";
-    private static final String SUMMARY_MIGRATION_TYPE = "artifact-analysis-job-summary-migration";
+    private static final String SUMMARY_MIGRATION_TYPE = "artifact-analysis-job-summary-migration-v2";
     private static final String SUMMARY_MIGRATION_CURSOR_TYPE =
-            "artifact-analysis-job-summary-migration-cursor";
+            "artifact-analysis-job-summary-migration-v2-cursor";
+    private static final String ACTIVE_LOCK_MIGRATION_TYPE =
+            "artifact-analysis-active-lock-migration-v1";
+    private static final String ACTIVE_LOCK_MIGRATION_CURSOR_TYPE =
+            "artifact-analysis-active-lock-migration-v1-cursor";
     private final ArtifactJsonStore store;
 
     public DbKvArtifactAnalysisJobRepository(ArtifactJsonStore store) {
@@ -63,19 +67,17 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
         while (!complete && migratedThisCall < requestedLimit) {
             long cursor = store.get(
                     SUMMARY_MIGRATION_CURSOR_TYPE, uid, Long.class)
-                    .orElse(Long.MAX_VALUE);
+                    .orElse(0L);
             int batchSize = Math.min(100, requestedLimit - migratedThisCall);
             List<ArtifactJsonStore.StoredValue<ArtifactAnalysisJob>> batch =
-                    store.listByKeyPrefixBeforeId(
+                    store.listByKeyPrefixAfterId(
                     TYPE, uid + ":", ArtifactAnalysisJob.class,
                     batchSize, cursor);
             batch.stream().map(ArtifactJsonStore.StoredValue::value).forEach(job -> store.put(
                     SUMMARY_TYPE,
                     key(job.uid(), job.id()),
                     ArtifactAnalysisJobSummary.from(job)));
-            long nextCursor = batch.isEmpty()
-                    ? cursor
-                    : batch.getLast().id();
+            long nextCursor = batch.isEmpty() ? cursor : batch.getLast().id();
             store.put(SUMMARY_MIGRATION_CURSOR_TYPE, uid, nextCursor);
             migratedThisCall += batch.size();
             complete = batch.size() < batchSize;
@@ -109,8 +111,39 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public List<ArtifactAnalysisJobSummary> findActiveLockExecutionSummaries() {
+        migrateActiveLockIndex();
         return store.list(ACTIVE_LOCK_TYPE, ArtifactAnalysisJobSummary.class);
+    }
+
+    private void migrateActiveLockIndex() {
+        boolean complete = store.get(
+                ACTIVE_LOCK_MIGRATION_TYPE, "default", Boolean.class).orElse(false);
+        while (!complete) {
+            long cursor = store.get(
+                    ACTIVE_LOCK_MIGRATION_CURSOR_TYPE, "default", Long.class)
+                    .orElse(0L);
+            List<ArtifactJsonStore.StoredValue<ArtifactAnalysisJob>> batch =
+                    store.listAfterId(TYPE, ArtifactAnalysisJob.class, 100, cursor);
+            for (ArtifactJsonStore.StoredValue<ArtifactAnalysisJob> stored : batch) {
+                ArtifactAnalysisJob job = stored.value();
+                String jobKey = key(job.uid(), job.id());
+                boolean activeLock = job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
+                        && (job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                            || job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
+                            || job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
+                if (activeLock) {
+                    store.put(ACTIVE_LOCK_TYPE, jobKey, ArtifactAnalysisJobSummary.from(job));
+                } else {
+                    store.delete(ACTIVE_LOCK_TYPE, jobKey);
+                }
+            }
+            long nextCursor = batch.isEmpty() ? cursor : batch.getLast().id();
+            store.put(ACTIVE_LOCK_MIGRATION_CURSOR_TYPE, "default", nextCursor);
+            complete = batch.size() < 100;
+            if (complete) store.put(ACTIVE_LOCK_MIGRATION_TYPE, "default", true);
+        }
     }
 
     @Override

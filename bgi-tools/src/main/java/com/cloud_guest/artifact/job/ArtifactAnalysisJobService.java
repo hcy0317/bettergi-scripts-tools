@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
 
 public class ArtifactAnalysisJobService {
     private final ArtifactAnalysisJobRepository repository;
@@ -426,6 +427,7 @@ public class ArtifactAnalysisJobService {
         return reanalyzeReviewableInternal(uid, builds, policy);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public synchronized <T> T mutateAnalysisConfigurationAndReanalyze(
             String uid,
             Supplier<T> mutation,
@@ -439,6 +441,7 @@ public class ArtifactAnalysisJobService {
         return result;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public synchronized <T> T mutateUidActivationAndReanalyze(
             String uid,
             Supplier<T> mutation,
