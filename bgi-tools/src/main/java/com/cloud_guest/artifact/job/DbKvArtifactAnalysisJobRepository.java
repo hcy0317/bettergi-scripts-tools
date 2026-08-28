@@ -11,11 +11,11 @@ import java.util.Optional;
 @Repository
 public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRepository {
     private static final String TYPE = "artifact-analysis-job";
-    private static final String SUMMARY_TYPE = "artifact-analysis-job-summary";
+    private static final String SUMMARY_TYPE = "artifact-analysis-job-summary-v3";
     private static final String ACTIVE_LOCK_TYPE = "artifact-analysis-active-lock-job";
-    private static final String SUMMARY_MIGRATION_TYPE = "artifact-analysis-job-summary-migration-v2";
+    private static final String SUMMARY_MIGRATION_TYPE = "artifact-analysis-job-summary-migration-v3";
     private static final String SUMMARY_MIGRATION_CURSOR_TYPE =
-            "artifact-analysis-job-summary-migration-v2-cursor";
+            "artifact-analysis-job-summary-migration-v3-cursor";
     private static final String ACTIVE_LOCK_MIGRATION_TYPE =
             "artifact-analysis-active-lock-migration-v1";
     private static final String ACTIVE_LOCK_MIGRATION_CURSOR_TYPE =
@@ -28,7 +28,7 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ArtifactAnalysisJob save(ArtifactAnalysisJob job) {
+    public synchronized ArtifactAnalysisJob save(ArtifactAnalysisJob job) {
         store.put(TYPE, key(job.uid(), job.id()), job);
         ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(job);
         store.put(SUMMARY_TYPE, key(job.uid(), job.id()), summary);
@@ -52,7 +52,7 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
     }
 
     @Override
-    public List<ArtifactAnalysisJobSummary> findSummariesByUid(
+    public synchronized List<ArtifactAnalysisJobSummary> findSummariesByUid(
             String uid,
             int limit) {
         migrateSummaryPage(uid, limit);
@@ -112,7 +112,7 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public List<ArtifactAnalysisJobSummary> findActiveLockExecutionSummaries() {
+    public synchronized List<ArtifactAnalysisJobSummary> findActiveLockExecutionSummaries() {
         migrateActiveLockIndex();
         return store.list(ACTIVE_LOCK_TYPE, ArtifactAnalysisJobSummary.class);
     }
@@ -148,7 +148,7 @@ public class DbKvArtifactAnalysisJobRepository implements ArtifactAnalysisJobRep
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean delete(String uid, String id) {
+    public synchronized boolean delete(String uid, String id) {
         boolean deleted = store.delete(TYPE, key(uid, id));
         store.delete(SUMMARY_TYPE, key(uid, id));
         store.delete(ACTIVE_LOCK_TYPE, key(uid, id));
