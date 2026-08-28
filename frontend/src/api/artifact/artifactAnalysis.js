@@ -40,9 +40,9 @@ export async function saveArtifactBuildAutoActivationSettings(settings) {
   return data
 }
 
-export async function startArtifactCharacterRosterJob(uid, gameNickname = '', miliastraNickname = '') {
+export async function startArtifactCharacterRosterJob(uid, gameNickname = '', miliastraNickname = '', miliastraCharacterKey = 'MannequinGirl') {
   const {data} = await service.post('/jwt/artifacts/builds/auto-activation/jobs', null, {
-    params: {uid, gameNickname, miliastraNickname}
+    params: {uid, gameNickname, miliastraNickname, miliastraCharacterKey}
   })
   return data
 }

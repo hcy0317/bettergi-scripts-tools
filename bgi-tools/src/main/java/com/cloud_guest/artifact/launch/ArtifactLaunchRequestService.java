@@ -64,7 +64,8 @@ public class ArtifactLaunchRequestService {
         String token = UUID.randomUUID().toString();
         ArtifactLaunchRequest request = new ArtifactLaunchRequest(
                 VERSION, KIND, uid, jobId, operation, createdAt.toString(), expiresAt.toString(),
-                sourceArtifactCount, targets, nativeCapacity, nativePlanDigest, null, null, null, null);
+                sourceArtifactCount, targets, nativeCapacity, nativePlanDigest,
+                null, null, null, null, null);
         Path requestRoot = requestRoot();
         try {
             Files.createDirectories(requestRoot);
@@ -84,7 +85,8 @@ public class ArtifactLaunchRequestService {
             String jobId,
             ArtifactBuildAutoActivationSettings settings,
             String gameNickname,
-            String miliastraNickname) {
+            String miliastraNickname,
+            String miliastraCharacterKey) {
         if (settings == null) throw new IllegalArgumentException("auto activation settings are required");
         if (uid == null || !uid.matches("[0-9]{6,12}")) throw new IllegalArgumentException("valid uid is required");
         if (jobId == null || jobId.isBlank()) throw new IllegalArgumentException("job id is required");
@@ -96,7 +98,9 @@ public class ArtifactLaunchRequestService {
                 createdAt.toString(), expiresAt.toString(), null, List.of(), null, null,
                 settings.levelThreshold(), settings.favoriteOverride(),
                 gameNickname == null ? null : gameNickname.trim(),
-                miliastraNickname == null ? null : miliastraNickname.trim());
+                miliastraNickname == null ? null : miliastraNickname.trim(),
+                "MannequinBoy".equals(miliastraCharacterKey)
+                        ? "MannequinBoy" : "MannequinGirl");
         Path requestRoot = requestRoot();
         try {
             Files.createDirectories(requestRoot);

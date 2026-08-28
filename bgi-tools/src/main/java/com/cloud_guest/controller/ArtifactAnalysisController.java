@@ -151,10 +151,11 @@ public class ArtifactAnalysisController {
     public Result<ArtifactJobStartResponse> startCharacterRosterJob(
             @RequestParam String uid,
             @RequestParam(defaultValue = "") String gameNickname,
-            @RequestParam(defaultValue = "") String miliastraNickname) {
+            @RequestParam(defaultValue = "") String miliastraNickname,
+            @RequestParam(defaultValue = "MannequinGirl") String miliastraCharacterKey) {
         return ok(jobService.startCharacterRoster(
                 uid, autoActivationSettingsService.get(),
-                gameNickname, miliastraNickname));
+                gameNickname, miliastraNickname, miliastraCharacterKey));
     }
 
     @PostMapping("jobs")

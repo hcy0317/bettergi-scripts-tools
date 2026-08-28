@@ -58,7 +58,8 @@ class ArtifactAnalysisHostControllerTest {
                 new ArtifactAnalysisSettingsService(new InMemoryArtifactAnalysisSettingsRepository()),
                 new ArtifactNativePlanCompiler());
         var start = jobService.startCharacterRoster(
-                "102550550", new ArtifactBuildAutoActivationSettings(80, true), "眇", "遥");
+                "102550550", new ArtifactBuildAutoActivationSettings(80, true),
+                "眇", "遥", "MannequinGirl");
 
         controller.claim(
                 start.job().id(), start.job().uid(), ArtifactLaunchOperation.SCAN_CHARACTER_ROSTER,

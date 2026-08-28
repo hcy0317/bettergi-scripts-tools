@@ -145,6 +145,15 @@ public class DatabaseInitRunner {
                                 )
                         ),
                         new SqlColumn(
+                                UidInfoConfig.COL_MILIASTRA_CHARACTER_KEY,
+                                UidInfoConfig.REMARK_COL_MILIASTRA_CHARACTER_KEY,
+                                List.of(
+                                        new DbSqlType(SQLite, "TEXT", "'MannequinGirl'"),
+                                        new DbSqlType(MySQL, "VARCHAR(32)", "'MannequinGirl'"),
+                                        new DbSqlType(PostgreSQL, "VARCHAR(32)", "'MannequinGirl'")
+                                )
+                        ),
+                        new SqlColumn(
                                 UidInfoConfig.COL_USERNAME, UidInfoConfig.REMARK_COL_USERNAME,
                                 List.of(
                                         new DbSqlType(SQLite, "TEXT", "NULL"),

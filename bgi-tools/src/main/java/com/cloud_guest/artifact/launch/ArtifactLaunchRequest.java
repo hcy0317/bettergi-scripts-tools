@@ -17,7 +17,8 @@ public record ArtifactLaunchRequest(
         Integer characterLevelThreshold,
         Boolean favoriteOverride,
         String gameNickname,
-        String miliastraNickname) {
+        String miliastraNickname,
+        String miliastraCharacterKey) {
 
     public ArtifactLaunchRequest {
         targets = targets == null ? List.of() : List.copyOf(targets);

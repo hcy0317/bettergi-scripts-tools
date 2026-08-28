@@ -69,7 +69,8 @@ public class ArtifactAnalysisJobService {
             String uid,
             ArtifactBuildAutoActivationSettings settings,
             String gameNickname,
-            String miliastraNickname) {
+            String miliastraNickname,
+            String miliastraCharacterKey) {
         String now = clock.instant().toString();
         ArtifactAnalysisJob job = new ArtifactAnalysisJob(
                 UUID.randomUUID().toString(), uid, ArtifactLaunchOperation.SCAN_CHARACTER_ROSTER,
@@ -78,7 +79,8 @@ public class ArtifactAnalysisJobService {
         repository.save(job);
         try {
             ArtifactLaunchResult launch = launchRequestService.createCharacterRoster(
-                    uid, job.id(), settings, gameNickname, miliastraNickname);
+                    uid, job.id(), settings, gameNickname, miliastraNickname,
+                    miliastraCharacterKey);
             return new ArtifactJobStartResponse(job, launch);
         } catch (RuntimeException exception) {
             repository.delete(uid, job.id());

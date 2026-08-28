@@ -96,7 +96,8 @@ class ArtifactAnalysisControllerTest {
 
         assertThat(controller.saveAutoActivationSettings(settings).getData()).isEqualTo(settings);
         assertThat(controller.autoActivationSettings().getData()).isEqualTo(settings);
-        var start = controller.startCharacterRosterJob("102550550", "眇", "遥").getData();
+        var start = controller.startCharacterRosterJob(
+                "102550550", "眇", "遥", "MannequinGirl").getData();
 
         assertThat(start.job().operation())
                 .isEqualTo(ArtifactLaunchOperation.SCAN_CHARACTER_ROSTER);

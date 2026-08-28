@@ -41,6 +41,8 @@ public class UidInfoConfig extends BaseEntity {
     private String gameNickname;
     @TableField(COL_MILIASTRA_NICKNAME)
     private String miliastraNickname;
+    @TableField(COL_MILIASTRA_CHARACTER_KEY)
+    private String miliastraCharacterKey = "MannequinGirl";
     @TableField(COL_USERNAME)
     private String username;
     @TableField(COL_PASSWORD)
@@ -57,11 +59,13 @@ public class UidInfoConfig extends BaseEntity {
     public static final String COL_AS = "col_as";
     public static final String COL_GAME_NICKNAME = "game_nickname";
     public static final String COL_MILIASTRA_NICKNAME = "miliastra_nickname";
+    public static final String COL_MILIASTRA_CHARACTER_KEY = "miliastra_character_key";
     public static final String COL_DEFAULT_UID = "is_default";
 
     public static final String REMARK_COL_USERNAME = "用户名";
     public static final String REMARK_COL_GAME_NICKNAME = "游戏内昵称";
     public static final String REMARK_COL_MILIASTRA_NICKNAME = "千星奇域昵称";
+    public static final String REMARK_COL_MILIASTRA_CHARACTER_KEY = "千星奇域角色性别";
     public static final String REMARK_COL_PASSWORD = "密码";
     public static final String REMARK_COL_SALT = "盐值";
     public static final String REMARK_COL_DEFAULT_UID = "是否为默认UID";
@@ -72,6 +76,7 @@ public class UidInfoConfig extends BaseEntity {
         String decryptedPassword = StrUtil.isBlankIfStr(password) ? password : decryptPassword(password, salt);
         return new UidInfo(
                 uid, asName, gameNickname, miliastraNickname,
+                normalizeMiliastraCharacterKey(miliastraCharacterKey),
                 username, decryptedPassword, defaultUid);
     }
 
@@ -93,14 +98,32 @@ public class UidInfoConfig extends BaseEntity {
             String miliastraNickname,
             String username,
             String password) {
+        this(uid, asName, gameNickname, miliastraNickname,
+                "MannequinGirl", username, password);
+    }
+
+    @SneakyThrows
+    public UidInfoConfig(
+            String uid,
+            String asName,
+            String gameNickname,
+            String miliastraNickname,
+            String miliastraCharacterKey,
+            String username,
+            String password) {
         this.uid = uid;
         this.asName = asName;
         this.gameNickname = gameNickname;
         this.miliastraNickname = miliastraNickname;
+        this.miliastraCharacterKey = normalizeMiliastraCharacterKey(miliastraCharacterKey);
         this.username = username;
         this.salt = UUID.randomUUID().toString();
         String encryptPassword = StrUtil.isBlankIfStr(password) ? password : encryptPassword(password, salt);
         this.password = encryptPassword;
+    }
+
+    private static String normalizeMiliastraCharacterKey(String value) {
+        return "MannequinBoy".equals(value) ? "MannequinBoy" : "MannequinGirl";
     }
 
     /**

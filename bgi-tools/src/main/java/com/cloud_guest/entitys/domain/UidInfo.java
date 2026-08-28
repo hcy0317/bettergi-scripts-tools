@@ -24,6 +24,7 @@ public class UidInfo {
     private String as;
     private String gameNickname;
     private String miliastraNickname;
+    private String miliastraCharacterKey;
     private String username;
     private String password;
     private Boolean defaultUid;
@@ -31,7 +32,8 @@ public class UidInfo {
     @SneakyThrows
     public UidInfoConfig toConfig(){
         UidInfoConfig uidInfoConfig = new UidInfoConfig(
-                uid, as, gameNickname, miliastraNickname, username, password);
+                uid, as, gameNickname, miliastraNickname,
+                miliastraCharacterKey, username, password);
         uidInfoConfig.setDefaultUid(defaultUid);
         return uidInfoConfig;
     }

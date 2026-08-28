@@ -171,7 +171,9 @@ const scanCharacters = async () => {
     const response = await startArtifactCharacterRosterJob(
       props.uid.trim(),
       String(uidInfo?.gameNickname || '').trim(),
-      String(uidInfo?.miliastraNickname || '').trim())
+      String(uidInfo?.miliastraNickname || '').trim(),
+      uidInfo?.miliastraCharacterKey === 'MannequinBoy'
+        ? 'MannequinBoy' : 'MannequinGirl')
     characterScanJobId.value = response.job.id
     characterScanJob.value = response.job
     characterLaunch.value = response.launch

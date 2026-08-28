@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS uid_info_config (
     col_as    VARCHAR(64),                                 -- 双引号转义保留字 as
     game_nickname VARCHAR(255),
     miliastra_nickname VARCHAR(255),
+    miliastra_character_key VARCHAR(32) DEFAULT 'MannequinGirl',
     username VARCHAR(255),
     password  VARCHAR(255),
     salt      VARCHAR(255),

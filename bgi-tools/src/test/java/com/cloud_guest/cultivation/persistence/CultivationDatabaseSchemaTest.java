@@ -42,6 +42,7 @@ class CultivationDatabaseSchemaTest {
             assertThat(columnExists(connection, "uid_info_config", "is_default")).isTrue();
             assertThat(columnExists(connection, "uid_info_config", "game_nickname")).isTrue();
             assertThat(columnExists(connection, "uid_info_config", "miliastra_nickname")).isTrue();
+            assertThat(columnExists(connection, "uid_info_config", "miliastra_character_key")).isTrue();
 
             String insert = """
                     INSERT INTO cultivation_plan_revision

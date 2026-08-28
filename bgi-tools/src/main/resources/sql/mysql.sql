@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS `uid_info_config`
     `col_as`          varchar(64) DEFAULT NULL COMMENT 'AS字段（注意：as是保留字，需反引号）',
     `game_nickname`  varchar(255) DEFAULT NULL COMMENT '游戏内昵称',
     `miliastra_nickname` varchar(255) DEFAULT NULL COMMENT '千星奇域昵称',
+    `miliastra_character_key` varchar(32) DEFAULT 'MannequinGirl' COMMENT '千星奇域角色性别',
     `username`       varchar(255) DEFAULT NULL COMMENT '用户名',
     `password`       varchar(255) DEFAULT NULL COMMENT '密码',
     `salt`       varchar(255) DEFAULT NULL COMMENT '盐值',

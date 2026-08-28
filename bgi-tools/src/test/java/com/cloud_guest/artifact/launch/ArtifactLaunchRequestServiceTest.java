@@ -110,7 +110,8 @@ class ArtifactLaunchRequestServiceTest {
 
         ArtifactLaunchResult launch = service.createCharacterRoster(
                 "102550550", "job-roster",
-                new ArtifactBuildAutoActivationSettings(80, true), "眇", "遥");
+                new ArtifactBuildAutoActivationSettings(80, true),
+                "眇", "遥", "MannequinBoy");
 
         assertThat(launch.launchUri()).matches(
                 "^BetterGIArtifact://characters\\?request=[0-9a-f-]{36}$");
@@ -120,6 +121,7 @@ class ArtifactLaunchRequestServiceTest {
         assertThat(request.favoriteOverride()).isTrue();
         assertThat(request.gameNickname()).isEqualTo("眇");
         assertThat(request.miliastraNickname()).isEqualTo("遥");
+        assertThat(request.miliastraCharacterKey()).isEqualTo("MannequinBoy");
     }
 
     private static final class MutableClock extends Clock {

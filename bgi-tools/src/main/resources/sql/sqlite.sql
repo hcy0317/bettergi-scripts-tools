@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS uid_info_config (
     col_as        TEXT,                                           -- AS字段（as 是保留字，需用双引号）
     game_nickname TEXT,
     miliastra_nickname TEXT,
+    miliastra_character_key TEXT DEFAULT 'MannequinGirl',
     username   TEXT,
     password    TEXT,
     salt        TEXT,
