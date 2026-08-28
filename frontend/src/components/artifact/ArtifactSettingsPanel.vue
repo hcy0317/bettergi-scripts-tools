@@ -4,12 +4,14 @@ import {Check, RefreshLeft} from '@element-plus/icons-vue'
 import {ElMessage} from 'element-plus'
 import {getArtifactSettings, saveArtifactSettings} from '@api/artifact/artifactAnalysis.js'
 
+const props = defineProps({uid: {type: String, default: ''}})
+
 const loading = ref(false)
 const saving = ref(false)
 const settings = reactive({unfinishedPotentialThreshold:75, finishedScoreThreshold:80, fourLineStartProbability:0.2})
 const load = async () => { loading.value = true; try { Object.assign(settings, await getArtifactSettings()) } catch { ElMessage.error('算法设置加载失败，请稍后重试') } finally { loading.value = false } }
 const reset = () => Object.assign(settings, {unfinishedPotentialThreshold:75, finishedScoreThreshold:80, fourLineStartProbability:0.2})
-const save = async () => { saving.value = true; try { Object.assign(settings, await saveArtifactSettings(settings)); ElMessage.success('算法设置已保存') } finally { saving.value = false } }
+const save = async () => { saving.value = true; try { Object.assign(settings, await saveArtifactSettings(settings, props.uid.trim())); ElMessage.success('算法设置已保存，锁定方案已重新计算') } finally { saving.value = false } }
 onMounted(load)
 </script>
 

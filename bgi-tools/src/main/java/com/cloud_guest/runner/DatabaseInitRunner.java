@@ -377,6 +377,7 @@ public class DatabaseInitRunner {
                 }
                 errorList.stream().forEach(sql -> log.warn("[字段存在] `{}.{}`字段已存在，跳过添加 {}", sql.table, sql.column,sql.remark));
                 log.info("====================================");
+                ensureArtifactStorageCapacity(dbType);
                 verifyCultivationExecutionSchema();
             } else {
                 log.info("数据库类型 {} 未配置对应脚本，跳过", dbType);
@@ -424,6 +425,13 @@ public class DatabaseInitRunner {
             page++;
         } while (CollUtil.isNotEmpty(pageRecords));
         log.info("数据兼容性迁移耗时: {} ms，更新记录数: {}", System.currentTimeMillis() - start, totalUpdated);
+    }
+
+    private void ensureArtifactStorageCapacity(String dbType) {
+        if (!"MySQL".equals(dbType)) return;
+        jdbcTemplate.execute(
+                "ALTER TABLE db_kv MODIFY COLUMN value LONGTEXT NULL COMMENT '键值'");
+        log.info("已确认 MySQL db_kv.value 使用 LONGTEXT，可保存完整圣遗物分析快照");
     }
 
     void verifyCultivationExecutionSchema() {

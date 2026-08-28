@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -285,6 +286,24 @@ class ArtifactAnalysisJobServiceTest {
         assertThatThrownBy(() -> launchRequestService().consume(start.launch().requestToken()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("not found");
+    }
+
+    @Test
+    void failedLaunchRequestCreationRollsBackInvisibleWaitingJob() throws Exception {
+        Path invalidRoot = tempDirectory.resolve("request-root-is-a-file");
+        Files.writeString(invalidRoot, "not a directory");
+        Clock clock = Clock.fixed(Instant.parse("2026-08-27T00:00:00Z"), ZoneOffset.UTC);
+        ArtifactAnalysisJobService service = new ArtifactAnalysisJobService(
+                new InMemoryArtifactAnalysisJobRepository(),
+                new ArtifactAnalysisEngine(), new ArtifactExecutionGuard(),
+                new ArtifactLaunchRequestService(
+                        invalidRoot, new ObjectMapper(), clock, Duration.ofMinutes(5)),
+                clock);
+
+        assertThatThrownBy(() -> service.start(
+                "102550550", ArtifactLaunchOperation.ANALYZE))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(service.list("102550550")).isEmpty();
     }
 
     @Test

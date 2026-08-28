@@ -52,8 +52,8 @@ export async function getArtifactSettings() {
   return data
 }
 
-export async function saveArtifactSettings(settings) {
-  const {data} = await service.put('/jwt/artifacts/settings', settings)
+export async function saveArtifactSettings(settings, uid) {
+  const {data} = await service.put('/jwt/artifacts/settings', settings, {params: {uid}})
   return data
 }
 

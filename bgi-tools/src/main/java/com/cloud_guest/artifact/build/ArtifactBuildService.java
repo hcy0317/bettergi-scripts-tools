@@ -67,6 +67,11 @@ public class ArtifactBuildService {
     }
 
     public boolean delete(String id) {
+        ArtifactBuild existing = repository.findById(id).orElse(null);
+        if (existing == null) return false;
+        if (existing.sourceVersion().startsWith("genshin-artifact-analyzer@")) {
+            throw new IllegalStateException("bundled artifact presets cannot be deleted");
+        }
         return repository.delete(id);
     }
 }

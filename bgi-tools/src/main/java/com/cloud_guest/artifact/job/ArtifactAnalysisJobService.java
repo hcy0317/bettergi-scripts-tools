@@ -56,8 +56,13 @@ public class ArtifactAnalysisJobService {
                 ArtifactAnalysisJobStatus.WAITING_FOR_HOST,
                 null, null, null, now, now, null);
         repository.save(job);
-        ArtifactLaunchResult launch = launchRequestService.create(uid, job.id(), operation);
-        return new ArtifactJobStartResponse(job, launch);
+        try {
+            ArtifactLaunchResult launch = launchRequestService.create(uid, job.id(), operation);
+            return new ArtifactJobStartResponse(job, launch);
+        } catch (RuntimeException exception) {
+            repository.delete(uid, job.id());
+            throw exception;
+        }
     }
 
     public ArtifactJobStartResponse startCharacterRoster(
@@ -71,9 +76,14 @@ public class ArtifactAnalysisJobService {
                 ArtifactAnalysisJobStatus.WAITING_FOR_HOST,
                 null, null, null, now, now, null);
         repository.save(job);
-        ArtifactLaunchResult launch = launchRequestService.createCharacterRoster(
-                uid, job.id(), settings, gameNickname, miliastraNickname);
-        return new ArtifactJobStartResponse(job, launch);
+        try {
+            ArtifactLaunchResult launch = launchRequestService.createCharacterRoster(
+                    uid, job.id(), settings, gameNickname, miliastraNickname);
+            return new ArtifactJobStartResponse(job, launch);
+        } catch (RuntimeException exception) {
+            repository.delete(uid, job.id());
+            throw exception;
+        }
     }
 
     public ArtifactJobStartResponse startNative(
@@ -89,10 +99,15 @@ public class ArtifactAnalysisJobService {
                 ArtifactAnalysisJobStatus.WAITING_FOR_HOST,
                 null, null, null, now, now, null);
         repository.save(job);
-        ArtifactLaunchResult launch = launchRequestService.create(
-                uid, job.id(), ArtifactLaunchOperation.REBUILD_NATIVE_PLANS,
-                null, List.of(), plan.capacity(), plan.planDigest());
-        return new ArtifactJobStartResponse(job, launch);
+        try {
+            ArtifactLaunchResult launch = launchRequestService.create(
+                    uid, job.id(), ArtifactLaunchOperation.REBUILD_NATIVE_PLANS,
+                    null, List.of(), plan.capacity(), plan.planDigest());
+            return new ArtifactJobStartResponse(job, launch);
+        } catch (RuntimeException exception) {
+            repository.delete(uid, job.id());
+            throw exception;
+        }
     }
 
     public ArtifactAnalysisJob submitSnapshot(

@@ -36,7 +36,7 @@ const activeTab = ref('analysis')
         <el-tab-pane label="配装管理" name="builds" lazy><ArtifactBuildsPanel v-if="activeTab === 'builds'" :uid="uid"/></el-tab-pane>
         <el-tab-pane label="锁定方案" name="lock" lazy><ArtifactLockPlanPanel v-if="activeTab === 'lock'" :uid="uid"/></el-tab-pane>
         <el-tab-pane label="原神方案同步" name="native" lazy><ArtifactNativeSyncPanel v-if="activeTab === 'native'" :uid="uid"/></el-tab-pane>
-        <el-tab-pane label="算法设置" name="settings" lazy><ArtifactSettingsPanel v-if="activeTab === 'settings'"/></el-tab-pane>
+        <el-tab-pane label="算法设置" name="settings" lazy><ArtifactSettingsPanel v-if="activeTab === 'settings'" :uid="uid"/></el-tab-pane>
       </el-tabs>
     </section>
   </main>

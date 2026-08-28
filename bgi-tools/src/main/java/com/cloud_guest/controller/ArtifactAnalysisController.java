@@ -39,10 +39,7 @@ import static com.cloud_guest.result.Result.ok;
 
 @Tag(name = "ArtifactAnalysis")
 @RestController
-@RequestMapping({
-        "/api/artifacts/",
-        "/jwt/artifacts/"
-})
+@RequestMapping("/jwt/artifacts/")
 public class ArtifactAnalysisController {
     private final ArtifactBuildService buildService;
     private final ArtifactAnalysisSettingsService settingsService;
@@ -121,8 +118,12 @@ public class ArtifactAnalysisController {
 
     @PutMapping("settings")
     @Operation(summary = "保存圣遗物评分设置")
-    public Result<ArtifactAnalysisPolicy> saveSettings(@RequestBody ArtifactAnalysisPolicy policy) {
-        return ok(settingsService.save(policy));
+    public Result<ArtifactAnalysisPolicy> saveSettings(
+            @RequestBody ArtifactAnalysisPolicy policy,
+            @RequestParam String uid) {
+        ArtifactAnalysisPolicy saved = settingsService.save(policy);
+        refreshLatestLockPlan(uid);
+        return ok(saved);
     }
 
     @GetMapping("builds/auto-activation/settings")

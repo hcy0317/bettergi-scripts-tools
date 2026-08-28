@@ -3,10 +3,24 @@ package com.cloud_guest.artifact.build;
 import com.cloud_guest.artifact.domain.ArtifactBuild;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ArtifactPresetInitializerTest {
+
+    @Test
+    void initializerUsesTheSameDatabaseInitConditionAsItsDependency() {
+        ConditionalOnProperty condition = AnnotatedElementUtils.findMergedAnnotation(
+                ArtifactPresetInitializer.class, ConditionalOnProperty.class);
+
+        assertThat(condition).isNotNull();
+        assertThat(condition.prefix()).isEqualTo("spring.datasource.init");
+        assertThat(condition.name()).containsExactly("enabled");
+        assertThat(condition.havingValue()).isEqualTo("true");
+        assertThat(condition.matchIfMissing()).isTrue();
+    }
 
     @Test
     void localizesExistingUpstreamNamesWithoutOverwritingUserActivationChoices() {

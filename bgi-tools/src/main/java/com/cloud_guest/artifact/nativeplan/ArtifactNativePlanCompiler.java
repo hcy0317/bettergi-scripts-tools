@@ -41,6 +41,12 @@ public class ArtifactNativePlanCompiler {
                 }
             }
         }
+        if (merged.isEmpty()) {
+            return new ArtifactNativeSyncPlan(
+                    ArtifactNativeSyncStatus.NO_GO_EMPTY, false, false, capacity,
+                    enabled.size(), List.of(), "", TRANSLATION_MODE,
+                    "native-sync-enabled builds did not compile into any representable plans");
+        }
         long nativeSetPlanCount = merged.keySet().stream().map(PlanKey::setKey).distinct().count();
         if (nativeSetPlanCount > capacity) {
             return new ArtifactNativeSyncPlan(

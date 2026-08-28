@@ -50,7 +50,7 @@ class ArtifactAnalysisControllerTest {
         assertThat(controller.builds().getData()).containsExactly(build);
 
         ArtifactAnalysisPolicy policy = new ArtifactAnalysisPolicy(78, 83, 0.25);
-        assertThat(controller.saveSettings(policy).getData()).isEqualTo(policy);
+        assertThat(controller.saveSettings(policy, "102550550").getData()).isEqualTo(policy);
         assertThat(controller.settings().getData()).isEqualTo(policy);
 
         var start = controller.startJob(

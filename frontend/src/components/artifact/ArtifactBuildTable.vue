@@ -34,7 +34,7 @@ const recipeTone = index => `tone-${artifactAlternativeTone(index)}`
     <el-table-column label="操作" width="126" fixed="right" align="center"><template #default="{row}"><div class="row-actions">
       <el-tooltip content="编辑"><el-button circle text :icon="Edit" :aria-label="`编辑 ${row.name}`" @click="emit('edit', row)"/></el-tooltip>
       <el-tooltip content="克隆为自定义"><el-button circle text :icon="CopyDocument" :aria-label="`克隆 ${row.name}`" @click="emit('clone', row)"/></el-tooltip>
-      <el-tooltip content="删除"><el-button circle text type="danger" :icon="Delete" :aria-label="`删除 ${row.name}`" @click="emit('remove', row)"/></el-tooltip>
+      <el-tooltip v-if="row.summary.sourceKind !== 'upstream'" content="删除"><el-button circle text type="danger" :icon="Delete" :aria-label="`删除 ${row.name}`" @click="emit('remove', row)"/></el-tooltip>
     </div></template></el-table-column>
   </el-table>
 </template>

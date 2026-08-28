@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ArtifactBuildBulkStateTest {
 
@@ -41,6 +42,20 @@ class ArtifactBuildBulkStateTest {
                 new ArtifactBuildBulkStateRequest("all", "nativeSyncEnabled", true));
 
         assertThat(result).allMatch(ArtifactBuild::nativeSyncEnabled);
+    }
+
+    @Test
+    void bundledPresetCannotBeDeletedButCustomBuildCan() {
+        ArtifactBuildService service = new ArtifactBuildService(new InMemoryArtifactBuildRepository());
+        service.importAll(List.of(
+                build("preset-a", "genshin-artifact-analyzer@abc", true, true),
+                build("custom-a", "custom", true, true)));
+
+        assertThatThrownBy(() -> service.delete("preset-a"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("presets");
+        assertThat(service.delete("custom-a")).isTrue();
+        assertThat(service.list()).extracting(ArtifactBuild::id).containsExactly("preset-a");
     }
 
     private static ArtifactBuild build(

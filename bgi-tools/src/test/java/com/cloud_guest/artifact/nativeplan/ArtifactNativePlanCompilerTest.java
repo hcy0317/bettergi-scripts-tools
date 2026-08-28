@@ -53,6 +53,20 @@ class ArtifactNativePlanCompilerTest {
     }
 
     @Test
+    void enabledButUnrepresentableBuildCannotDeleteEveryNativePlan() {
+        ArtifactBuild invalid = new ArtifactBuild(
+                "invalid", "invalid", "Furina", List.of(), Map.of(),
+                Map.of("critRate_", 1.0), true, true, "custom");
+
+        ArtifactNativeSyncPlan plan = compiler.compileReplaceAll(List.of(invalid), 10);
+
+        assertThat(plan.status()).isEqualTo(ArtifactNativeSyncStatus.NO_GO_EMPTY);
+        assertThat(plan.replaceAll()).isFalse();
+        assertThat(plan.requiresPreMutationEvidence()).isFalse();
+        assertThat(plan.plans()).isEmpty();
+    }
+
+    @Test
     void twoPieceRulesExpandSetsWithTheSameEffectForNativeSync() {
         ArtifactBuild build = new ArtifactBuild(
                 "healer", "healer", "Furina",
