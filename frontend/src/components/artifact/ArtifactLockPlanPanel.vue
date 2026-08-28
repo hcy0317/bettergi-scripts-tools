@@ -54,11 +54,19 @@ const executionTargets = computed(() => artifactExecutionTargets(filtered.value)
 const executionSummary = computed(() => artifactExecutionSummary(filtered.value))
 const hasBuildScoreMatrix = computed(() => Boolean(job.value?.analysisResult?.buildIds?.length))
 const evaluation = row => artifactDecisionEvaluation(row)
-const loadJobDetail = async id => {
+const loadJobDetail = async (
+  id,
+  requestedUid = props.uid.trim(),
+  parentGeneration = loadGeneration,
+) => {
   const generation = ++detailGeneration
   if (!id) { job.value = null; return }
   const detail = await getArtifactJob(id)
-  if (generation === detailGeneration && id === jobId.value) job.value = detail
+  if (generation === detailGeneration
+    && parentGeneration === loadGeneration
+    && requestedUid === props.uid.trim()
+    && detail?.uid === requestedUid
+    && id === jobId.value) job.value = detail
 }
 
 const load = async (silent = false) => {
@@ -78,7 +86,7 @@ const load = async (silent = false) => {
     builds.value = nextBuilds
     settings.value = {...DEFAULT_ARTIFACT_ANALYSIS_THRESHOLDS, ...(nextSettings || {})}
     jobId.value = nextJobId
-    await loadJobDetail(nextJobId)
+    await loadJobDetail(nextJobId, requestedUid, generation)
   }
   catch { if (!silent) ElMessage.error('锁定方案加载失败，请稍后重试') }
   finally {
@@ -112,7 +120,14 @@ const execute = async () => {
     } else launchDialogOpen.value = true
   } finally { launching.value = false }
 }
-watch(() => props.uid, () => void load(), {immediate: true})
+watch(() => props.uid, () => {
+  detailGeneration++
+  job.value = null
+  jobId.value = ''
+  jobs.value = []
+  builds.value = []
+  void load()
+}, {immediate: true})
 watch([jobId, view, setKey, slotKey, levelRange, sort], () => { page.value = 1 })
 onMounted(() => {
   if (!window.IntersectionObserver || !panelRoot.value) return
@@ -131,8 +146,8 @@ onBeforeUnmount(() => visibilityObserver?.disconnect())
       <div class="commands">
         <el-select v-model="jobId" placeholder="选择分析记录" @change="loadJobDetail"><el-option v-for="item in analyzable" :key="item.id" :label="`${formatArtifactDate(item.createdAtUtc)} · ${artifactJobStatusMeta(item.status).label}`" :value="item.id"/></el-select>
         <el-tooltip content="刷新最新方案"><el-button circle :icon="Refresh" :loading="refreshing" :disabled="!uid" aria-label="刷新最新锁定方案" @click="load()"/></el-tooltip>
-        <el-button :icon="Check" :loading="approving" :disabled="!canApproveArtifactJob(job)" @click="approve">批准方案</el-button>
-        <el-tooltip :content="executionTargets.length ? `执行当前筛选的 ${executionTargets.length} 个目标` : '当前筛选没有加解锁目标'"><span><el-button type="primary" :icon="VideoPlay" :loading="launching" :disabled="!canExecuteArtifactJob(job) || !executionTargets.length" @click="execute">执行方案</el-button></span></el-tooltip>
+        <el-button :icon="Check" :loading="approving" :disabled="refreshing || !canApproveArtifactJob(job)" @click="approve">批准方案</el-button>
+        <el-tooltip :content="executionTargets.length ? `执行当前筛选的 ${executionTargets.length} 个目标` : '当前筛选没有加解锁目标'"><span><el-button type="primary" :icon="VideoPlay" :loading="launching" :disabled="refreshing || !canExecuteArtifactJob(job) || !executionTargets.length" @click="execute">执行方案</el-button></span></el-tooltip>
       </div>
     </header>
     <el-empty v-if="!uid" description="请选择 UID"/>

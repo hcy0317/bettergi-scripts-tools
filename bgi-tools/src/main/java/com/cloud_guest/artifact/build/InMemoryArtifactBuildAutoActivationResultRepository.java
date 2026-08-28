@@ -20,4 +20,9 @@ public class InMemoryArtifactBuildAutoActivationResultRepository
         results.put(uid, result);
         return result;
     }
+
+    @Override
+    public boolean delete(String uid) {
+        return results.remove(uid) != null;
+    }
 }

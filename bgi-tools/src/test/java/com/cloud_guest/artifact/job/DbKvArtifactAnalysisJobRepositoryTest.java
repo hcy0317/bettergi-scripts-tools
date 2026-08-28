@@ -61,4 +61,41 @@ class DbKvArtifactAnalysisJobRepositoryTest {
                 "artifact-analysis-job", "102550550:",
                 ArtifactAnalysisJob.class);
     }
+
+    @Test
+    void summaryMigrationContinuesFromStoredCursorBeforeMarkingComplete() {
+        ArtifactJsonStore store = mock(ArtifactJsonStore.class);
+        ArtifactAnalysisJob legacy = new ArtifactAnalysisJob(
+                "legacy-101", "102550550", ArtifactLaunchOperation.ANALYZE,
+                ArtifactAnalysisJobStatus.READY_FOR_REVIEW,
+                null, null, null,
+                "2026-08-27T00:00:00Z", "2026-08-27T00:00:01Z", null);
+        ArtifactAnalysisJobSummary summary = ArtifactAnalysisJobSummary.from(legacy);
+        when(store.get(
+                "artifact-analysis-job-summary-migration", "102550550", Boolean.class))
+                .thenReturn(Optional.of(false));
+        when(store.get(
+                "artifact-analysis-job-summary-migration-cursor", "102550550", Integer.class))
+                .thenReturn(Optional.of(100));
+        when(store.listByKeyPrefixPage(
+                "artifact-analysis-job", "102550550:",
+                ArtifactAnalysisJob.class, 100, 100))
+                .thenReturn(List.of(legacy));
+        when(store.put(
+                "artifact-analysis-job-summary", "102550550:legacy-101", summary))
+                .thenReturn(summary);
+        when(store.listByKeyPrefixLimited(
+                "artifact-analysis-job-summary", "102550550:",
+                ArtifactAnalysisJobSummary.class, 1000))
+                .thenReturn(List.of(summary));
+
+        var result = new DbKvArtifactAnalysisJobRepository(store)
+                .findSummariesByUid("102550550", 1000);
+
+        assertThat(result).containsExactly(summary);
+        verify(store).put(
+                "artifact-analysis-job-summary-migration-cursor", "102550550", 101);
+        verify(store).put(
+                "artifact-analysis-job-summary-migration", "102550550", true);
+    }
 }

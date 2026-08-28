@@ -26,4 +26,9 @@ public class DbKvArtifactBuildAutoActivationResultRepository
             ArtifactBuildAutoActivationResult result) {
         return store.put(TYPE, uid, result);
     }
+
+    @Override
+    public boolean delete(String uid) {
+        return store.delete(TYPE, uid);
+    }
 }

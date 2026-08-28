@@ -78,9 +78,11 @@ public class ArtifactBuildAutoActivationService {
             String uid,
             List<ArtifactBuild> builds) {
         ArtifactBuildAutoActivationResult result = latest(uid);
-        if (result == null || result.rosterDigest() == null
-                || result.rosterDigest().isBlank()) {
+        if (result == null) {
             return List.copyOf(builds);
+        }
+        if (result.rosterDigest() == null || result.rosterDigest().isBlank()) {
+            return builds.stream().map(build -> build.withActivation(false)).toList();
         }
         Set<String> enabledCharacters = Set.copyOf(
                 result.appliedEligibleCharacterKeys());
@@ -88,6 +90,10 @@ public class ArtifactBuildAutoActivationService {
                 .map(build -> build.withActivation(
                         enabledCharacters.contains(build.characterKey())))
                 .toList();
+    }
+
+    public boolean clear(String uid) {
+        return resultRepository.delete(uid);
     }
 
     private static RosterDifference compare(

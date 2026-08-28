@@ -75,8 +75,11 @@ public class ArtifactAnalysisController {
             @PathVariable String buildId,
             @RequestBody ArtifactBuild build,
             @RequestParam String uid) {
-        ArtifactBuild saved = mutateAndRefresh(
-                uid, () -> buildService.save(buildId, build));
+        ArtifactBuild saved = mutateAndRefresh(uid, () -> {
+            ArtifactBuild value = buildService.save(buildId, build);
+            autoActivationService.clear(uid);
+            return value;
+        });
         return ok(saved);
     }
 
@@ -85,8 +88,11 @@ public class ArtifactAnalysisController {
     public Result<List<ArtifactBuild>> importBuilds(
             @RequestBody List<ArtifactBuild> builds,
             @RequestParam String uid) {
-        List<ArtifactBuild> imported = mutateAndRefresh(
-                uid, () -> buildService.importAll(builds));
+        List<ArtifactBuild> imported = mutateAndRefresh(uid, () -> {
+            List<ArtifactBuild> value = buildService.importAll(builds);
+            autoActivationService.clear(uid);
+            return value;
+        });
         return ok(imported);
     }
 
@@ -95,8 +101,11 @@ public class ArtifactAnalysisController {
     public Result<List<ArtifactBuild>> updateBuildBulkState(
             @RequestBody ArtifactBuildBulkStateRequest request,
             @RequestParam String uid) {
-        List<ArtifactBuild> updated = mutateAndRefresh(
-                uid, () -> buildService.updateBulkState(request));
+        List<ArtifactBuild> updated = mutateAndRefresh(uid, () -> {
+            List<ArtifactBuild> value = buildService.updateBulkState(request);
+            autoActivationService.clear(uid);
+            return value;
+        });
         return ok(updated);
     }
 
@@ -105,8 +114,11 @@ public class ArtifactAnalysisController {
     public Result<Boolean> deleteBuild(
             @PathVariable String buildId,
             @RequestParam String uid) {
-        boolean deleted = mutateAndRefresh(
-                uid, () -> buildService.delete(buildId));
+        boolean deleted = mutateAndRefresh(uid, () -> {
+            boolean value = buildService.delete(buildId);
+            if (value) autoActivationService.clear(uid);
+            return value;
+        });
         return ok(deleted);
     }
 
@@ -192,7 +204,8 @@ public class ArtifactAnalysisController {
     @GetMapping("jobs")
     @Operation(summary = "读取 UID 的圣遗物分析记录")
     public Result<List<ArtifactAnalysisJobSummary>> jobs(@RequestParam String uid) {
-        return ok(jobService.listSummaries(uid));
+        return ok(jobService.listSummaries(
+                uid, buildsForUid(uid), settingsService.get()));
     }
 
     @GetMapping("jobs/{jobId}")

@@ -65,7 +65,8 @@ class ArtifactAnalysisJobServiceTest {
                 started.id(), snapshot(List.of(item(0, false), item(1, true))),
                 List.of(build()), ArtifactAnalysisPolicy.defaults());
 
-        ArtifactAnalysisJobSummary summary = service.listSummaries("102550550").getFirst();
+        ArtifactAnalysisJobSummary summary = service.listSummaries(
+                "102550550", List.of(build()), ArtifactAnalysisPolicy.defaults()).getFirst();
         String json = new ObjectMapper().writeValueAsString(summary);
 
         assertThat(summary.snapshot().artifactCount()).isEqualTo(2);
@@ -240,6 +241,29 @@ class ArtifactAnalysisJobServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("全部账号");
         assertThat(mutated).isFalse();
+    }
+
+    @Test
+    void globalBuildChangeRevokesAnotherUidWaitingExecution() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob analysis = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(analysis.id(), source.snapshotDigest());
+        ArtifactJobStartResponse execution = service.launch(
+                analysis.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+
+        service.mutateAnalysisConfigurationAndReanalyze(
+                "123456789", () -> true,
+                () -> List.of(build()), ArtifactAnalysisPolicy::defaults);
+
+        assertThat(service.get(execution.job().id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.STALE_ABORT);
+        assertThatThrownBy(() -> launchRequestService().consume(
+                execution.launch().requestToken()))
+                .hasMessageContaining("not found");
     }
 
     @Test
@@ -438,6 +462,36 @@ class ArtifactAnalysisJobServiceTest {
                 claimed.id(), snapshot(List.of(item(0, false))),
                 List.of(build()), ArtifactAnalysisPolicy.defaults());
         assertThat(reviewed.status()).isEqualTo(ArtifactAnalysisJobStatus.READY_FOR_REVIEW);
+    }
+
+    @Test
+    void claimedRecoveryCanResumeReviewAndReadyToExecutePhases() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob analysis = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        service.claim(analysis.id(), source.uid(), ArtifactLaunchOperation.ANALYZE);
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+
+        assertThat(service.claim(
+                analysis.id(), source.uid(), ArtifactLaunchOperation.ANALYZE).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.HOST_CLAIMED);
+        service.submitSnapshot(
+                analysis.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(analysis.id(), source.snapshotDigest());
+        ArtifactAnalysisJob execution = service.launch(
+                analysis.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        service.claim(execution.id(), source.uid(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+        service.preflight(
+                execution.id(),
+                new ArtifactExecutionObservation(
+                        source.uid(), source.artifactCount(), source.artifacts(), null),
+                List.of(build()), ArtifactAnalysisPolicy.defaults());
+
+        assertThat(service.claim(
+                execution.id(), source.uid(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.HOST_CLAIMED);
     }
 
     @Test

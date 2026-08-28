@@ -44,7 +44,8 @@ public class InMemoryArtifactAnalysisJobRepository implements ArtifactAnalysisJo
     public List<ArtifactAnalysisJobSummary> findActiveLockExecutionSummaries() {
         return jobs.values().stream()
                 .filter(job -> job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN)
-                .filter(job -> job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
+                .filter(job -> job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                        || job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
                         || job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE)
                 .map(ArtifactAnalysisJobSummary::from)
                 .toList();

@@ -79,6 +79,25 @@ public class ArtifactJsonStore {
                 .toList();
     }
 
+    public <T> List<T> listByKeyPrefixPage(
+            String type,
+            String prefix,
+            Class<T> valueType,
+            int limit,
+            int offset) {
+        if (limit < 1 || limit > 1000 || offset < 0) {
+            throw new IllegalArgumentException("invalid page bounds");
+        }
+        return mapper.selectList(Wrappers.lambdaQuery(DbKV.class)
+                        .eq(DbKV::getType, type)
+                        .likeRight(DbKV::getKeyName, prefix)
+                        .orderByDesc(DbKV::getId)
+                        .last("LIMIT " + limit + " OFFSET " + offset))
+                .stream()
+                .map(entity -> read(entity.getValue(), valueType))
+                .toList();
+    }
+
     public <T> List<T> listLimited(
             String type,
             Class<T> valueType,

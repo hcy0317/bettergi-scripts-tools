@@ -18,7 +18,9 @@ public record ArtifactAnalysisJobSummary(
                 job.snapshot().snapshotDigest());
         ArtifactAnalysisResultSummary result = job.analysisResult() == null ? null
                 : new ArtifactAnalysisResultSummary(
-                        job.analysisResult().policyVersion(), job.analysisResult().summary());
+                        job.analysisResult().policyVersion(),
+                        job.analysisResult().analysisInputDigest(),
+                        job.analysisResult().summary());
         ArtifactDecisionPlanSummary plan = job.decisionPlan() == null ? null
                 : new ArtifactDecisionPlanSummary(job.decisionPlan().approved());
         return new ArtifactAnalysisJobSummary(

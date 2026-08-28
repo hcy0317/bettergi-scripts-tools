@@ -189,6 +189,17 @@ public class ArtifactAnalysisJobService {
         if (job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED) {
             return job;
         }
+        boolean resumablePhase = operation == ArtifactLaunchOperation.ANALYZE
+                && job.operation() == ArtifactLaunchOperation.ANALYZE
+                && job.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
+                || operation == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
+                && job.operation() == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
+                && job.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE;
+        if (resumablePhase) {
+            return repository.save(copy(
+                    job, ArtifactAnalysisJobStatus.HOST_CLAIMED,
+                    job.snapshot(), job.analysisResult(), job.decisionPlan(), null));
+        }
         boolean claimable = job.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
                 || (operation == ArtifactLaunchOperation.EXECUTE_LOCK_PLAN
                 && job.status() == ArtifactAnalysisJobStatus.APPROVED);
@@ -379,9 +390,14 @@ public class ArtifactAnalysisJobService {
                 .toList();
     }
 
-    public List<ArtifactAnalysisJobSummary> listSummaries(String uid) {
+    public List<ArtifactAnalysisJobSummary> listSummaries(
+            String uid,
+            List<ArtifactBuild> builds,
+            ArtifactAnalysisPolicy policy) {
+        String currentInputDigest = ArtifactAnalysisEngine.analysisInputDigest(
+                builds, policy);
         return repository.findSummariesByUid(uid, 100).stream()
-                .map(this::presentPolicyStatus)
+                .map(summary -> presentPolicyStatus(summary, currentInputDigest))
                 .sorted(Comparator
                         .comparing(ArtifactAnalysisJobSummary::createdAtUtc)
                         .thenComparing(ArtifactAnalysisJobSummary::id)
@@ -405,6 +421,7 @@ public class ArtifactAnalysisJobService {
             Supplier<ArtifactAnalysisPolicy> policy) {
         requireNoActiveLockExecutionGlobally();
         T result = mutation.get();
+        invalidateWaitingLockExecutionsGlobally();
         invalidateWaitingLockExecutions(uid);
         reanalyzeReviewableInternal(uid, builds.get(), policy.get());
         return result;
@@ -452,7 +469,10 @@ public class ArtifactAnalysisJobService {
     }
 
     private void requireNoActiveLockExecutionGlobally() {
-        if (!repository.findActiveLockExecutionSummaries().isEmpty()) {
+        boolean hostOwnsExecution = repository.findActiveLockExecutionSummaries().stream()
+                .anyMatch(summary -> summary.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
+                        || summary.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
+        if (hostOwnsExecution) {
             throw new IllegalStateException(
                     "BetterGI 正在执行锁定方案，全部账号完成或停止后才能修改全局 Build 或评分设置");
         }
@@ -467,6 +487,21 @@ public class ArtifactAnalysisJobService {
                             job, ArtifactAnalysisJobStatus.STALE_ABORT,
                             job.snapshot(), job.analysisResult(), job.decisionPlan(),
                             "Build 或评分设置已变化，待执行的旧锁定方案已撤销"));
+                });
+    }
+
+    private void invalidateWaitingLockExecutionsGlobally() {
+        repository.findActiveLockExecutionSummaries().stream()
+                .filter(summary -> summary.status()
+                        == ArtifactAnalysisJobStatus.WAITING_FOR_HOST)
+                .map(summary -> repository.findById(summary.id()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .forEach(job -> {
+                    launchRequestService.revokeForJob(job.uid(), job.id());
+                    repository.save(copy(
+                            job, ArtifactAnalysisJobStatus.STALE_ABORT,
+                            job.snapshot(), job.analysisResult(), job.decisionPlan(),
+                            "全局 Build 或评分设置已变化，待执行的旧锁定方案已撤销"));
                 });
     }
 
@@ -522,20 +557,26 @@ public class ArtifactAnalysisJobService {
     }
 
     private ArtifactAnalysisJobSummary presentPolicyStatus(
-            ArtifactAnalysisJobSummary summary) {
+            ArtifactAnalysisJobSummary summary,
+            String currentInputDigest) {
         boolean reviewable = summary.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
                 || summary.status() == ArtifactAnalysisJobStatus.APPROVED;
-        if (!reviewable || summary.analysisResult() == null
-                || ArtifactAnalysisEngine.POLICY_VERSION.equals(
-                        summary.analysisResult().policyVersion())) {
+        if (!reviewable || summary.analysisResult() == null) {
             return summary;
         }
+        boolean currentPolicy = ArtifactAnalysisEngine.POLICY_VERSION.equals(
+                summary.analysisResult().policyVersion());
+        boolean currentInputs = currentInputDigest.equals(
+                summary.analysisResult().analysisInputDigest());
+        if (currentPolicy && currentInputs) return summary;
         return new ArtifactAnalysisJobSummary(
                 summary.id(), summary.uid(), summary.operation(),
                 ArtifactAnalysisJobStatus.RESCAN_REQUIRED,
                 summary.snapshot(), summary.analysisResult(), summary.decisionPlan(),
                 summary.createdAtUtc(), summary.updatedAtUtc(),
-                "评分算法已更新，请重新扫描后再审核。");
+                currentPolicy
+                        ? "Build 或评分设置已更新，请重新计算后再审核。"
+                        : "评分算法已更新，请重新扫描后再审核。");
     }
 
     private ArtifactAnalysisJob copy(

@@ -152,6 +152,29 @@ class ArtifactBuildAutoActivationServiceTest {
                         org.assertj.core.groups.Tuple.tuple("noelle", true));
     }
 
+    @Test
+    void legacyActivationWithoutRosterDigestFailsClosedUntilRescan() {
+        InMemoryArtifactBuildRepository buildRepository =
+                new InMemoryArtifactBuildRepository();
+        ArtifactBuildService buildService = new ArtifactBuildService(buildRepository);
+        buildService.importAll(List.of(build("furina", "Furina", true)));
+        InMemoryArtifactBuildAutoActivationResultRepository resultRepository =
+                new InMemoryArtifactBuildAutoActivationResultRepository();
+        resultRepository.save("102550550", new ArtifactBuildAutoActivationResult(
+                1, 0, 1, 1, 1, 0,
+                new ArtifactBuildAutoActivationSettings(80, true),
+                null, null, List.of(), List.of(), List.of(), List.of(), List.of()));
+        ArtifactBuildAutoActivationService service =
+                new ArtifactBuildAutoActivationService(buildService, resultRepository);
+
+        assertThat(service.resolve("102550550", buildService.list()).getFirst()
+                .analysisEnabled()).isFalse();
+
+        service.clear("102550550");
+        assertThat(service.resolve("102550550", buildService.list()).getFirst()
+                .analysisEnabled()).isTrue();
+    }
+
     private static ArtifactBuild build(String id, String characterKey, boolean enabled) {
         return new ArtifactBuild(
                 id, id, characterKey, List.of(), Map.of("flower", Set.of("hp")),

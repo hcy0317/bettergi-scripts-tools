@@ -61,6 +61,9 @@ const rosterDifferenceText = computed(() => {
     .map(([label, keys]) => `${label}：${keys.map(artifactCharacterLabel).join('、')}`)
   return sections.join('；')
 })
+const legacyActivationResult = computed(() => Boolean(
+  autoActivationResult.value && !autoActivationResult.value.rosterDigest
+))
 
 const sourceOptions = [
   {label: '全部', value: 'all'}, {label: '上游预设', value: 'upstream'}, {label: '自定义', value: 'custom'},
@@ -329,6 +332,14 @@ onBeforeUnmount(() => {
         <strong>满足条件 {{ autoActivationResult.eligibleCharacterCount }} 人</strong>
         <span>启用配装 {{ autoActivationResult.enabledBuildCount }} 个</span>
       </div>
+      <el-alert
+        v-if="legacyActivationResult"
+        title="旧版角色启停结果没有 UID 名单绑定，已安全停用"
+        description="请重新检测一次游戏角色；重扫前不会沿用其他账号遗留的启用状态。"
+        type="warning"
+        show-icon
+        :closable="false"
+      />
       <el-alert
         v-if="rosterDifferenceText"
         title="本次识别名单与上次不同，尚未应用启停"
