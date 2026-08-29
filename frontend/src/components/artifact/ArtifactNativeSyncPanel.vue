@@ -1,5 +1,5 @@
 <script setup>
-import {computed, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, ref, watch} from 'vue'
 import {Refresh, VideoPlay} from '@element-plus/icons-vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {getArtifactJob, previewArtifactNativeSync, startArtifactJob} from '@api/artifact/artifactAnalysis.js'
@@ -24,13 +24,29 @@ const pendingLaunch = ref(null)
 const pendingLaunchJobId = ref('')
 let watchGeneration = 0
 let watchedJobId = ''
+let previewRequestGeneration = 0
 const previewMeta = computed(() => artifactNativeSyncStatusMeta(preview.value?.status))
 const statListLabel = values => [...(values || [])].map(artifactStatLabel).join(' / ') || '无'
 const check = async () => {
+  const requestedUid = props.uid.trim()
+  const requestedCapacity = capacity.value
+  const requestGeneration = ++previewRequestGeneration
   loading.value = true
-  try { preview.value = await previewArtifactNativeSync(props.uid.trim(), capacity.value) }
-  catch { preview.value = null; ElMessage.error('预检失败，请确认服务已启动后重试') }
-  finally { loading.value = false }
+  try {
+    const result = await previewArtifactNativeSync(requestedUid, requestedCapacity)
+    if (requestGeneration !== previewRequestGeneration
+      || requestedUid !== props.uid.trim()
+      || requestedCapacity !== capacity.value) return
+    preview.value = result
+  } catch {
+    if (requestGeneration !== previewRequestGeneration
+      || requestedUid !== props.uid.trim()
+      || requestedCapacity !== capacity.value) return
+    preview.value = null
+    ElMessage.error('预检失败，请确认服务已启动后重试')
+  } finally {
+    if (requestGeneration === previewRequestGeneration) loading.value = false
+  }
 }
 const watchNativeSync = jobId => {
   if (!jobId || watchedJobId === jobId) return
@@ -73,13 +89,22 @@ const rebuild = async () => {
     } else launchDialogOpen.value = true
   } finally { starting.value = false }
 }
-watch(capacity, () => { preview.value = null })
+watch(capacity, () => {
+  previewRequestGeneration++
+  loading.value = false
+  preview.value = null
+})
 watch(() => props.uid, () => {
   watchGeneration++
+  previewRequestGeneration++
   watchedJobId = ''
   observing.value = false
   pendingLaunchJobId.value = ''
   preview.value = null
+})
+onBeforeUnmount(() => {
+  watchGeneration++
+  previewRequestGeneration++
 })
 </script>
 

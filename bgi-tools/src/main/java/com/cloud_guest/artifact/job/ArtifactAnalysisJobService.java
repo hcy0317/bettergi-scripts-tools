@@ -290,7 +290,7 @@ public class ArtifactAnalysisJobService {
                 .anyMatch(candidate -> (candidate.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
                         && (!launchRequestService.isExpired(
                                 candidate.createdAtUtc(), clock.instant())
-                            || launchRequestService.hasClaimedRequest(
+                            || launchRequestService.hasAcceptedRequest(
                                 candidate.uid(), candidate.id())))
                         || candidate.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
                         || candidate.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
@@ -625,7 +625,7 @@ public class ArtifactAnalysisJobService {
     private ArtifactAnalysisJob presentLaunchStatus(ArtifactAnalysisJob job) {
         if (job.status() != ArtifactAnalysisJobStatus.WAITING_FOR_HOST
                 || !launchRequestService.isExpired(job.createdAtUtc(), clock.instant())
-                || launchRequestService.hasClaimedRequest(job.uid(), job.id())) {
+                || launchRequestService.hasAcceptedRequest(job.uid(), job.id())) {
             return job;
         }
         return new ArtifactAnalysisJob(
@@ -639,7 +639,7 @@ public class ArtifactAnalysisJobService {
             ArtifactAnalysisJobSummary summary) {
         if (summary.status() != ArtifactAnalysisJobStatus.WAITING_FOR_HOST
                 || !launchRequestService.isExpired(summary.createdAtUtc(), clock.instant())
-                || launchRequestService.hasClaimedRequest(summary.uid(), summary.id())) {
+                || launchRequestService.hasAcceptedRequest(summary.uid(), summary.id())) {
             return summary;
         }
         return new ArtifactAnalysisJobSummary(

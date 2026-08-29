@@ -53,7 +53,9 @@ public class CultivationMaterialSourceCatalog {
     }
 
     public Optional<MonsterSource> findMonster(String materialName) {
-        Path root = betterGiRoot();
+        Optional<Path> discoveredRoot = betterGiRootForRead();
+        if (discoveredRoot.isEmpty()) return Optional.empty();
+        Path root = discoveredRoot.get();
         Path monsterInfo = root.resolve(MONSTER_INFO);
         if (!Files.isRegularFile(monsterInfo)) return Optional.empty();
 
@@ -80,7 +82,9 @@ public class CultivationMaterialSourceCatalog {
 
     public Optional<String> findSpecialtyCountry(String materialName) {
         if (materialName == null || materialName.isBlank()) return Optional.empty();
-        Path routeRoot = betterGiRoot().resolve(SPECIALTY_ROUTES);
+        Optional<Path> discoveredRoot = betterGiRootForRead();
+        if (discoveredRoot.isEmpty()) return Optional.empty();
+        Path routeRoot = discoveredRoot.get().resolve(SPECIALTY_ROUTES);
         if (!Files.isDirectory(routeRoot)) return Optional.empty();
         try (var countries = Files.list(routeRoot)) {
             for (Path country : countries.filter(Files::isDirectory)
@@ -101,7 +105,17 @@ public class CultivationMaterialSourceCatalog {
     }
 
     public List<String> availableMonsterRouteFamilies() {
-        return availableMonsterRouteFamilies(betterGiRoot());
+        return betterGiRootForRead()
+                .map(CultivationMaterialSourceCatalog::availableMonsterRouteFamilies)
+                .orElseGet(List::of);
+    }
+
+    private Optional<Path> betterGiRootForRead() {
+        try {
+            return Optional.of(betterGiRoot());
+        } catch (IllegalStateException exception) {
+            return Optional.empty();
+        }
     }
 
     public Path betterGiRoot() {

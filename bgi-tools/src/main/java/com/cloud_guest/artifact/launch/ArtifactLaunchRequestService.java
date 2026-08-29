@@ -232,12 +232,15 @@ public class ArtifactLaunchRequestService {
         }
     }
 
-    public synchronized boolean hasClaimedRequest(String expectedUid, String expectedJobId) {
+    public synchronized boolean hasAcceptedRequest(String expectedUid, String expectedJobId) {
         try {
+            Path root = requestRoot();
             return containsMatchingRequest(
-                    requestRoot().resolve("consumed"), expectedUid, expectedJobId);
+                    root.resolve("consumed"), expectedUid, expectedJobId)
+                    || containsMatchingRequest(
+                    root.resolve("completed"), expectedUid, expectedJobId);
         } catch (IOException exception) {
-            throw new IllegalStateException("无法检查 BetterGI 已领取启动请求", exception);
+            throw new IllegalStateException("无法检查 BetterGI 已接受启动请求", exception);
         }
     }
 

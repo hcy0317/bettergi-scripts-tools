@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,21 +51,17 @@ public class CultivationLedgerObservationService {
         }
 
         Map<String, Long> latestOwned = new LinkedHashMap<>();
-        Map<String, Long> highestObservedOwned = new LinkedHashMap<>();
         Map<String, Long> actualRewards = new LinkedHashMap<>();
         for (CultivationExecutionActionEntity observation : observations) {
             if ("INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())) {
                 readInventoryBatch(observation.getRewardsJson()).forEach((materialName, observedOwned) -> {
                     if (materialName == null || observedOwned == null || observedOwned < 0) return;
                     latestOwned.putIfAbsent(materialName, observedOwned);
-                    highestObservedOwned.merge(materialName, observedOwned, Math::max);
                 });
                 continue;
             }
             if (observation.getObservedOwned() == null || observation.getObservedOwned() < 0) continue;
             latestOwned.putIfAbsent(observation.getMaterialName(), observation.getObservedOwned());
-            highestObservedOwned.merge(
-                    observation.getMaterialName(), observation.getObservedOwned(), Math::max);
             mergeRewards(actualRewards, observation.getRewardsJson());
         }
         if (latestOwned.isEmpty()) {
@@ -77,14 +75,7 @@ public class CultivationLedgerObservationService {
                 .toList();
         List<CultivationLedgerEntry> effectiveRequirements = progress.stream()
                 .map(EntryProgress::entry).toList();
-        boolean inventoryDecreased = imported.requirements().stream().anyMatch(entry -> {
-            Long latest = latestOwned.get(entry.materialName());
-            if (latest == null) return false;
-            long previousHigh = Math.max(
-                    entry.baselineOwned(),
-                    highestObservedOwned.getOrDefault(entry.materialName(), latest));
-            return latest < previousHigh;
-        });
+        boolean inventoryDecreased = hasUnexplainedInventoryDecrease(imported, observations);
         CultivationMaterialCraftingPlan craftingPlan = craftingPlan(effectiveRequirements);
         effectiveRequirements = effectiveRequirements.stream().map(entry -> new CultivationLedgerEntry(
                 entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(),
@@ -121,6 +112,71 @@ public class CultivationLedgerObservationService {
 
     public Optional<CultivationMaterialCraftingCatalog.CraftFamily> craftingFamily(String materialName) {
         return craftingPlanner == null ? Optional.empty() : craftingPlanner.family(materialName);
+    }
+
+    private boolean hasUnexplainedInventoryDecrease(
+            CultivationPlanRevisionResponse imported,
+            List<CultivationExecutionActionEntity> observations) {
+        Map<String, Long> previousOwned = new LinkedHashMap<>();
+        imported.requirements().forEach(entry -> {
+            if (entry.currentOwned() >= 0) previousOwned.put(entry.materialName(), entry.currentOwned());
+        });
+        Map<String, Long> allowedCraftConsumption = new LinkedHashMap<>();
+        java.util.Set<String> pendingUnexplainedDecrease = new java.util.LinkedHashSet<>();
+        List<CultivationExecutionActionEntity> chronological = new ArrayList<>(observations);
+        Collections.reverse(chronological);
+        for (CultivationExecutionActionEntity observation : chronological) {
+            if ("CRAFT".equals(observation.getActionType())
+                    && !recordCraftConsumption(observation, allowedCraftConsumption)) {
+                return true;
+            }
+            Map<String, Long> owned = "INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())
+                    ? readInventoryBatch(observation.getRewardsJson())
+                    : observation.getMaterialName() != null
+                        && observation.getObservedOwned() != null && observation.getObservedOwned() >= 0
+                        ? Map.of(observation.getMaterialName(), observation.getObservedOwned())
+                        : Map.of();
+            for (Map.Entry<String, Long> entry : owned.entrySet()) {
+                String materialName = entry.getKey();
+                Long currentOwned = entry.getValue();
+                if (materialName == null || currentOwned == null || currentOwned < 0) continue;
+                Long previous = previousOwned.put(materialName, currentOwned);
+                long allowed = allowedCraftConsumption.getOrDefault(materialName, 0L);
+                allowedCraftConsumption.remove(materialName);
+                if (previous != null && currentOwned < previous
+                        && previous - currentOwned > allowed) {
+                    pendingUnexplainedDecrease.add(materialName);
+                } else if ("INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())) {
+                    pendingUnexplainedDecrease.remove(materialName);
+                }
+            }
+        }
+        return !pendingUnexplainedDecrease.isEmpty();
+    }
+
+    private boolean recordCraftConsumption(
+            CultivationExecutionActionEntity craft,
+            Map<String, Long> allowedCraftConsumption) {
+        if (craftingPlanner == null || craft.getPlanJson() == null || craft.getMaterialName() == null) {
+            return false;
+        }
+        try {
+            int quantity = objectMapper.readTree(craft.getPlanJson()).path("quantity").asInt(-1);
+            Optional<CultivationMaterialCraftingCatalog.CraftFamily> family =
+                    craftingPlanner.family(craft.getMaterialName());
+            if (quantity <= 0 || family.isEmpty()) return false;
+            List<CultivationMaterialCraftingCatalog.CraftTier> tiers = family.get().tiers();
+            for (int index = 1; index < tiers.size(); index++) {
+                if (!tiers.get(index).materialName().equals(craft.getMaterialName())) continue;
+                long consumed = Math.multiplyExact((long) quantity, 3L);
+                allowedCraftConsumption.merge(
+                        tiers.get(index - 1).materialName(), consumed, Math::addExact);
+                return true;
+            }
+            return false;
+        } catch (IOException | ArithmeticException exception) {
+            return false;
+        }
     }
 
     private static CultivationPlanRevisionResponse withState(

@@ -7,13 +7,16 @@ import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurati
 import com.cloud_guest.cultivation.execution.module.CultivationModuleDefinition;
 import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
 import com.cloud_guest.cultivation.execution.module.WeeklyBossExecutionModule;
+import com.cloud_guest.cultivation.ocr.CultivationOcrProperties;
 import com.cloud_guest.cultivation.ocr.RemainingEvidence;
 import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
 import com.cloud_guest.cultivation.plan.CultivationPlanApplicationService;
 import com.cloud_guest.cultivation.plan.CultivationPlanRevisionResponse;
 import com.cloud_guest.service.AutoPlanService;
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -230,6 +233,45 @@ class CultivationExecutionServiceTest {
         assertThat(result.monsterAction().targets()).isEmpty();
         assertThat(result.materialProgress()).singleElement()
                 .satisfies(progress -> assertThat(progress.remaining()).isZero());
+    }
+
+    @Test
+    void projectionDegradesWhenBetterGiCannotBeDiscovered() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        AutoPlanService autoPlanService = mock(AutoPlanService.class);
+        CultivationModuleConfigurationService configurationService = mock(CultivationModuleConfigurationService.class);
+        BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
+        CultivationMaterialSourceCatalog unavailableCatalog = new CultivationMaterialSourceCatalog(
+                new CultivationOcrProperties(), new ObjectMapper()) {
+            @Override
+            public Path betterGiRoot() {
+                throw new IllegalStateException("BetterGI unavailable");
+            }
+        };
+        CultivationPlanRevisionResponse revision = new CultivationPlanRevisionResponse(
+                1, "102550550", 6, "IMPORTED", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(entry("未知材料", 3, 0, 3)),
+                LocalDateTime.now());
+        CultivationModuleConfiguration enabled = configuration(
+                AutoPlanResinExecutionModule.ID, true, Map.of());
+        when(planService.latest("102550550")).thenReturn(revision);
+        when(observationService.effective(revision)).thenReturn(revision);
+        when(observationService.craftingPlan(revision.requirements())).thenReturn(
+                new CultivationMaterialCraftingPlan(Map.of("未知材料", 3L), List.of()));
+        when(configurationService.find(anyString(), anyString())).thenReturn(enabled);
+        when(configurationService.findAll("102550550")).thenReturn(List.of(enabled));
+        when(autoPlanService.findDomainAll()).thenReturn(List.of());
+        when(autoPlanService.find("102550550", null)).thenReturn(List.of());
+        when(optionCatalog.discover()).thenReturn(
+                new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
+
+        CultivationExecutionProjection result = new CultivationExecutionService(
+                planService, observationService, autoPlanService, configurationService,
+                unavailableCatalog, optionCatalog).projection("102550550");
+
+        assertThat(result.pendingMaterials()).singleElement()
+                .satisfies(item -> assertThat(item.materialName()).isEqualTo("未知材料"));
     }
 
     private static CultivationLedgerEntry entry(String name, long required, long owned, long remaining) {
