@@ -99,6 +99,7 @@ watch(() => props.uid, () => {
   previewRequestGeneration++
   watchedJobId = ''
   observing.value = false
+  loading.value = false
   pendingLaunchJobId.value = ''
   preview.value = null
 })

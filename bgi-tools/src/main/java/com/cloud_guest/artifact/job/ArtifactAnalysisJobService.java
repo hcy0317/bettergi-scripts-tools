@@ -539,7 +539,8 @@ public class ArtifactAnalysisJobService {
                 || job.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED) {
             throw new IllegalStateException("任务正在执行，当前不能删除");
         }
-        launchRequestService.revokeForJob(job.uid(), job.id());
+        launchRequestService.revokeForJob(
+                job.uid(), job.id(), job.status() != ArtifactAnalysisJobStatus.WAITING_FOR_HOST);
         return repository.delete(job.uid(), job.id());
     }
 

@@ -216,15 +216,31 @@ public class ArtifactLaunchRequestService {
     }
 
     public synchronized int revokeForJob(String expectedUid, String expectedJobId) {
+        return revokeForJob(expectedUid, expectedJobId, false);
+    }
+
+    public synchronized int revokeForJob(
+            String expectedUid, String expectedJobId, boolean allowCompleted) {
         Path root = requestRoot();
         try {
             if (containsMatchingRequest(root.resolve("consumed"), expectedUid, expectedJobId)) {
                 throw new IllegalStateException("任务已被 BetterGI 接收，当前不能删除");
             }
+            if (!allowCompleted
+                    && containsMatchingRequest(root.resolve("completed"), expectedUid, expectedJobId)) {
+                throw new IllegalStateException("任务已被 BetterGI 接受，终态落库前不能删除");
+            }
             int revoked = deleteMatchingRequests(root, expectedUid, expectedJobId);
-            revoked += deleteMatchingRequests(root.resolve("completed"), expectedUid, expectedJobId);
+            if (allowCompleted) {
+                revoked += deleteMatchingRequests(
+                        root.resolve("completed"), expectedUid, expectedJobId);
+            }
             if (containsMatchingRequest(root.resolve("consumed"), expectedUid, expectedJobId)) {
                 throw new IllegalStateException("任务已被 BetterGI 接收，当前不能删除");
+            }
+            if (!allowCompleted
+                    && containsMatchingRequest(root.resolve("completed"), expectedUid, expectedJobId)) {
+                throw new IllegalStateException("任务已被 BetterGI 接受，终态落库前不能删除");
             }
             return revoked;
         } catch (IOException exception) {

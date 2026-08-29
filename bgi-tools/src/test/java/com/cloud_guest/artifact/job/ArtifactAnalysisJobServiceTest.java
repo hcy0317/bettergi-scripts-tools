@@ -506,6 +506,13 @@ class ArtifactAnalysisJobServiceTest {
                 sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already being executed");
+        assertThatThrownBy(() -> service.delete(waiting.id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("已被 BetterGI 接受");
+        assertThat(requests.complete(
+                firstAttempt.launch().requestToken(),
+                accepted.uid(), accepted.jobId(), accepted.operation()))
+                .isEqualTo(accepted);
     }
 
     @Test
