@@ -140,6 +140,10 @@ const watchActiveJob = jobId => {
     },
   }).then(() => {
     if (generation === watchGeneration) void load(true)
+  }).catch(() => {
+    if (generation === watchGeneration) {
+      ElMessage.error('分析任务状态连续读取失败，请稍后刷新')
+    }
   }).finally(() => watchedJobIds.delete(jobId))
 }
 

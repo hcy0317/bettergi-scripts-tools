@@ -200,3 +200,44 @@ test("unbounded completion observation continues past the finite polling budget"
   assert.equal(job.status, "COMPLETED");
   assert.equal(calls, 306);
 });
+
+test("artifact completion observation retries a transient request failure", async () => {
+  let calls = 0;
+  const errors = [];
+
+  const job = await waitForArtifactJobCompletion(
+    "job-retry",
+    async () => {
+      calls++;
+      if (calls === 1) throw new Error("temporary network failure");
+      return {id: "job-retry", status: "COMPLETED"};
+    },
+    {
+      attempts: 3,
+      delay: 0,
+      sleep: async () => {},
+      onError: (_error, count) => errors.push(count),
+    },
+  );
+
+  assert.equal(job.status, "COMPLETED");
+  assert.equal(calls, 2);
+  assert.deepEqual(errors, [1]);
+});
+
+test("artifact completion observation stops after its consecutive error budget", async () => {
+  let calls = 0;
+
+  await assert.rejects(
+    waitForArtifactJobCompletion(
+      "job-failing",
+      async () => {
+        calls++;
+        throw new Error("service unavailable");
+      },
+      {attempts: null, delay: 0, sleep: async () => {}, maxConsecutiveErrors: 2},
+    ),
+    /service unavailable/,
+  );
+  assert.equal(calls, 2);
+});

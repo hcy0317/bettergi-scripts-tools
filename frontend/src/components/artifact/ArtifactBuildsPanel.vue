@@ -164,7 +164,9 @@ const waitForCharacterScan = async jobId => {
 const watchCharacterScan = jobId => {
   if (!jobId || characterScanWatchJobId.value === jobId) return
   characterScanWatchJobId.value = jobId
-  void waitForCharacterScan(jobId).finally(() => {
+  void waitForCharacterScan(jobId).catch(() => {
+    ElMessage.error('角色检测状态连续读取失败，请稍后刷新')
+  }).finally(() => {
     if (characterScanWatchJobId.value === jobId) characterScanWatchJobId.value = ''
   })
 }

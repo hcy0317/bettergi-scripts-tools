@@ -107,16 +107,27 @@ export const waitForArtifactJobCompletion = async (
     delay = 1000,
     sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
     onUpdate = () => {},
+    onError = () => {},
+    maxConsecutiveErrors = 3,
     terminalStatuses = ['COMPLETED', 'FAILED'],
     shouldContinue = () => true,
   } = {}
 ) => {
   let job = null
+  let consecutiveErrors = 0
   for (let attempt = 0; attempts === null || attempt < attempts; attempt++) {
     if (!shouldContinue()) return job
     if (attempt > 0) await sleep(delay)
     if (!shouldContinue()) return job
-    job = await getJob(jobId)
+    try {
+      job = await getJob(jobId)
+      consecutiveErrors = 0
+    } catch (error) {
+      consecutiveErrors++
+      onError(error, consecutiveErrors)
+      if (consecutiveErrors >= maxConsecutiveErrors) throw error
+      continue
+    }
     onUpdate(job)
     if (terminalStatuses.includes(job?.status)) return job
   }

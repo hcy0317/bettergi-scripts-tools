@@ -13,6 +13,7 @@ test('manual BetterGI connection resumes analysis observation', () => {
   assert.match(panel, /const continueAnalysis =/)
   assert.match(panel, /watchActiveJob\(pendingLaunchJobId\.value\)/)
   assert.match(panel, /@launched="continueAnalysis"/)
+  assert.match(panel, /分析任务状态连续读取失败/)
 })
 
 test('manual BetterGI connection resumes native-plan completion observation', () => {
@@ -25,4 +26,5 @@ test('manual BetterGI connection resumes native-plan completion observation', ()
   assert.match(panel, /requestedCapacity !== capacity\.value/)
   assert.match(panel, /requestGeneration !== previewRequestGeneration/)
   assert.match(panel, /watch\(\(\) => props\.uid,[\s\S]*?loading\.value = false/)
+  assert.match(panel, /原神方案任务状态连续读取失败/)
 })

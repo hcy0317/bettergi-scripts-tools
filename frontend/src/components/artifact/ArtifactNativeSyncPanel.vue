@@ -61,6 +61,10 @@ const watchNativeSync = jobId => {
     if (completed?.status === 'FAILED') ElMessage.error('原神方案重建失败')
     else if (completed?.status === 'COMPLETED') ElMessage.success('原神方案重建完成')
     await check()
+  }).catch(() => {
+    if (generation === watchGeneration) {
+      ElMessage.error('原神方案任务状态连续读取失败，请重新预检')
+    }
   }).finally(() => {
     if (watchedJobId === jobId) watchedJobId = ''
     if (generation === watchGeneration) observing.value = false
