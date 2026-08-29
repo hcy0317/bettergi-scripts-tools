@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -102,14 +103,78 @@ public class CultivationMaterialSourceCatalog {
     }
 
     public Path betterGiRoot() {
-        if (properties.getBettergiRoot() != null && !properties.getBettergiRoot().isBlank()) {
-            return Path.of(properties.getBettergiRoot()).toAbsolutePath().normalize();
+        return resolveBetterGiRoot(
+                properties.getBettergiRoot(),
+                Path.of(System.getProperty("user.dir")),
+                runningProcessCommands(),
+                knownInstallationCandidates())
+                .orElseThrow(() -> new IllegalStateException(
+                        "未找到 BetterGI 根目录，请设置 BETTERGI_ROOT"));
+    }
+
+    static Optional<Path> resolveBetterGiRoot(String configuredRoot,
+                                              Path workingDirectory,
+                                              List<Path> runningCommands,
+                                              List<Path> installationCandidates) {
+        if (configuredRoot != null && !configuredRoot.isBlank()) {
+            return Optional.of(Path.of(configuredRoot).toAbsolutePath().normalize());
         }
-        Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        Path current = workingDirectory.toAbsolutePath().normalize();
         for (int depth = 0; current != null && depth < 8; depth++, current = current.getParent()) {
-            if (Files.isDirectory(current.resolve("User").resolve("ScriptGroup"))) return current;
+            if (Files.isDirectory(current.resolve("User").resolve("ScriptGroup"))) {
+                return Optional.of(current);
+            }
         }
-        throw new IllegalStateException("未找到 BetterGI 根目录，请设置 BETTERGI_ROOT");
+        for (Path command : runningCommands) {
+            if (command.getFileName() == null
+                    || !command.getFileName().toString().equalsIgnoreCase("BetterGI.exe")) continue;
+            Path candidate = command.toAbsolutePath().normalize().getParent();
+            if (isBetterGiInstallation(candidate)) return Optional.of(candidate);
+        }
+        return installationCandidates.stream()
+                .map(path -> path.toAbsolutePath().normalize())
+                .filter(CultivationMaterialSourceCatalog::isBetterGiInstallation)
+                .findFirst();
+    }
+
+    private static boolean isBetterGiInstallation(Path root) {
+        return root != null
+                && Files.isDirectory(root.resolve("User"))
+                && Files.isRegularFile(root.resolve("BetterGI.exe"));
+    }
+
+    private static List<Path> runningProcessCommands() {
+        try (var processes = ProcessHandle.allProcesses()) {
+            return processes
+                    .map(process -> process.info().command())
+                    .flatMap(Optional::stream)
+                    .map(CultivationMaterialSourceCatalog::pathOrNull)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+        } catch (SecurityException exception) {
+            return List.of();
+        }
+    }
+
+    private static Path pathOrNull(String value) {
+        try {
+            return Path.of(value);
+        } catch (InvalidPathException exception) {
+            return null;
+        }
+    }
+
+    private static List<Path> knownInstallationCandidates() {
+        List<Path> candidates = new ArrayList<>();
+        String userHome = System.getProperty("user.home", "");
+        if (!userHome.isBlank()) {
+            candidates.add(Path.of(userHome, "Programs", "Genshin Tools", "BetterGI"));
+        }
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData != null && !localAppData.isBlank()) {
+            candidates.add(Path.of(localAppData, "BetterGI"));
+        }
+        return List.copyOf(candidates);
     }
 
     private String resolveRouteFamily(String materialName,

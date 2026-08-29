@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,5 +42,33 @@ class CultivationMaterialSourceCatalogTest {
                 .isEqualTo("灵觉隐修的迷者");
         assertThat(catalog.findWeeklyBoss("无光涡眼")).contains("吞星之鲸");
         assertThat(catalog.findSpecialtyCountry("月矩力结晶")).contains("挪德卡莱");
+    }
+
+    @Test
+    void discoversRunningBetterGiInstallationWithoutConfiguredRoot() throws Exception {
+        Path betterGiRoot = temporaryRoot.resolve("BetterGI");
+        Files.createDirectories(betterGiRoot.resolve(Path.of("User", "ScriptGroup")));
+        Path executable = Files.createFile(betterGiRoot.resolve("BetterGI.exe"));
+
+        assertThat(CultivationMaterialSourceCatalog.resolveBetterGiRoot(
+                "",
+                temporaryRoot.resolve("source-checkout"),
+                List.of(executable),
+                List.of()))
+                .contains(betterGiRoot.toAbsolutePath().normalize());
+    }
+
+    @Test
+    void discoversKnownInstallationCandidateWhenBetterGiIsNotRunning() throws Exception {
+        Path betterGiRoot = temporaryRoot.resolve("installed");
+        Files.createDirectories(betterGiRoot.resolve(Path.of("User", "ScriptGroup")));
+        Files.createFile(betterGiRoot.resolve("BetterGI.exe"));
+
+        assertThat(CultivationMaterialSourceCatalog.resolveBetterGiRoot(
+                "",
+                temporaryRoot.resolve("source-checkout"),
+                List.of(),
+                List.of(betterGiRoot)))
+                .contains(betterGiRoot.toAbsolutePath().normalize());
     }
 }
