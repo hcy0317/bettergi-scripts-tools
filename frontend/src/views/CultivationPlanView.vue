@@ -480,7 +480,7 @@ const goToExecution = () => { activeTab.value = 'execution' }
   color: #20252b;
   box-sizing: border-box;
   padding: clamp(16px, 3vw, 32px);
-  background: url("@assets/MHY_XTLL.png") center / cover fixed no-repeat;
+  background: url("@assets/MHY_XTLL.webp") center / cover scroll no-repeat;
 }
 
 .cultivation-shell {

@@ -129,6 +129,31 @@ public class DatabaseInitRunner {
         SqlTable uidSQL = new SqlTable(UidInfoConfig.TABLE_NAME,
                 List.of(
                         new SqlColumn(
+                                UidInfoConfig.COL_GAME_NICKNAME, UidInfoConfig.REMARK_COL_GAME_NICKNAME,
+                                List.of(
+                                        new DbSqlType(SQLite, "TEXT", "NULL"),
+                                        new DbSqlType(MySQL, "VARCHAR(255)", "NULL"),
+                                        new DbSqlType(PostgreSQL, "VARCHAR(255)", "NULL")
+                                )
+                        ),
+                        new SqlColumn(
+                                UidInfoConfig.COL_MILIASTRA_NICKNAME, UidInfoConfig.REMARK_COL_MILIASTRA_NICKNAME,
+                                List.of(
+                                        new DbSqlType(SQLite, "TEXT", "NULL"),
+                                        new DbSqlType(MySQL, "VARCHAR(255)", "NULL"),
+                                        new DbSqlType(PostgreSQL, "VARCHAR(255)", "NULL")
+                                )
+                        ),
+                        new SqlColumn(
+                                UidInfoConfig.COL_MILIASTRA_CHARACTER_KEY,
+                                UidInfoConfig.REMARK_COL_MILIASTRA_CHARACTER_KEY,
+                                List.of(
+                                        new DbSqlType(SQLite, "TEXT", "'MannequinGirl'"),
+                                        new DbSqlType(MySQL, "VARCHAR(32)", "'MannequinGirl'"),
+                                        new DbSqlType(PostgreSQL, "VARCHAR(32)", "'MannequinGirl'")
+                                )
+                        ),
+                        new SqlColumn(
                                 UidInfoConfig.COL_USERNAME, UidInfoConfig.REMARK_COL_USERNAME,
                                 List.of(
                                         new DbSqlType(SQLite, "TEXT", "NULL"),
@@ -361,6 +386,7 @@ public class DatabaseInitRunner {
                 }
                 errorList.stream().forEach(sql -> log.warn("[字段存在] `{}.{}`字段已存在，跳过添加 {}", sql.table, sql.column,sql.remark));
                 log.info("====================================");
+                ensureArtifactStorageCapacity(dbType);
                 verifyCultivationExecutionSchema();
             } else {
                 log.info("数据库类型 {} 未配置对应脚本，跳过", dbType);
@@ -408,6 +434,13 @@ public class DatabaseInitRunner {
             page++;
         } while (CollUtil.isNotEmpty(pageRecords));
         log.info("数据兼容性迁移耗时: {} ms，更新记录数: {}", System.currentTimeMillis() - start, totalUpdated);
+    }
+
+    private void ensureArtifactStorageCapacity(String dbType) {
+        if (!"MySQL".equals(dbType)) return;
+        jdbcTemplate.execute(
+                "ALTER TABLE db_kv MODIFY COLUMN value LONGTEXT NULL COMMENT '键值'");
+        log.info("已确认 MySQL db_kv.value 使用 LONGTEXT，可保存完整圣遗物分析快照");
     }
 
     void verifyCultivationExecutionSchema() {

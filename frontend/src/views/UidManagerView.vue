@@ -17,6 +17,9 @@ const formData = reactive({
   edit: false,
   uid: '',
   as: '',
+  gameNickname: '',
+  miliastraNickname: '',
+  miliastraCharacterKey: 'MannequinGirl',
   username: undefined,
   password: undefined,
   password1: undefined,
@@ -58,6 +61,9 @@ const handleAdd = () => {
   formData.edit = false
   formData.uid = ''
   formData.as = ''
+  formData.gameNickname = ''
+  formData.miliastraNickname = ''
+  formData.miliastraCharacterKey = 'MannequinGirl'
   formData.username = undefined
   formData.password = undefined
   formData.password1 = undefined
@@ -69,6 +75,10 @@ const handleEdit = (row) => {
   formData.edit = true
   formData.uid = row.uid
   formData.as = row.as
+  formData.gameNickname = row.gameNickname || ''
+  formData.miliastraNickname = row.miliastraNickname || ''
+  formData.miliastraCharacterKey = row.miliastraCharacterKey === 'MannequinBoy'
+      ? 'MannequinBoy' : 'MannequinGirl'
   formData.username = row.username
   formData.password = row.password
   formData.password1 = row.password1
@@ -95,6 +105,9 @@ const handleSubmit = async () => {
     const uidInfo = {
       uid: formData.uid,
       as: formData.as,
+      gameNickname: formData.gameNickname,
+      miliastraNickname: formData.miliastraNickname,
+      miliastraCharacterKey: formData.miliastraCharacterKey,
       username: formData.username,
       password: formData.password,
     }
@@ -276,6 +289,9 @@ onMounted(() => {
                 </template>
               </el-table-column>
               <el-table-column prop="as" label="别称"/>
+              <el-table-column prop="gameNickname" label="游戏内昵称"/>
+              <el-table-column prop="miliastraNickname" label="千星奇域昵称"/>
+              <el-table-column label="千星奇域角色"><template #default="{row}">{{ row.miliastraCharacterKey === 'MannequinBoy' ? '男性' : '女性' }}</template></el-table-column>
               <el-table-column prop="username" label="用户名"/>
 
               <el-table-column label="密码" width="200">
@@ -365,6 +381,29 @@ onMounted(() => {
               placeholder="请输入别称"
               clearable
           />
+        </el-form-item>
+
+        <el-form-item label="游戏内昵称" prop="gameNickname">
+          <el-input
+              v-model="formData.gameNickname"
+              placeholder="旅行者在游戏内显示的昵称"
+              clearable
+          />
+        </el-form-item>
+
+        <el-form-item label="千星奇域昵称" prop="miliastraNickname">
+          <el-input
+              v-model="formData.miliastraNickname"
+              placeholder="千星奇域自机角色显示昵称"
+              clearable
+          />
+        </el-form-item>
+
+        <el-form-item label="千星奇域角色" prop="miliastraCharacterKey">
+          <el-select v-model="formData.miliastraCharacterKey" style="width:100%">
+            <el-option label="女性" value="MannequinGirl"/>
+            <el-option label="男性" value="MannequinBoy"/>
+          </el-select>
         </el-form-item>
 
         <el-form-item label="用户名" prop="username">

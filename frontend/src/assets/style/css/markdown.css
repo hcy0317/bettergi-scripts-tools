@@ -4,9 +4,9 @@
     min-height: 100vh;
     align-items: center;
     justify-content: center;
-    background: url("@assets/MHY_XTLL.png");
+    background: url("@assets/MHY_XTLL.webp");
     /* 关键：固定背景，不随滚动重复或变形 */
-    background-attachment: fixed;         /* ← 核心属性 */
+    background-attachment: scroll;
     background-size: cover;               /* 覆盖整个容器 */
     background-position: center;
 }

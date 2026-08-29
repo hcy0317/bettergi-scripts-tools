@@ -61,7 +61,8 @@ public class UidController {
     public Result<List<UidInfo>> selectionAll() {
         Map<String, UidInfo> result = new LinkedHashMap<>();
         allUidReferences().forEach(uid -> result.put(uid,
-                new UidInfo(uid, "未命名账号", null, null, Boolean.FALSE)));
+                new UidInfo(uid, "未命名账号", null, null,
+                        "MannequinGirl", null, null, Boolean.FALSE)));
         uidService.findUidAll().stream()
                 .map(UidInfoConfig::toUidInfo)
                 .forEach(info -> {

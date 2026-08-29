@@ -525,8 +525,8 @@ const getPartTypeName = (type) => {
   position: relative;
 
   /*  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);*/
-  background: url("@assets/MHY_XTLL.png");
-  background-attachment: fixed; /* ← 核心属性 */
+  background: url("@assets/MHY_XTLL.webp");
+  background-attachment: scroll;
   background-size: cover; /* 覆盖整个容器 */
   background-position: center;
 }

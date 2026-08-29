@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS `uid_info_config`
 (
     `uid`         varchar(64) NOT NULL COMMENT '用户唯一标识',
     `col_as`          varchar(64) DEFAULT NULL COMMENT 'AS字段（注意：as是保留字，需反引号）',
+    `game_nickname`  varchar(255) DEFAULT NULL COMMENT '游戏内昵称',
+    `miliastra_nickname` varchar(255) DEFAULT NULL COMMENT '千星奇域昵称',
+    `miliastra_character_key` varchar(32) DEFAULT 'MannequinGirl' COMMENT '千星奇域角色性别',
     `username`       varchar(255) DEFAULT NULL COMMENT '用户名',
     `password`       varchar(255) DEFAULT NULL COMMENT '密码',
     `salt`       varchar(255) DEFAULT NULL COMMENT '盐值',
@@ -75,7 +78,7 @@ CREATE TABLE IF NOT EXISTS `db_kv` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `type`        VARCHAR(64)  DEFAULT NULL COMMENT '键值类型',
     `key_name`         VARCHAR(128) NOT NULL COMMENT '键名',
-    `value`       TEXT         DEFAULT NULL COMMENT '键值',
+    `value`       LONGTEXT     DEFAULT NULL COMMENT '键值',
     -- 通用审计字段
     `create_by`   VARCHAR(64)  DEFAULT NULL COMMENT '创建者',
     `create_time` TIMESTAMP     DEFAULT NULL COMMENT '创建时间',

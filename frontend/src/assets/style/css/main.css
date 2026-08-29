@@ -25,9 +25,9 @@ body::-webkit-scrollbar,
     display: flex;
     align-items: center;
     justify-content: center;
-    background: url("@assets/MHY_XTLL.png");
+    background: url("@assets/MHY_XTLL.webp");
     /* 关键：固定背景，不随滚动重复或变形 */
-    background-attachment: fixed; /* ← 核心属性 */
+    background-attachment: scroll;
     background-size: cover; /* 覆盖整个容器 */
     background-position: center;
     /*  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;*/
@@ -43,9 +43,7 @@ body::-webkit-scrollbar,
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background: rgba(22, 26, 34, 0.75);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgba(22, 26, 34, 0.92);
     border-radius: 24px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow:

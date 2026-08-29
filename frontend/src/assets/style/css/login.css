@@ -6,8 +6,8 @@
     justify-content: center;
     background: linear-gradient(135deg, #6a89cc 0%, #3498db 100%);
     /* 如果想用图片背景，和首页一致，可替换为： */
-    background: url("@assets/MHY_XTLL.png");
-    background-attachment: fixed;
+    background: url("@assets/MHY_XTLL.webp");
+    background-attachment: scroll;
     background-size: cover;
     background-position: center;
     /*padding: 20px;*/

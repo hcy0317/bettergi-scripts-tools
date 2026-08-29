@@ -22,13 +22,18 @@ public class UidInfo {
     private String uid;
     @NotBlank(message = "as不能为空")
     private String as;
+    private String gameNickname;
+    private String miliastraNickname;
+    private String miliastraCharacterKey;
     private String username;
     private String password;
     private Boolean defaultUid;
 
     @SneakyThrows
     public UidInfoConfig toConfig(){
-        UidInfoConfig uidInfoConfig = new UidInfoConfig(uid, as, username, password);
+        UidInfoConfig uidInfoConfig = new UidInfoConfig(
+                uid, as, gameNickname, miliastraNickname,
+                miliastraCharacterKey, username, password);
         uidInfoConfig.setDefaultUid(defaultUid);
         return uidInfoConfig;
     }

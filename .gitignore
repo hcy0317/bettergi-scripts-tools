@@ -55,6 +55,10 @@ buildNumber.properties
 .gradle
 **/build/
 !src/**/build/
+!bgi-tools/src/main/java/com/cloud_guest/artifact/build/
+!bgi-tools/src/main/java/com/cloud_guest/artifact/build/**
+!bgi-tools/src/test/java/com/cloud_guest/artifact/build/
+!bgi-tools/src/test/java/com/cloud_guest/artifact/build/**
 
 # Ignore Gradle GUI config
 gradle-app.setting
