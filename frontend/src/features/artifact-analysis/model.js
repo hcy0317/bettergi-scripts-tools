@@ -112,7 +112,7 @@ export const waitForArtifactJobCompletion = async (
   } = {}
 ) => {
   let job = null
-  for (let attempt = 0; attempt < attempts; attempt++) {
+  for (let attempt = 0; attempts === null || attempt < attempts; attempt++) {
     if (!shouldContinue()) return job
     if (attempt > 0) await sleep(delay)
     if (!shouldContinue()) return job

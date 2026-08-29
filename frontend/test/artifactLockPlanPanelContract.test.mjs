@@ -12,6 +12,7 @@ test('manual BetterGI connection resumes lock execution observation', () => {
   assert.match(panelSource, /waitForArtifactJobCompletion/)
   assert.match(panelSource, /const continueLockExecution =/)
   assert.match(panelSource, /@launched="continueLockExecution"/)
+  assert.match(panelSource, /attempts:\s*null/)
   assert.match(panelSource, /shouldContinue:/)
   assert.match(panelSource, /executionWatchGeneration\+\+/)
 })

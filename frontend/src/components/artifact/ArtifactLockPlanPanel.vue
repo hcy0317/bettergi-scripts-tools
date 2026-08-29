@@ -120,6 +120,7 @@ const watchLockExecution = executionJobId => {
   const generation = ++executionWatchGeneration
   const requestedUid = props.uid.trim()
   void waitForArtifactJobCompletion(executionJobId, getArtifactJob, {
+    attempts: null,
     terminalStatuses: ['COMPLETED', 'FAILED', 'READY_FOR_REVIEW', 'RESCAN_REQUIRED', 'STALE_ABORT'],
     shouldContinue: () => generation === executionWatchGeneration
       && requestedUid === props.uid.trim(),

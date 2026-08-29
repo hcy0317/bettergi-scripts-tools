@@ -183,3 +183,20 @@ test("character scan waits for the host to finish applying build activation", as
   assert.equal(calls, 2);
   assert.deepEqual(observed, ["HOST_CLAIMED", "COMPLETED"]);
 });
+
+test("unbounded completion observation continues past the finite polling budget", async () => {
+  const states = [
+    ...Array.from({length: 305}, () => ({id: "job-lock", status: "HOST_CLAIMED"})),
+    {id: "job-lock", status: "COMPLETED"},
+  ];
+  let calls = 0;
+
+  const job = await waitForArtifactJobCompletion(
+    "job-lock",
+    async () => states[Math.min(calls++, states.length - 1)],
+    {attempts: null, delay: 0, sleep: async () => {}},
+  );
+
+  assert.equal(job.status, "COMPLETED");
+  assert.equal(calls, 306);
+});
