@@ -152,7 +152,7 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
-    void repeatedCompleteInventoryBatchConfirmsANewLowerBaseline() throws Exception {
+    void repeatedCompleteInventoryBatchCannotReplaceANewImportBaseline() throws Exception {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity before = inventoryBatch(
                 "before-external-consumption", Map.of("「公平」的哲学", 8L));
@@ -167,7 +167,7 @@ class CultivationLedgerObservationServiceTest {
                 new CultivationLedgerObservationService(mapper, objectMapper())
                         .effective(revision(10, 4, 6));
 
-        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
     }
 

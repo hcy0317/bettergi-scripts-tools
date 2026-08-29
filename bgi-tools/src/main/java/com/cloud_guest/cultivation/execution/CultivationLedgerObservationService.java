@@ -146,8 +146,6 @@ public class CultivationLedgerObservationService {
                 if (previous != null && currentOwned < previous
                         && previous - currentOwned > allowed) {
                     pendingUnexplainedDecrease.add(materialName);
-                } else if ("INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())) {
-                    pendingUnexplainedDecrease.remove(materialName);
                 }
             }
         }
