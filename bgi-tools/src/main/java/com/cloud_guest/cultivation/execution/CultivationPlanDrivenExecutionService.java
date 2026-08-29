@@ -31,6 +31,7 @@ import java.util.UUID;
 public class CultivationPlanDrivenExecutionService {
     private static final String LEASED = "LEASED";
     private static final String AWAITING_RECONCILE = "AWAITING_RECONCILE";
+    private static final String RECONCILE_RETRY_LEASED = "RECONCILE_RETRY_LEASED";
     private static final String COMPLETED = "COMPLETED";
     private static final String INVENTORY_RECONCILE_BATCH = "INVENTORY_RECONCILE_BATCH";
     private static final Duration LEASE_DURATION = Duration.ofMinutes(45);
@@ -277,6 +278,7 @@ public class CultivationPlanDrivenExecutionService {
                 existing.setExecutorId(normalizedExecutor);
                 existing.setLeaseExpiresAt(LocalDateTime.now(clock).plus(LEASE_DURATION));
                 existing.setLeaseKey(normalizedUid + ":" + projection.revision());
+                existing.setStatus(RECONCILE_RETRY_LEASED);
                 int transferred = actionMapper.update(existing, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
                         .eq(CultivationExecutionActionEntity::getId, existing.getId())
                         .eq(CultivationExecutionActionEntity::getStatus, AWAITING_RECONCILE)
@@ -289,6 +291,33 @@ public class CultivationPlanDrivenExecutionService {
                             normalizedUid, projection.revision(), materialNames);
                 }
                 return inventoryResponse(existing, "NEEDS_RECONCILE", "上次组末库存存在未知值，请重新完整清点",
+                        materialNamesByGrid);
+            }
+            if (inventoryBatch && RECONCILE_RETRY_LEASED.equals(existing.getStatus())) {
+                if (activeLease) {
+                    if (!normalizedExecutor.equals(existing.getExecutorId())) {
+                        return inventoryResponse(existing, "BUSY", "组末库存重试正由其他执行器持有",
+                                materialNamesByGrid);
+                    }
+                    return inventoryResponse(existing, "NEEDS_RECONCILE", "恢复当前组末库存重试",
+                            materialNamesByGrid);
+                }
+                String previousExecutor = existing.getExecutorId();
+                existing.setExecutorId(normalizedExecutor);
+                existing.setLeaseExpiresAt(LocalDateTime.now(clock).plus(LEASE_DURATION));
+                int transferred = actionMapper.update(existing, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                        .eq(CultivationExecutionActionEntity::getId, existing.getId())
+                        .eq(CultivationExecutionActionEntity::getStatus, RECONCILE_RETRY_LEASED)
+                        .eq(CultivationExecutionActionEntity::getExecutorId, previousExecutor)
+                        .eq(CultivationExecutionActionEntity::getResultIdempotencyKey,
+                                existing.getResultIdempotencyKey())
+                        .le(CultivationExecutionActionEntity::getLeaseExpiresAt, LocalDateTime.now(clock)));
+                if (transferred != 1) {
+                    return inventoryStatus(
+                            "BUSY", "组末库存重试租约刚被其他执行器接管，请重新领取",
+                            normalizedUid, projection.revision(), materialNames);
+                }
+                return inventoryResponse(existing, "NEEDS_RECONCILE", "已接管过期的组末库存重试",
                         materialNamesByGrid);
             }
             if (activeLease) {
@@ -375,7 +404,8 @@ public class CultivationPlanDrivenExecutionService {
                 }
                 return inventoryResult(entity, observations);
             }
-            if (!AWAITING_RECONCILE.equals(entity.getStatus())) {
+            if (!AWAITING_RECONCILE.equals(entity.getStatus())
+                    && !RECONCILE_RETRY_LEASED.equals(entity.getStatus())) {
                 throw new IllegalStateException("库存复核不再处于可提交状态");
             }
         } else if (!LEASED.equals(entity.getStatus())) {

@@ -466,6 +466,39 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
+    void activeInventoryRetryLeaseCannotBeStolenByAnotherExecutor() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = inventoryBatch("inventory-retry");
+        awaiting.setStatus("AWAITING_RECONCILE");
+        awaiting.setResultIdempotencyKey("inventory-retry:result");
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "Materials", List.of("沙脂蛹"),
+                "CharacterDevelopmentItems", List.of("织金红绸")));
+        when(mapper.findLeased("102550550", 3)).thenReturn(awaiting);
+        when(mapper.selectById("inventory-retry")).thenReturn(awaiting);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationInventoryReconcileTargetsResponse first =
+                service.claimInventoryReconcile("102550550", "retry-a");
+        CultivationInventoryReconcileTargetsResponse competing =
+                service.claimInventoryReconcile("102550550", "retry-b");
+        CultivationInventoryObservationResponse completed = service.recordInventoryObservations(
+                "102550550", new CultivationInventoryObservationRequest(
+                        "inventory-retry", "retry-a", 3, "inventory-retry:result",
+                        Map.of("沙脂蛹", 48L, "织金红绸", 73L)));
+
+        assertThat(first.status()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(competing.status()).isEqualTo("BUSY");
+        assertThat(completed.status()).isEqualTo("REPLANNING");
+        assertThat(awaiting.getStatus()).isEqualTo("COMPLETED");
+        assertThat(awaiting.getLeaseKey()).isNull();
+    }
+
+    @Test
     void persistsFinalGatherAndMonsterInventoryAsOneLeasedIdempotentBatch() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);

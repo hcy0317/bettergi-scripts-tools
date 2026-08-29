@@ -40,7 +40,8 @@ public class CultivationLedgerObservationService {
     public CultivationPlanRevisionResponse effective(CultivationPlanRevisionResponse imported) {
         if (imported == null) return null;
         CultivationExecutionActionEntity active = actionMapper.findLeased(imported.uid(), imported.revision());
-        boolean awaitingReconcile = active != null && "AWAITING_RECONCILE".equals(active.getStatus());
+        boolean awaitingReconcile = active != null && ("AWAITING_RECONCILE".equals(active.getStatus())
+                || "RECONCILE_RETRY_LEASED".equals(active.getStatus()));
         List<CultivationExecutionActionEntity> observations = actionMapper.findCompletedObservations(
                 imported.uid(), imported.revision());
         if (observations == null || observations.isEmpty()) {

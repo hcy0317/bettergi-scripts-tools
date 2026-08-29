@@ -29,12 +29,16 @@ class CultivationExecutionServiceTest {
     void expandsCraftableLedgerRowsToEveryFamilyTierForReconciliation() {
         CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
         CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
         CultivationPlanRevisionResponse ledger = new CultivationPlanRevisionResponse(
                 1, "102550550", 4, "NEEDS_CRAFT", "name-only-v1", 2, "hash",
                 "PP-OCRv6", "local", List.of(entry("「笃行」的哲学", 4, 0, 4)),
                 LocalDateTime.now());
         when(planService.latest("102550550")).thenReturn(ledger);
         when(observationService.effective(ledger)).thenReturn(ledger);
+        when(materialSourceCatalog.findMonster("「笃行」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.MonsterSource(
+                        "丘丘人", List.of("丘丘人"), List.of("丘丘人"))));
         when(observationService.craftingFamily("「笃行」的哲学")).thenReturn(Optional.of(
                 new CultivationMaterialCraftingCatalog.CraftFamily(
                         "「笃行」的哲学",
@@ -48,7 +52,7 @@ class CultivationExecutionServiceTest {
         CultivationExecutionService service = new CultivationExecutionService(
                 planService, observationService, mock(AutoPlanService.class),
                 mock(CultivationModuleConfigurationService.class),
-                mock(CultivationMaterialSourceCatalog.class),
+                materialSourceCatalog,
                 mock(BetterGiCombatOptionCatalog.class));
 
         assertThat(service.inventoryReconcileTargets("102550550"))

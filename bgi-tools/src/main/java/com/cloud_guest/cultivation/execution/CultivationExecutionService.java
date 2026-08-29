@@ -215,12 +215,14 @@ public class CultivationExecutionService {
         for (CultivationLedgerEntry entry : ledger.requirements()) {
             if (materialSourceCatalog.findSpecialtyCountry(entry.materialName()).isPresent()) {
                 grouped.get("Materials").add(entry.materialName());
-            } else if (materialSourceCatalog.findMonster(entry.materialName()).isPresent()) {
-                grouped.get("CharacterDevelopmentItems").add(entry.materialName());
             } else {
-                observationService.craftingFamily(entry.materialName()).ifPresent(family ->
-                        family.tiers().forEach(tier ->
-                                grouped.get("CharacterDevelopmentItems").add(tier.materialName())));
+                var family = observationService.craftingFamily(entry.materialName());
+                if (family.isPresent()) {
+                    family.get().tiers().forEach(tier ->
+                            grouped.get("CharacterDevelopmentItems").add(tier.materialName()));
+                } else if (materialSourceCatalog.findMonster(entry.materialName()).isPresent()) {
+                    grouped.get("CharacterDevelopmentItems").add(entry.materialName());
+                }
             }
         }
         grouped.entrySet().removeIf(entry -> entry.getValue().isEmpty());
