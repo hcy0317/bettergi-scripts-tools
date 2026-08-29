@@ -5,6 +5,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css';
 import {zhCn} from "element-plus/es/locale/index";
 import '@css/main.css';
+import '@css/feature_page_background.css';
 import {getVersion} from "@api/sys/sys.js";
 import {getLocalVersion, setLocalVersion} from "@api/web/web.js";
 

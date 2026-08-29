@@ -14,7 +14,7 @@ const activeTab = ref('analysis')
 </script>
 
 <template>
-  <main class="artifact-page">
+  <main class="artifact-page feature-page-background">
     <section class="artifact-shell">
       <header class="page-header">
         <div class="header-actions">
@@ -48,7 +48,7 @@ const activeTab = ref('analysis')
   padding: clamp(14px, 2.5vw, 30px);
   box-sizing: border-box;
   color: var(--el-text-color-primary);
-  background: #eef1f4;
+  background: transparent;
 }
 
 .artifact-shell {
@@ -57,9 +57,11 @@ const activeTab = ref('analysis')
   margin: 0 auto;
   padding: clamp(16px, 2.5vw, 30px);
   box-sizing: border-box;
-  background: #fff;
-  border: 1px solid var(--el-border-color-light);
-  box-shadow: 0 12px 32px rgba(31, 41, 55, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(50, 59, 72, 0.22);
+  backdrop-filter: blur(18px) saturate(1.1);
 }
 
 .page-header,

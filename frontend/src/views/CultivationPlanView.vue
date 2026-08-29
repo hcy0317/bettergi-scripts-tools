@@ -235,7 +235,7 @@ const goToExecution = () => { activeTab.value = 'execution' }
 </script>
 
 <template>
-  <main class="cultivation-page">
+  <main class="cultivation-page feature-page-background">
     <section class="cultivation-shell">
     <header class="page-header">
       <div class="header-actions">
@@ -480,7 +480,7 @@ const goToExecution = () => { activeTab.value = 'execution' }
   color: #20252b;
   box-sizing: border-box;
   padding: clamp(16px, 3vw, 32px);
-  background: url("@assets/MHY_XTLL.webp") center / cover scroll no-repeat;
+  background: transparent;
 }
 
 .cultivation-shell {
