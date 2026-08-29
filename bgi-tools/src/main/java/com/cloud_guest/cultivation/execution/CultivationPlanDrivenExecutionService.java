@@ -114,6 +114,15 @@ public class CultivationPlanDrivenExecutionService {
             actionMapper.updateById(existing);
         }
 
+        if (!projection.craftingActions().isEmpty()
+                && !hasFreshCraftInventoryEvidence(projection)) {
+            return status(
+                    "PLAN_NEEDS_RECONCILE",
+                    "材料合成前必须重新清点同族全部层级库存",
+                    normalizedUid,
+                    projection.revision());
+        }
+
         Candidate candidate = choose(projection);
         if (candidate == null) {
             return status("WAITING", "当前没有满足开放日和 P1 证据要求的体力行动", normalizedUid,
@@ -383,8 +392,8 @@ public class CultivationPlanDrivenExecutionService {
         entity.setTerminationReason(hasUnknown
                 ? "INVENTORY_RECONCILE_UNKNOWN_PRESERVED"
                 : "INVENTORY_RECONCILE");
-        entity.setStatus(COMPLETED);
-        entity.setLeaseKey(null);
+        entity.setStatus(hasUnknown ? AWAITING_RECONCILE : COMPLETED);
+        entity.setLeaseKey(hasUnknown ? entity.getUid() + ":" + entity.getPlanRevision() : null);
         var update = Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
                 .eq(CultivationExecutionActionEntity::getId, actionId)
                 .eq(CultivationExecutionActionEntity::getStatus, previousStatus)
@@ -405,6 +414,21 @@ public class CultivationPlanDrivenExecutionService {
             throw new IllegalStateException("库存复核已由另一个幂等结果完成");
         }
         return inventoryResult(entity, observations);
+    }
+
+    private boolean hasFreshCraftInventoryEvidence(CultivationExecutionProjection projection) {
+        Map<String, List<String>> targets = executionService.inventoryReconcileTargets(projection.uid());
+        List<String> craftingTargets = targets == null
+                ? List.of()
+                : targets.getOrDefault("CharacterDevelopmentItems", List.of());
+        if (craftingTargets.isEmpty()) return false;
+        List<CultivationExecutionActionEntity> observations = actionMapper.findCompletedObservations(
+                projection.uid(), projection.revision());
+        if (observations == null || observations.isEmpty()) return false;
+        CultivationExecutionActionEntity latest = observations.getFirst();
+        if (!INVENTORY_RECONCILE_BATCH.equals(latest.getActionType())) return false;
+        Map<String, Long> inventory = readInventoryObservations(latest);
+        return craftingTargets.stream().allMatch(name -> inventory.getOrDefault(name, -1L) >= 0);
     }
 
     private static Map<String, List<String>> legacyReconcileTargets(CultivationExecutionProjection projection) {
@@ -465,10 +489,10 @@ public class CultivationPlanDrivenExecutionService {
         return new CultivationInventoryObservationResponse(
             completed ? "REPLANNING" : "NEEDS_RECONCILE",
                 completed
-                        ? hasUnknown
-                            ? "已回写可识别库存；未知项保留上次可信库存，将自动重生成后续路线"
-                            : "权威库存已回写，将自动重生成后续路线"
-                        : "库存复核尚未完成",
+                        ? "权威库存已回写，将自动重生成后续路线"
+                        : hasUnknown
+                            ? "合成相关库存仍有未知项，已阻止继续领取行动"
+                            : "库存复核尚未完成",
                 entity.getUid(), entity.getPlanRevision(), observedCount);
     }
 

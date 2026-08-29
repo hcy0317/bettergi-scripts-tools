@@ -19,6 +19,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 class CultivationPlanDrivenExecutionServiceTest {
@@ -97,6 +98,11 @@ class CultivationPlanDrivenExecutionServiceTest {
                 current.preferences(), current.partyOptions());
         when(projectionService.projection("102550550")).thenReturn(needsCraft);
         when(projectionService.craftingCountry("102550550")).thenReturn("枫丹");
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学")));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
+                completedInventoryBatch()));
         when(mapper.findLeased("102550550", 3)).thenReturn(null);
         when(mapper.insert(any())).thenReturn(1);
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
@@ -112,6 +118,61 @@ class CultivationPlanDrivenExecutionServiceTest {
         assertThat(response.craftCountry()).isEqualTo("枫丹");
         assertThat(response.plan()).isNull();
         verify(mapper).insert(any(CultivationExecutionActionEntity.class));
+    }
+
+    @Test
+    void requiresACompleteFamilyInventoryBatchBeforeLeasingCraft() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection needsCraft = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的指引", 3, "角色天赋素材")),
+                current.resinActions(), current.bossActions(), current.weeklyBossActions(),
+                current.gatherAction(), current.monsterAction(), current.pendingMaterials(),
+                current.preferences(), current.partyOptions());
+        when(projectionService.projection("102550550")).thenReturn(needsCraft);
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学")));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of());
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim("102550550", "craft-executor");
+
+        assertThat(response.status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    void requiresAnotherFamilyInventoryBatchAfterACompletedCraft() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection needsCraft = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的哲学", 1, "角色天赋素材")),
+                current.resinActions(), current.bossActions(), current.weeklyBossActions(),
+                current.gatherAction(), current.monsterAction(), current.pendingMaterials(),
+                current.preferences(), current.partyOptions());
+        when(projectionService.projection("102550550")).thenReturn(needsCraft);
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学")));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        CultivationExecutionActionEntity craft = leasedAction("completed-craft");
+        craft.setActionType("CRAFT");
+        craft.setStatus("COMPLETED");
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
+                craft, completedInventoryBatch()));
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        assertThat(service.claim("102550550", "craft-executor").status())
+                .isEqualTo("PLAN_NEEDS_RECONCILE");
+        verify(mapper, never()).insert(any());
     }
 
     @Test
@@ -432,7 +493,7 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
-    void preservesPreviousTrustedInventoryForUnknownItemsWithoutBlockingThePlan() throws Exception {
+    void keepsUnknownInventoryBatchOpenAndBlocksFurtherActions() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity leased = inventoryBatch("inventory-unknown");
@@ -447,11 +508,11 @@ class CultivationPlanDrivenExecutionServiceTest {
                         "inventory-unknown", "inventory-executor", 3, "inventory-unknown:result",
                         Map.of("沙脂蛹", -1L, "织金红绸", 73L)));
 
-        assertThat(response.status()).isEqualTo("REPLANNING");
+        assertThat(response.status()).isEqualTo("NEEDS_RECONCILE");
         assertThat(response.observedCount()).isEqualTo(1);
-        assertThat(response.message()).contains("未知项保留上次可信库存");
-        assertThat(leased.getStatus()).isEqualTo("COMPLETED");
-        assertThat(leased.getLeaseKey()).isNull();
+        assertThat(response.message()).contains("已阻止继续领取行动");
+        assertThat(leased.getStatus()).isEqualTo("AWAITING_RECONCILE");
+        assertThat(leased.getLeaseKey()).isEqualTo("102550550:3");
         assertThat(leased.getTerminationReason()).isEqualTo("INVENTORY_RECONCILE_UNKNOWN_PRESERVED");
         assertThat(new ObjectMapper().readTree(leased.getRewardsJson()))
                 .isEqualTo(new ObjectMapper().readTree("{\"沙脂蛹\":-1,\"织金红绸\":73}"));
@@ -541,6 +602,15 @@ class CultivationPlanDrivenExecutionServiceTest {
         leased.setLeaseKey("102550550:3");
         leased.setPlanJson("[\"沙脂蛹\",\"织金红绸\"]");
         return leased;
+    }
+
+    private static CultivationExecutionActionEntity completedInventoryBatch() {
+        CultivationExecutionActionEntity batch = inventoryBatch("completed-inventory");
+        batch.setStatus("COMPLETED");
+        batch.setLeaseKey(null);
+        batch.setPlanJson("[\"「笃行」的教导\",\"「笃行」的指引\",\"「笃行」的哲学\"]");
+        batch.setRewardsJson("{\"「笃行」的教导\":18,\"「笃行」的指引\":6,\"「笃行」的哲学\":2}");
+        return batch;
     }
 
     private static CultivationExecutionProjection projectionWithReconcileTargets() {

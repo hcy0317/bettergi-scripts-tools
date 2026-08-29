@@ -209,15 +209,18 @@ public class CultivationExecutionService {
     public Map<String, List<String>> inventoryReconcileTargets(String uid) {
         CultivationPlanRevisionResponse ledger = latestLedger(uid);
         if (ledger == null) return Map.of();
-        Map<String, List<String>> grouped = new LinkedHashMap<>();
-        grouped.put("Materials", new ArrayList<>());
-        grouped.put("CharacterDevelopmentItems", new ArrayList<>());
+        Map<String, LinkedHashSet<String>> grouped = new LinkedHashMap<>();
+        grouped.put("Materials", new LinkedHashSet<>());
+        grouped.put("CharacterDevelopmentItems", new LinkedHashSet<>());
         for (CultivationLedgerEntry entry : ledger.requirements()) {
             if (materialSourceCatalog.findSpecialtyCountry(entry.materialName()).isPresent()) {
                 grouped.get("Materials").add(entry.materialName());
-            } else if (materialSourceCatalog.findMonster(entry.materialName()).isPresent()
-                    || observationService.isCraftable(entry.materialName())) {
+            } else if (materialSourceCatalog.findMonster(entry.materialName()).isPresent()) {
                 grouped.get("CharacterDevelopmentItems").add(entry.materialName());
+            } else {
+                observationService.craftingFamily(entry.materialName()).ifPresent(family ->
+                        family.tiers().forEach(tier ->
+                                grouped.get("CharacterDevelopmentItems").add(tier.materialName())));
             }
         }
         grouped.entrySet().removeIf(entry -> entry.getValue().isEmpty());

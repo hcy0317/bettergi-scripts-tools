@@ -153,7 +153,7 @@ export async function runCultivationInventoryReconcile(config) {
         },
         config.bgi_tools.token);
     log.info("[计划驱动] 组末库存回写完成：{0} 项，{1}", response.observedCount, response.message);
-    return true;
+    return response.status === "REPLANNING";
 }
 
 async function executeAction(baseUrl, action, executorId, token) {

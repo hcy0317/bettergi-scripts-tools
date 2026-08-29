@@ -26,6 +26,37 @@ import static org.mockito.Mockito.when;
 
 class CultivationExecutionServiceTest {
     @Test
+    void expandsCraftableLedgerRowsToEveryFamilyTierForReconciliation() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        CultivationPlanRevisionResponse ledger = new CultivationPlanRevisionResponse(
+                1, "102550550", 4, "NEEDS_CRAFT", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(entry("「笃行」的哲学", 4, 0, 4)),
+                LocalDateTime.now());
+        when(planService.latest("102550550")).thenReturn(ledger);
+        when(observationService.effective(ledger)).thenReturn(ledger);
+        when(observationService.craftingFamily("「笃行」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialCraftingCatalog.CraftFamily(
+                        "「笃行」的哲学",
+                        List.of(
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        104335, "「笃行」的教导", "角色天赋素材", 2),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        104336, "「笃行」的指引", "角色天赋素材", 3),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        104337, "「笃行」的哲学", "角色天赋素材", 4)))));
+        CultivationExecutionService service = new CultivationExecutionService(
+                planService, observationService, mock(AutoPlanService.class),
+                mock(CultivationModuleConfigurationService.class),
+                mock(CultivationMaterialSourceCatalog.class),
+                mock(BetterGiCombatOptionCatalog.class));
+
+        assertThat(service.inventoryReconcileTargets("102550550"))
+                .containsEntry("CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学"));
+    }
+
+    @Test
     void preservesAnExplicitlyEmptyResinSelection() {
         CultivationModuleConfigurationService configurationService =
                 mock(CultivationModuleConfigurationService.class);

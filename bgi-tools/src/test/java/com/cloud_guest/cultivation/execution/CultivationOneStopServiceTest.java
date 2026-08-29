@@ -53,6 +53,22 @@ class CultivationOneStopServiceTest {
     }
 
     @Test
+    void craftOnlyProjectionStillRequiresThePlanDrivenAutoPlanTask() {
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection craftOnly = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的指引", 1, "角色天赋素材")),
+                List.of(), List.of(), List.of(),
+                new CultivationExecutionProjection.GatherAction("gather", "无", Map.of(), List.of()),
+                new CultivationExecutionProjection.MonsterAction("monster", "无", Map.of(), List.of(), List.of()),
+                List.of(), current.preferences(), current.partyOptions());
+
+        assertThat(CultivationOneStopService.hasPlanDrivenAction(
+                craftOnly,
+                configuration(AutoPlanResinExecutionModule.ID, Map.of()))).isTrue();
+    }
+
+    @Test
     void generatesDedicatedGroupFromOnlyNeededModules() throws Exception {
         Path source = temporaryRoot.resolve(Path.of("User", "ScriptGroup", "来源组.json"));
         Files.createDirectories(source.getParent());
@@ -205,6 +221,7 @@ class CultivationOneStopServiceTest {
                 .doesNotContain("await genshin.GoCraftResin(action.craftCountry)")
                 .contains("await genshin.CraftMaterial(")
                 .contains("完整库存复核后仍未开放行动")
+                .contains("return response.status === \"REPLANNING\"")
                 .containsOnlyOnce("if (action.status === \"PLAN_NEEDS_RECONCILE\")")
                 .contains("return result.status === \"REPLANNING\"")
                 .doesNotContain("config, inventoryReconcileState, `合成 ${action.materialName} 后复核`")
