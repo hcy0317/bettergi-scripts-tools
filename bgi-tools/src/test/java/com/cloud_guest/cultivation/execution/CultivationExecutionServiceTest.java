@@ -26,6 +26,26 @@ import static org.mockito.Mockito.when;
 
 class CultivationExecutionServiceTest {
     @Test
+    void preservesAnExplicitlyEmptyResinSelection() {
+        CultivationModuleConfigurationService configurationService =
+                mock(CultivationModuleConfigurationService.class);
+        when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID))
+                .thenReturn(configuration(
+                        AutoPlanResinExecutionModule.ID,
+                        true,
+                        Map.of("resinPriority", List.of())));
+        CultivationExecutionService service = new CultivationExecutionService(
+                mock(CultivationPlanApplicationService.class),
+                mock(CultivationLedgerObservationService.class),
+                mock(AutoPlanService.class),
+                configurationService,
+                mock(CultivationMaterialSourceCatalog.class),
+                mock(BetterGiCombatOptionCatalog.class));
+
+        assertThat(service.resinPriority("102550550")).isEmpty();
+    }
+
+    @Test
     void returnsTheEffectiveLedgerWithTheLatestAuthoritativeOwnedCount() {
         CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
         CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);

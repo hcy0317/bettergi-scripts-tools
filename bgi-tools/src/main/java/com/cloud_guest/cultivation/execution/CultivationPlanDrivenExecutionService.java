@@ -533,7 +533,7 @@ public class CultivationPlanDrivenExecutionService {
         }
         int today = LocalDate.now(clock).getDayOfWeek().getValue() % 7;
         List<String> configuredResinPriority = executionService.resinPriority(projection.uid());
-        List<String> resinPriority = configuredResinPriority == null || configuredResinPriority.isEmpty()
+        List<String> resinPriority = configuredResinPriority == null
                 ? List.of("浓缩树脂", "原粹树脂")
                 : configuredResinPriority;
         Candidate domain = projection.resinActions().stream()

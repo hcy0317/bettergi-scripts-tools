@@ -207,7 +207,9 @@ class CultivationOneStopServiceTest {
                 .contains("完整库存复核后仍未开放行动")
                 .containsOnlyOnce("if (action.status === \"PLAN_NEEDS_RECONCILE\")")
                 .contains("return result.status === \"REPLANNING\"")
-                .contains("config, inventoryReconcileState, `合成 ${action.materialName} 后复核`")
+                .doesNotContain("config, inventoryReconcileState, `合成 ${action.materialName} 后复核`")
+                .containsPattern("(?s)if \\(action\\.actionType === \\\"CRAFT\\\"\\).*?"
+                        + "executeCraftAction.*?runCultivationInventoryReconcile\\(config\\).*?continue;")
                 .doesNotContain("param.GridScreenName = GridScreenName.Materials")
                 .doesNotContain("gridScreenName: \"Materials\"")
                 .doesNotContain("组末库存存在未知值，已停止后续执行")

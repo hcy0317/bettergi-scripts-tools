@@ -309,9 +309,8 @@ export async function runPlanDrivenCultivation(config) {
         if (action.actionType === "CRAFT") {
             const shouldContinue = await executeCraftAction(baseUrl, action, executorId, config);
             if (!shouldContinue) return;
-            const reconcile = await runInventoryReconcileOnce(
-                config, inventoryReconcileState, `合成 ${action.materialName} 后复核`);
-            if (!reconcile.succeeded) return;
+            log.warn("[计划驱动] 合成 {0} 后强制完整库存复核", action.materialName);
+            if (!await runCultivationInventoryReconcile(config)) return;
             continue;
         }
         const shouldContinue = await executeAction(

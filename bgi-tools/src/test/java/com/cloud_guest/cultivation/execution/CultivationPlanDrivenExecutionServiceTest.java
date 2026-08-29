@@ -27,6 +27,26 @@ class CultivationPlanDrivenExecutionServiceTest {
             Instant.parse("2026-08-24T04:00:00Z"), ZoneId.of("Asia/Shanghai"));
 
     @Test
+    void explicitlyEmptyResinSelectionKeepsEveryPhysicalSourceDisabled() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        when(projectionService.projection("102550550")).thenReturn(projection());
+        when(projectionService.resinPriority("102550550")).thenReturn(List.of());
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        when(mapper.insert(any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim("102550550", "executor-empty-resin");
+
+        assertThat(response.plan().getAutoDomain().getPhysical())
+                .allSatisfy(physical -> {
+                    assertThat(physical.isOpen()).isFalse();
+                    assertThat(physical.getCount()).isZero();
+                });
+    }
+
+    @Test
     void claimsOnlyOneEligibleLedgerActionAsAOneRoundSafetyBatch() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);

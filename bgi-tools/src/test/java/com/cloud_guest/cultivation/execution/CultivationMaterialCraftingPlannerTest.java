@@ -1,6 +1,5 @@
 package com.cloud_guest.cultivation.execution;
 
-import com.cloud_guest.cultivation.ocr.CultivationOcrProperties;
 import com.cloud_guest.cultivation.ocr.RemainingEvidence;
 import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
 import org.junit.jupiter.api.Test;
@@ -11,6 +10,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class CultivationMaterialCraftingPlannerTest {
     @TempDir
@@ -86,9 +87,9 @@ class CultivationMaterialCraftingPlannerTest {
                 material:112082,material:112082,异色结晶石,角色与武器培养素材,,3,,,x
                 material:101222,material:101222,沙脂蛹,角色突破素材,,0,,,x
                 """);
-        CultivationOcrProperties properties = new CultivationOcrProperties();
-        properties.setBettergiRoot(betterGiRoot.toString());
-        return new CultivationMaterialCraftingCatalog(properties);
+        CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        when(sourceCatalog.betterGiRoot()).thenReturn(betterGiRoot);
+        return new CultivationMaterialCraftingCatalog(sourceCatalog);
     }
 
     private static CultivationLedgerEntry entry(String name, long required, long owned) {

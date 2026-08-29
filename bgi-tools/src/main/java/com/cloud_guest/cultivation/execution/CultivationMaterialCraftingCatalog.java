@@ -1,6 +1,5 @@
 package com.cloud_guest.cultivation.execution;
 
-import com.cloud_guest.cultivation.ocr.CultivationOcrProperties;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -20,11 +19,11 @@ public class CultivationMaterialCraftingCatalog {
     private static final Set<String> CRAFTABLE_TYPES = Set.of(
             "角色突破素材", "角色天赋素材", "角色与武器培养素材", "武器突破素材");
 
-    private final CultivationOcrProperties properties;
+    private final CultivationMaterialSourceCatalog materialSourceCatalog;
     private volatile Map<String, CraftFamily> familyByMaterial;
 
-    public CultivationMaterialCraftingCatalog(CultivationOcrProperties properties) {
-        this.properties = properties;
+    public CultivationMaterialCraftingCatalog(CultivationMaterialSourceCatalog materialSourceCatalog) {
+        this.materialSourceCatalog = materialSourceCatalog;
     }
 
     public Optional<CraftFamily> family(String materialName) {
@@ -41,7 +40,8 @@ public class CultivationMaterialCraftingCatalog {
     }
 
     private Map<String, CraftFamily> loadFamilies() {
-        Path csv = betterGiRoot().resolve(Path.of("Assets", "Model", "ItemV2", "item.csv"));
+        Path csv = materialSourceCatalog.betterGiRoot()
+                .resolve(Path.of("Assets", "Model", "ItemV2", "item.csv"));
         if (!Files.isRegularFile(csv)) return Map.of();
         try {
             List<String> lines = Files.readAllLines(csv);
@@ -89,13 +89,6 @@ public class CultivationMaterialCraftingCatalog {
         if (tiers.size() < 2) return;
         CraftFamily family = new CraftFamily(tiers.getLast().materialName(), List.copyOf(tiers));
         tiers.forEach(tier -> target.put(tier.materialName(), family));
-    }
-
-    private Path betterGiRoot() {
-        String configured = properties.getBettergiRoot();
-        return configured == null || configured.isBlank()
-                ? Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize()
-                : Path.of(configured).toAbsolutePath().normalize();
     }
 
     private static int parseMaterialId(String value) {

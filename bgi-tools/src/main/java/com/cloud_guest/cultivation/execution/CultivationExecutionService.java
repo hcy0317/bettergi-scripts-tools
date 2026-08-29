@@ -203,9 +203,7 @@ public class CultivationExecutionService {
             String name = item == null ? "" : String.valueOf(item).trim();
             if (RESIN_SOURCES.contains(name)) selected.add(name);
         });
-        return selected.isEmpty()
-                ? List.of("浓缩树脂", "原粹树脂")
-                : List.copyOf(selected);
+        return List.copyOf(selected);
     }
 
     public Map<String, List<String>> inventoryReconcileTargets(String uid) {
