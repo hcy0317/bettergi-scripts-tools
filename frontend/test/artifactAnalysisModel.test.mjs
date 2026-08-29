@@ -15,6 +15,7 @@ import {
   shouldRefreshArtifactJobs,
   hasActiveArtifactJobs,
   artifactCharacterScanStatusMeta,
+  artifactLoadSettlement,
 } from "../src/features/artifact-analysis/model.js";
 
 test("manual non-five-star count reconciles analyzable items with total inventory", () => {
@@ -130,9 +131,12 @@ test("artifact launch does not offer a second start after the host already finis
   assert.equal(artifactHostHasAcceptedJob(job), true);
 });
 
-test("artifact launch prompt does not wait for a host that has not accepted the request", async () => {
-  const states = Array.from({length: 29}, () => ({id: "job-1", status: "WAITING_FOR_HOST"}));
-  states.push({id: "job-1", status: "HOST_CLAIMED"});
+test("artifact launch gives an already-running host a bounded claim window before prompting", async () => {
+  const states = [
+    {id: "job-1", status: "WAITING_FOR_HOST"},
+    {id: "job-1", status: "WAITING_FOR_HOST"},
+    {id: "job-1", status: "HOST_CLAIMED"},
+  ];
   let calls = 0;
 
   const job = await waitForArtifactHostClaim(
@@ -141,8 +145,34 @@ test("artifact launch prompt does not wait for a host that has not accepted the 
     {delay: 0, sleep: async () => {}}
   );
 
-  assert.equal(job.status, "WAITING_FOR_HOST");
-  assert.equal(calls, 1);
+  assert.equal(job.status, "HOST_CLAIMED");
+  assert.equal(calls, 3);
+});
+
+test("artifact launch claim tolerates transient status read failures", async () => {
+  let calls = 0;
+  const errors = [];
+  const job = await waitForArtifactHostClaim(
+    "job-retry",
+    async () => {
+      calls++;
+      if (calls <= 2) throw new Error("temporary status failure");
+      return {id: "job-retry", status: "HOST_CLAIMED"};
+    },
+    {delay: 0, sleep: async () => {}, onError: (_error, count) => errors.push(count)}
+  );
+
+  assert.equal(job.status, "HOST_CLAIMED");
+  assert.equal(calls, 3);
+  assert.deepEqual(errors, [1, 2]);
+});
+
+test("latest silent lock-plan refresh always settles an older visible loading state", () => {
+  assert.equal(artifactLoadSettlement(1, 2), null);
+  assert.deepEqual(artifactLoadSettlement(2, 2), {
+    loading: false,
+    refreshing: false,
+  });
 });
 
 test("artifact states and operations have concise user-facing metadata", () => {

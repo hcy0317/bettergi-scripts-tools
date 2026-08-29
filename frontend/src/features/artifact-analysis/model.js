@@ -88,16 +88,38 @@ export const artifactHostHasAcceptedJob = job => Boolean(
 export const waitForArtifactHostClaim = async (
   jobId,
   getJob,
-  {attempts = 1, delay = 350, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))} = {}
+  {
+    attempts = 12,
+    delay = 250,
+    sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
+    onError = () => {},
+    maxConsecutiveErrors = 3,
+  } = {}
 ) => {
   let job = null
+  let consecutiveErrors = 0
+  let lastError = null
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await sleep(delay)
-    job = await getJob(jobId)
-    if (artifactHostHasAcceptedJob(job)) return job
+    try {
+      job = await getJob(jobId)
+      consecutiveErrors = 0
+      if (artifactHostHasAcceptedJob(job)) return job
+    } catch (error) {
+      lastError = error
+      consecutiveErrors++
+      onError(error, consecutiveErrors)
+      if (consecutiveErrors >= maxConsecutiveErrors) throw error
+    }
   }
+  if (!job && lastError) throw lastError
   return job
 }
+
+export const artifactLoadSettlement = (generation, currentGeneration) =>
+  generation === currentGeneration
+    ? {loading: false, refreshing: false}
+    : null
 
 export const waitForArtifactJobCompletion = async (
   jobId,

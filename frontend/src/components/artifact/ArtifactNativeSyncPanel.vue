@@ -78,14 +78,29 @@ const rebuild = async () => {
   if (!props.uid.trim()) { ElMessage.warning('请选择 UID'); return }
   try { await ElMessageBox.confirm('将保存目标方案和阶段日志后删除全部原神默认、推荐和旧自定义方案。删除后执行不再响应普通取消，并可用目标方案继续完成前向恢复；写入规则是该 UID 已启用配装的保守套装并集。', '完整重建原神方案', {confirmButtonText:'接受并重建',cancelButtonText:'取消',type:'warning'}) } catch { return }
   starting.value = true
+  pendingLaunchJobId.value = ''
+  pendingLaunch.value = null
   try {
-    const response = await startArtifactJob(
-      props.uid.trim(), 'REBUILD_NATIVE_PLANS', capacity.value, true,
-      preview.value.planDigest)
-    if (!validateArtifactLaunch(response.launch, 'REBUILD_NATIVE_PLANS')) throw new Error('服务端未返回有效启动请求')
+    let response
+    try {
+      response = await startArtifactJob(
+        props.uid.trim(), 'REBUILD_NATIVE_PLANS', capacity.value, true,
+        preview.value.planDigest)
+      if (!validateArtifactLaunch(response.launch, 'REBUILD_NATIVE_PLANS')) throw new Error('服务端未返回有效启动请求')
+    } catch {
+      ElMessage.error('无法创建原神方案重建任务，请稍后重试')
+      return
+    }
     pendingLaunch.value = response.launch
     pendingLaunchJobId.value = response.job.id
-    const claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    let claimed
+    try {
+      claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    } catch {
+      ElMessage.warning('原神方案任务状态读取暂时失败，已继续在后台观察')
+      watchNativeSync(response.job.id)
+      return
+    }
     if (artifactHostHasAcceptedJob(claimed)) {
       if (claimed.status === 'FAILED') ElMessage.error('BetterGI 已接收重建任务，但执行失败')
       else ElMessage.success('BetterGI 已接收重建任务')

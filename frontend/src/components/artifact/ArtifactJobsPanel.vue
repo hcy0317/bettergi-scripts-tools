@@ -103,14 +103,29 @@ const start = async () => {
     )
   } catch { return }
   starting.value = true
+  pendingLaunchJobId.value = ''
+  pendingLaunch.value = null
   try {
-    const response = await startArtifactJob(props.uid.trim(), 'ANALYZE')
-    if (!validateArtifactLaunch(response.launch, 'ANALYZE')) throw new Error('服务端未返回有效启动请求')
+    let response
+    try {
+      response = await startArtifactJob(props.uid.trim(), 'ANALYZE')
+      if (!validateArtifactLaunch(response.launch, 'ANALYZE')) throw new Error('服务端未返回有效启动请求')
+    } catch {
+      ElMessage.error('无法创建扫描任务，请稍后重试')
+      return
+    }
     jobs.value.unshift(response.job)
     selectedId.value = response.job.id
     pendingLaunch.value = response.launch
     pendingLaunchJobId.value = response.job.id
-    const claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    let claimed
+    try {
+      claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    } catch {
+      ElMessage.warning('扫描任务状态读取暂时失败，已继续在后台观察')
+      watchActiveJob(response.job.id)
+      return
+    }
     const index = jobs.value.findIndex(job => job.id === claimed.id)
     if (index >= 0) jobs.value[index] = claimed
     if (artifactHostHasAcceptedJob(claimed)) {
