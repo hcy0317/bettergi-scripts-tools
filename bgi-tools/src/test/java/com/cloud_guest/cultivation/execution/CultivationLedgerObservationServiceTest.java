@@ -247,6 +247,45 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
+    void excludesCraftOutputsFromAcquisitionRewardEquivalents() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity acquired = observation("domain-action", 0);
+        acquired.setActionType("DOMAIN");
+        acquired.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of(
+                "「公平」的指引", 3)));
+        CultivationExecutionActionEntity crafted = observation("craft-action", 1);
+        crafted.setActionType("CRAFT");
+        crafted.setPlanJson("{\"materialType\":\"角色天赋素材\",\"country\":\"枫丹\",\"quantity\":1}");
+        crafted.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of(
+                "「公平」的哲学", 1)));
+        when(mapper.findCompletedObservations("102550550", 3))
+                .thenReturn(List.of(crafted, acquired));
+        when(planner.family("「公平」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialCraftingCatalog.CraftFamily(
+                        "「公平」",
+                        List.of(
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        1, "「公平」的指引", "角色天赋素材", 3),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        2, "「公平」的哲学", "角色天赋素材", 4)))));
+        when(planner.plan(anyList())).thenAnswer(invocation -> {
+            List<CultivationLedgerEntry> entries = invocation.getArgument(0);
+            assertThat(entries).singleElement()
+                    .satisfies(entry -> assertThat(entry.remaining()).isEqualTo(1));
+            return new CultivationMaterialCraftingPlan(
+                    Map.of("「公平」的哲学", 1L), List.of());
+        });
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner)
+                        .effective(revision(2, 0, 2));
+
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(1);
+    }
+
+    @Test
     void reservesTheLowerTierRequirementBeforeTreatingRewardsAsCraftable() throws Exception {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);

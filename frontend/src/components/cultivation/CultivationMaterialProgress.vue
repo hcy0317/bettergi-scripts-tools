@@ -9,6 +9,18 @@ const orderedItems = computed(() => [...props.items].sort((left, right) =>
   (left.tierIndex ?? 0) - (right.tierIndex ?? 0)))
 const isTiered = computed(() => orderedItems.value.length > 1)
 const formatCount = value => Number(value || 0).toLocaleString()
+const ownedGap = item => Math.max(
+  Number(item.required || 0) - Number(item.currentOwned || 0),
+  0,
+)
+const isOwnedComplete = item => ownedGap(item) <= 0
+const gapLabel = item => {
+  const gap = ownedGap(item)
+  if (gap <= 0) return '已满足'
+  return item.remaining <= 0
+    ? `还需 ${formatCount(gap)}（待合成）`
+    : `还需 ${formatCount(gap)}`
+}
 </script>
 
 <template>
@@ -25,8 +37,8 @@ const formatCount = value => Number(value || 0).toLocaleString()
       <div class="material-counts">
         <span>当前 / 目标</span>
         <strong>{{ formatCount(item.currentOwned) }} / {{ formatCount(item.required) }}</strong>
-        <small :class="{'is-complete': item.remaining <= 0}">
-          {{ item.remaining > 0 ? `还需 ${formatCount(item.remaining)}` : '已满足' }}
+        <small :class="{'is-complete': isOwnedComplete(item), 'is-crafting': !isOwnedComplete(item) && item.remaining <= 0}">
+          {{ gapLabel(item) }}
         </small>
       </div>
     </div>
@@ -98,6 +110,10 @@ const formatCount = value => Number(value || 0).toLocaleString()
 
 .material-counts small.is-complete {
   color: var(--el-color-success-dark-2);
+}
+
+.material-counts small.is-crafting {
+  color: var(--el-color-primary);
 }
 
 @media (max-width: 640px) {

@@ -62,7 +62,9 @@ public class CultivationLedgerObservationService {
             }
             if (observation.getObservedOwned() == null || observation.getObservedOwned() < 0) continue;
             latestOwned.putIfAbsent(observation.getMaterialName(), observation.getObservedOwned());
-            mergeRewards(actualRewards, observation.getRewardsJson());
+            if (!"CRAFT".equals(observation.getActionType())) {
+                mergeRewards(actualRewards, observation.getRewardsJson());
+            }
         }
         if (latestOwned.isEmpty()) {
             return awaitingReconcile ? withState(imported, "NEEDS_RECONCILE", imported.requirements()) : imported;
