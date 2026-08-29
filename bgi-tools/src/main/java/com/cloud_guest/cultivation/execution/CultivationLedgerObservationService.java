@@ -161,7 +161,12 @@ public class CultivationLedgerObservationService {
             return false;
         }
         try {
-            int quantity = objectMapper.readTree(craft.getPlanJson()).path("quantity").asInt(-1);
+            int plannedQuantity = objectMapper.readTree(craft.getPlanJson()).path("quantity").asInt(-1);
+            int actualQuantity = craft.getRewardsJson() == null
+                    ? -1
+                    : objectMapper.readTree(craft.getRewardsJson())
+                        .path(craft.getMaterialName()).asInt(-1);
+            int quantity = Math.min(plannedQuantity, actualQuantity);
             Optional<CultivationMaterialCraftingCatalog.CraftFamily> family =
                     craftingPlanner.family(craft.getMaterialName());
             if (quantity <= 0 || family.isEmpty()) return false;

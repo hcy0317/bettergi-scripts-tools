@@ -115,7 +115,7 @@ class CultivationLedgerObservationServiceTest {
         craft.setMaterialName("史莱姆清");
         craft.setPlanJson("{\"materialType\":\"角色与武器培养素材\",\"country\":\"枫丹\",\"quantity\":3}");
         craft.setObservedOwned(3L);
-        craft.setRewardsJson("{}");
+        craft.setRewardsJson("{\"史莱姆清\":3}");
         CultivationExecutionActionEntity after = inventoryBatch(
                 "after-craft", Map.of("史莱姆凝液", 9L, "史莱姆清", 3L));
         when(mapper.findCompletedObservations("102550550", 3))
