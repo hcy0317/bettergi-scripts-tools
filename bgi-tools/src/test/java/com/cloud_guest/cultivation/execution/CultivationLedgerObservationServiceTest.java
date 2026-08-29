@@ -13,6 +13,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 class CultivationLedgerObservationServiceTest {
@@ -69,7 +70,7 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
-    void requiresReconcileInsteadOfSchedulingMoreWhenInventoryDropsBelowImportBaseline() {
+    void acceptsAuthoritativeInventoryBelowImportBaselineAndSchedulesTheFullDeficit() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(observation("action-4", 3)));
         CultivationPlanRevisionResponse imported = revision(10, 4, 6);
@@ -77,13 +78,13 @@ class CultivationLedgerObservationServiceTest {
         CultivationPlanRevisionResponse effective =
                 new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
 
-        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
-        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(6);
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(7);
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(3);
     }
 
     @Test
-    void requiresReconcileForAnyNegativeInventoryDeltaAfterThePlanStarted() {
+    void acceptsTheLatestAuthoritativeInventoryAfterADecrease() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
                 observation("newest", 6), observation("older", 8)));
@@ -92,13 +93,13 @@ class CultivationLedgerObservationServiceTest {
                 new CultivationLedgerObservationService(mapper, objectMapper())
                         .effective(revision(10, 4, 6));
 
-        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.state()).isEqualTo("ACTIVE");
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
-        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(4);
     }
 
     @Test
-    void keepsUnobservedMaterialsAtBaselineWhenAnotherMaterialTriggersReconcile() {
+    void keepsUnobservedMaterialsAtBaselineWhenAnObservedMaterialDecreases() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity newest = observation("newest", 6);
         CultivationExecutionActionEntity older = observation("older", 8);
@@ -118,7 +119,7 @@ class CultivationLedgerObservationServiceTest {
         CultivationPlanRevisionResponse effective =
                 new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
 
-        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.state()).isEqualTo("ACTIVE");
         assertThat(effective.requirements().get(1).currentOwned()).isEqualTo(4);
         assertThat(effective.requirements().get(1).remaining()).isEqualTo(164);
     }
@@ -170,6 +171,42 @@ class CultivationLedgerObservationServiceTest {
 
         assertThat(effective.state()).isEqualTo("ACTIVE");
         assertThat(effective.requirements().getFirst().remaining()).isEqualTo(4);
+    }
+
+    @Test
+    void reservesTheLowerTierRequirementBeforeTreatingRewardsAsCraftable() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity action = observation("action-tier-reserve", 0);
+        action.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of(
+                "「公平」的指引", 3)));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(action));
+        when(planner.plan(anyList())).thenAnswer(invocation -> {
+            List<CultivationLedgerEntry> entries = invocation.getArgument(0);
+            assertThat(entries).filteredOn(entry -> "「公平」的指引".equals(entry.materialName()))
+                    .singleElement().satisfies(entry -> assertThat(entry.currentOwned()).isEqualTo(7));
+            return new CultivationMaterialCraftingPlan(java.util.Map.of(
+                    "「公平」的指引", 0L,
+                    "「公平」的哲学", 1L), List.of());
+        });
+        CultivationPlanRevisionResponse imported = new CultivationPlanRevisionResponse(
+                1L, "102550550", 3, "IMPORTED", "name-only-v1", 2L,
+                "sha", "engine", "model",
+                List.of(
+                        new CultivationLedgerEntry(
+                                0, "「公平」的指引", 6, 4, 2,
+                                RemainingEvidence.OCR, 1.0, false, List.of()),
+                        new CultivationLedgerEntry(
+                                1, "「公平」的哲学", 1, 0, 1,
+                                RemainingEvidence.OCR, 1.0, false, List.of())),
+                LocalDateTime.of(2026, 8, 23, 20, 0));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner).effective(imported);
+
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements()).filteredOn(entry -> "「公平」的哲学".equals(entry.materialName()))
+                .singleElement().satisfies(entry -> assertThat(entry.remaining()).isEqualTo(1));
     }
 
     @Test

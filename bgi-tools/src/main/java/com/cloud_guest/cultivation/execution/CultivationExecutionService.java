@@ -8,6 +8,7 @@ import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurati
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
 import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
+import com.cloud_guest.cultivation.execution.module.ScriptGroupSettingsExecutionModule;
 import com.cloud_guest.cultivation.execution.module.WeeklyBossExecutionModule;
 import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
 import com.cloud_guest.cultivation.plan.CultivationPlanApplicationService;
@@ -28,6 +29,8 @@ import java.util.Set;
 
 @Service
 public class CultivationExecutionService {
+    private static final List<String> RESIN_SOURCES =
+            List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂");
     private static final String EXECUTION_MODE = "计划驱动：领取一个行动，权威库存回写后重新规划";
     private static final Map<String, String> MANUAL_MATERIALS = Map.of(
             "智识之冕", "人工来源：活动、版本奖励等限量渠道；系统持续保留缺口，取得后重新导入确认");
@@ -37,17 +40,20 @@ public class CultivationExecutionService {
     private final AutoPlanService autoPlanService;
     private final CultivationModuleConfigurationService configurationService;
     private final CultivationMaterialSourceCatalog materialSourceCatalog;
+    private final BetterGiCombatOptionCatalog combatOptionCatalog;
 
     public CultivationExecutionService(CultivationPlanApplicationService planService,
                                        CultivationLedgerObservationService observationService,
                                        AutoPlanService autoPlanService,
                                        CultivationModuleConfigurationService configurationService,
-                                       CultivationMaterialSourceCatalog materialSourceCatalog) {
+                                       CultivationMaterialSourceCatalog materialSourceCatalog,
+                                       BetterGiCombatOptionCatalog combatOptionCatalog) {
         this.planService = planService;
         this.observationService = observationService;
         this.autoPlanService = autoPlanService;
         this.configurationService = configurationService;
         this.materialSourceCatalog = materialSourceCatalog;
+        this.combatOptionCatalog = combatOptionCatalog;
     }
 
     public CultivationExecutionProjection projection(String uid) {
@@ -58,6 +64,10 @@ public class CultivationExecutionService {
         }
 
         CultivationExecutionPreferences preferences = preferences(normalizedUid);
+        CultivationMaterialCraftingPlan craftingPlan = observationService.craftingPlan(revision.requirements());
+        if (craftingPlan == null) {
+            craftingPlan = new CultivationMaterialCraftingPlan(Map.of(), List.of());
+        }
         CultivationModuleConfiguration autoPlanConfiguration = configurationService.find(
                 normalizedUid, AutoPlanResinExecutionModule.ID);
         CultivationModuleConfiguration gatherConfiguration = configurationService.find(
@@ -145,6 +155,10 @@ public class CultivationExecutionService {
                 continue;
             }
 
+            if (observationService.isCraftable(entry.materialName())) {
+                continue;
+            }
+
             pending.add(new CultivationExecutionProjection.PendingMaterial(
                     entry.materialName(), entry.remaining(), "尚未接入可验证的自动执行适配器"));
         }
@@ -154,9 +168,10 @@ public class CultivationExecutionService {
         CultivationExecutionProjection.MonsterAction monsterAction = buildMonsterAction(
                 monsterConfiguration, monsterTargets);
         return new CultivationExecutionProjection(
-                normalizedUid, revision.revision(), revision.state(), EXECUTION_MODE,
+                normalizedUid, revision.revision(), revision.state(), EXECUTION_MODE, craftingPlan.actions(),
                 resinActions, bossActions, weeklyBossActions, gatherAction, monsterAction,
-                pending, preferences, partyOptions(normalizedUid));
+                pending, preferences, partyOptions(normalizedUid), combatStrategyOptions(normalizedUid),
+                materialProgress(revision.requirements()));
     }
 
     public CultivationPlanRevisionResponse latestLedger(String uid) {
@@ -176,6 +191,50 @@ public class CultivationExecutionService {
                 setting(gather, "partyName"),
                 setting(gather, "partyName2nd"),
                 gather.enabled());
+    }
+
+    public List<String> resinPriority(String uid) {
+        CultivationModuleConfiguration configuration = configurationService.find(
+                requireUid(uid), AutoPlanResinExecutionModule.ID);
+        Object value = configuration.settings().get("resinPriority");
+        if (!(value instanceof Iterable<?> values)) return List.of("浓缩树脂", "原粹树脂");
+        LinkedHashSet<String> selected = new LinkedHashSet<>();
+        values.forEach(item -> {
+            String name = item == null ? "" : String.valueOf(item).trim();
+            if (RESIN_SOURCES.contains(name)) selected.add(name);
+        });
+        return selected.isEmpty()
+                ? List.of("浓缩树脂", "原粹树脂")
+                : List.copyOf(selected);
+    }
+
+    public Map<String, List<String>> inventoryReconcileTargets(String uid) {
+        CultivationPlanRevisionResponse ledger = latestLedger(uid);
+        if (ledger == null) return Map.of();
+        Map<String, List<String>> grouped = new LinkedHashMap<>();
+        grouped.put("Materials", new ArrayList<>());
+        grouped.put("CharacterDevelopmentItems", new ArrayList<>());
+        for (CultivationLedgerEntry entry : ledger.requirements()) {
+            if (materialSourceCatalog.findSpecialtyCountry(entry.materialName()).isPresent()) {
+                grouped.get("Materials").add(entry.materialName());
+            } else if (materialSourceCatalog.findMonster(entry.materialName()).isPresent()
+                    || observationService.isCraftable(entry.materialName())) {
+                grouped.get("CharacterDevelopmentItems").add(entry.materialName());
+            }
+        }
+        grouped.entrySet().removeIf(entry -> entry.getValue().isEmpty());
+        return grouped.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> List.copyOf(entry.getValue()),
+                (left, right) -> left,
+                LinkedHashMap::new));
+    }
+
+    public String craftingCountry(String uid) {
+        CultivationModuleConfiguration configuration = configurationService.find(
+                requireUid(uid), AutoPlanResinExecutionModule.ID);
+        String country = setting(configuration, "craftingCountry");
+        return country.isBlank() ? "枫丹" : country;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -199,6 +258,8 @@ public class CultivationExecutionService {
 
     private List<String> partyOptions(String uid) {
         Set<String> names = new LinkedHashSet<>();
+        BetterGiCombatOptionCatalog.Options installed = combatOptionCatalog.discover();
+        installed.parties().forEach(name -> addParty(names, name));
         CultivationExecutionPreferences preferences = preferences(uid);
         addParty(names, preferences.domainParty());
         addParty(names, preferences.gatherParty());
@@ -206,12 +267,61 @@ public class CultivationExecutionService {
         configurationService.findAll(uid).stream()
                 .flatMap(configuration -> configuration.settings().entrySet().stream())
                 .filter(entry -> entry.getKey().toLowerCase().contains("party"))
-                .map(entry -> String.valueOf(entry.getValue()))
-                .forEach(name -> addParty(names, name));
+                .forEach(entry -> addOptionValue(names, entry.getValue()));
         autoPlanService.find(uid, null).stream()
                 .map(config -> config.toVo())
                 .forEach(plan -> collectParties(plan, names));
+        CultivationModuleConfiguration group = configurationService.find(
+                uid, ScriptGroupSettingsExecutionModule.ID);
+        if (group != null) {
+            addOptionValue(names, group.settings().get("managedPartyOptions"));
+            removeOptionValue(names, group.settings().get("hiddenPartyOptions"));
+        }
         return List.copyOf(names);
+    }
+
+    private List<String> combatStrategyOptions(String uid) {
+        Set<String> names = new LinkedHashSet<>(combatOptionCatalog.discover().strategies());
+        configurationService.findAll(uid).stream()
+                .flatMap(configuration -> configuration.settings().entrySet().stream())
+                .filter(entry -> entry.getKey().toLowerCase().contains("strategy"))
+                .forEach(entry -> addOptionValue(names, entry.getValue()));
+        CultivationModuleConfiguration group = configurationService.find(
+                uid, ScriptGroupSettingsExecutionModule.ID);
+        if (group != null) {
+            addOptionValue(names, group.settings().get("managedCombatStrategyOptions"));
+            removeOptionValue(names, group.settings().get("hiddenCombatStrategyOptions"));
+        }
+        names.add("根据队伍自动选择");
+        List<String> result = new ArrayList<>();
+        result.add("根据队伍自动选择");
+        names.stream().filter(name -> !"根据队伍自动选择".equals(name)).sorted().forEach(result::add);
+        return List.copyOf(result);
+    }
+
+    private List<CultivationExecutionProjection.MaterialProgress> materialProgress(
+            List<CultivationLedgerEntry> entries) {
+        return entries.stream().map(entry -> {
+            Optional<CultivationMaterialCraftingCatalog.CraftFamily> family =
+                    observationService.craftingFamily(entry.materialName());
+            if (family == null || family.isEmpty()) {
+                return new CultivationExecutionProjection.MaterialProgress(
+                        entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
+                        entry.materialName(), 0, 1, 0);
+            }
+            List<CultivationMaterialCraftingCatalog.CraftTier> tiers = family.get().tiers();
+            for (int index = 0; index < tiers.size(); index++) {
+                CultivationMaterialCraftingCatalog.CraftTier tier = tiers.get(index);
+                if (tier.materialName().equals(entry.materialName())) {
+                    return new CultivationExecutionProjection.MaterialProgress(
+                            entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
+                            family.get().familyName(), index, tiers.size(), tier.qualityLevel());
+                }
+            }
+            return new CultivationExecutionProjection.MaterialProgress(
+                    entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
+                    family.get().familyName(), 0, tiers.size(), 0);
+        }).toList();
     }
 
     private static void collectParties(AutoPlan plan, Set<String> names) {
@@ -224,6 +334,26 @@ public class CultivationExecutionService {
             addParty(names, plan.getAutoStygianOnslaught().getFightTeamName());
         }
         if (plan.getAutoBoss() != null) addParty(names, plan.getAutoBoss().getTeamName());
+    }
+
+    private static void addOptionValue(Set<String> target, Object value) {
+        if (value instanceof Iterable<?> values) {
+            values.forEach(item -> {
+                if (item instanceof CharSequence text) addParty(target, text.toString());
+            });
+        } else if (value instanceof CharSequence text) {
+            addParty(target, text.toString());
+        }
+    }
+
+    private static void removeOptionValue(Set<String> target, Object value) {
+        if (value instanceof Iterable<?> values) {
+            values.forEach(item -> {
+                if (item != null) target.remove(String.valueOf(item).trim());
+            });
+        } else if (value != null) {
+            target.remove(String.valueOf(value).trim());
+        }
     }
 
     private static CultivationExecutionProjection.GatherAction buildGatherAction(

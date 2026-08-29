@@ -23,6 +23,10 @@ public class ScriptGroupSettingsExecutionModule implements CultivationExecutionM
     public List<CultivationModuleSettingField> settingsSchema() {
         return List.of(
                 field("pathingEnabled", "启用配置组跑图设置", "switch"),
+                field("managedPartyOptions", "讨伐队伍库", "option-manager", "uid-parties"),
+                field("hiddenPartyOptions", "已隐藏讨伐队伍", "hidden"),
+                field("managedCombatStrategyOptions", "战斗策略库", "option-manager", "combat-strategies"),
+                field("hiddenCombatStrategyOptions", "已隐藏战斗策略", "hidden"),
                 field("partyName", "配置组队伍", "party-select", "uid-parties"),
                 field("autoPickEnabled", "自动拾取", "switch"),
                 field("mainAvatarIndex", "主要行走角色位置", "select", List.of("", "1", "2", "3", "4")),
@@ -46,7 +50,7 @@ public class ScriptGroupSettingsExecutionModule implements CultivationExecutionM
                 field("travelMode", "赶路模式", "select", List.of("精准靠近", "连续赶路")),
                 field("switchToWalkEnabled", "接近节点时切人步行", "switch"),
                 field("autoFightEnabled", "自动战斗", "switch"),
-                field("autoFightStrategyName", "战斗策略", "text"),
+                field("autoFightStrategyName", "战斗策略", "strategy-select", "combat-strategies"),
                 field("autoFightTeamNames", "战斗队伍限制", "text"),
                 field("fightFinishDetectEnabled", "战斗结束识别", "switch"),
                 field("pickDropsAfterFightEnabled", "战斗后拾取掉落", "switch"),
@@ -72,6 +76,10 @@ public class ScriptGroupSettingsExecutionModule implements CultivationExecutionM
     public Map<String, Object> defaultSettings(String uid) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("pathingEnabled", true);
+        result.put("managedPartyOptions", List.of());
+        result.put("hiddenPartyOptions", List.of());
+        result.put("managedCombatStrategyOptions", List.of());
+        result.put("hiddenCombatStrategyOptions", List.of());
         result.put("partyName", "");
         result.put("autoPickEnabled", true);
         result.put("mainAvatarIndex", "1");

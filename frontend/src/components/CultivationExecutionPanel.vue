@@ -3,6 +3,8 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {Connection, MagicStick, Refresh, Setting, VideoPlay} from '@element-plus/icons-vue'
 import router from '@router/router.js'
+import CultivationMaterialProgress from '@/components/cultivation/CultivationMaterialProgress.vue'
+import CultivationOptionManager from '@/components/cultivation/CultivationOptionManager.vue'
 import {
   getCultivationExecutionModules,
   getCultivationExecutionProjection,
@@ -35,19 +37,63 @@ let loadGeneration = 0
 
 const partyOptions = computed(() => {
   const result = new Set(projection.value?.partyOptions || [])
+  const hidden = new Set()
   modules.value.forEach(module => {
+    ;(module.settings?.hiddenPartyOptions || []).forEach(value => hidden.add(value))
     Object.entries(module.settings || {})
-      .filter(([key]) => key.toLowerCase().includes('party'))
+      .filter(([key]) => key.toLowerCase().includes('party') && !key.toLowerCase().includes('hidden'))
       .forEach(([, value]) => {
-        if (value) result.add(value)
+        if (Array.isArray(value)) value.filter(Boolean).forEach(item => result.add(item))
+        else if (value) result.add(value)
       })
   })
-  return Array.from(result)
+  return Array.from(result).filter(value => !hidden.has(value))
 })
-const gatherTargets = computed(() => projection.value?.gatherAction?.csvTargets || [])
-const monsterTargets = computed(() => projection.value?.monsterAction?.targets || [])
-const bossActions = computed(() => projection.value?.bossActions || [])
-const weeklyBossActions = computed(() => projection.value?.weeklyBossActions || [])
+const combatStrategyOptions = computed(() => {
+  const result = new Set(projection.value?.combatStrategyOptions || [])
+  const hidden = new Set()
+  modules.value.forEach(module => {
+    ;(module.settings?.hiddenCombatStrategyOptions || []).forEach(value => hidden.add(value))
+    Object.entries(module.settings || {})
+      .filter(([key]) => key.toLowerCase().includes('strategy') && !key.toLowerCase().includes('hidden'))
+      .forEach(([, value]) => {
+        if (Array.isArray(value)) value.filter(Boolean).forEach(item => result.add(item))
+        else if (value) result.add(value)
+      })
+  })
+  hidden.delete('根据队伍自动选择')
+  return Array.from(result).filter(value => !hidden.has(value))
+})
+const progressByName = computed(() => new Map(
+  (projection.value?.materialProgress || []).map(item => [item.materialName, item])))
+const progressFor = materialName => {
+  const progress = progressByName.value.get(materialName)
+  if (!progress) return []
+  return (projection.value?.materialProgress || [])
+    .filter(item => item.familyName === progress.familyName)
+    .sort((left, right) => (left.tierIndex ?? 0) - (right.tierIndex ?? 0))
+}
+const groupByMaterialFamily = (items, discriminator = () => '') => {
+  const seen = new Set()
+  return (items || []).filter(item => {
+    const progress = progressByName.value.get(item.materialName)
+    const key = `${progress?.familyName || item.materialName}|${discriminator(item)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+const resinActions = computed(() => groupByMaterialFamily(
+  projection.value?.resinActions, action => action.sourceName))
+const gatherTargets = computed(() => groupByMaterialFamily(projection.value?.gatherAction?.csvTargets))
+const monsterTargets = computed(() => groupByMaterialFamily(
+  projection.value?.monsterAction?.targets, target => target.routeFamily))
+const bossActions = computed(() => groupByMaterialFamily(
+  projection.value?.bossActions, action => action.bossName))
+const weeklyBossActions = computed(() => groupByMaterialFamily(
+  projection.value?.weeklyBossActions, action => action.bossName))
+const craftingActions = computed(() => groupByMaterialFamily(projection.value?.craftingActions))
+const pendingMaterials = computed(() => groupByMaterialFamily(projection.value?.pendingMaterials))
 const hasProjection = computed(() => Boolean(projection.value))
 const displayModules = computed(() => [...modules.value].sort((left, right) => {
   if (left.module.moduleId === GROUP_SETTINGS_MODULE_ID) return -1
@@ -115,6 +161,7 @@ const saveModule = async module => {
 }
 
 const moduleFields = module => module.module.settingsSchema || []
+const visibleModuleFields = module => moduleFields(module).filter(field => field.control !== 'hidden')
 const settingsPayload = module => Object.fromEntries(
   moduleFields(module)
     .filter(field => field.editable)
@@ -122,10 +169,30 @@ const settingsPayload = module => Object.fromEntries(
 )
 const fieldOptions = field => {
   if (field.optionsSource === 'uid-parties') return partyOptions.value
+  if (field.optionsSource === 'combat-strategies') return combatStrategyOptions.value
   if (field.optionsSource === 'monster-route-families') {
     return projection.value?.monsterAction?.availableRouteFamilies || []
   }
   return field.options || []
+}
+const optionManagerHiddenKey = field => field.key === 'managedPartyOptions'
+  ? 'hiddenPartyOptions'
+  : 'hiddenCombatStrategyOptions'
+const optionManagerValues = (module, key) => Array.isArray(module.settings[key]) ? module.settings[key] : []
+const updateOptionManagerValues = (module, key, value) => {
+  module.settings[key] = value
+}
+const orderedValues = (module, field) => {
+  const value = module.settings[field.key]
+  if (!Array.isArray(value)) module.settings[field.key] = []
+  return module.settings[field.key]
+}
+const moveOrderedValue = (module, field, index, offset) => {
+  const values = [...orderedValues(module, field)]
+  const target = index + offset
+  if (target < 0 || target >= values.length) return
+  ;[values[index], values[target]] = [values[target], values[index]]
+  module.settings[field.key] = values
 }
 const canSync = module => ['cd-aware-auto-gather', 'fully-auto-and-semi-auto-tools']
   .includes(module.module.moduleId)
@@ -320,19 +387,53 @@ watch(() => props.uid, () => load(), {immediate: true})
       <el-dialog
           v-model="settingsDialogOpen"
           :title="editingModule ? `${editingModule.module.displayName} 设置` : '脚本设置'"
-          width="760px"
+          width="920px"
           class="module-settings-dialog"
           append-to-body
           destroy-on-close
       >
-        <div v-if="editingModule" class="settings-dialog-grid">
-          <label v-for="field in moduleFields(editingModule)" :key="field.key" class="module-field">
+          <div v-if="editingModule" class="settings-dialog-grid">
+          <label
+              v-for="field in visibleModuleFields(editingModule)"
+              :key="field.key"
+              class="module-field"
+              :class="{'module-field-wide': field.control === 'option-manager' || field.control === 'ordered-multi-select'}"
+          >
             <span>{{ field.label }}<small v-if="!field.editable">由账本自动生成</small></span>
+            <CultivationOptionManager
+                v-if="field.control === 'option-manager'"
+                :model-value="optionManagerValues(editingModule, field.key)"
+                :hidden-values="optionManagerValues(editingModule, optionManagerHiddenKey(field))"
+                :detected-options="fieldOptions(field)"
+                :placeholder="field.optionsSource === 'uid-parties' ? '输入讨伐队伍名称' : '输入战斗策略名称'"
+                :protected-values="field.optionsSource === 'combat-strategies' ? ['根据队伍自动选择'] : []"
+                @update:model-value="updateOptionManagerValues(editingModule, field.key, $event)"
+                @update:hidden-values="updateOptionManagerValues(editingModule, optionManagerHiddenKey(field), $event)"
+            />
+            <div v-else-if="field.control === 'ordered-multi-select'" class="ordered-multi-select">
+              <el-checkbox-group v-model="editingModule.settings[field.key]">
+                <el-checkbox v-for="option in fieldOptions(field)" :key="option" :value="option">
+                  {{ option }}
+                </el-checkbox>
+              </el-checkbox-group>
+              <ol class="ordered-selection-list">
+                <li v-for="(option, index) in orderedValues(editingModule, field)" :key="option">
+                  <span>{{ index + 1 }}. {{ option }}</span>
+                  <div>
+                    <el-button size="small" :disabled="index === 0"
+                               @click.prevent="moveOrderedValue(editingModule, field, index, -1)">上移</el-button>
+                    <el-button size="small" :disabled="index === orderedValues(editingModule, field).length - 1"
+                               @click.prevent="moveOrderedValue(editingModule, field, index, 1)">下移</el-button>
+                  </div>
+                </li>
+              </ol>
+              <small>勾选即启用；上方顺序就是实际消耗优先级，未勾选的树脂不会使用。</small>
+            </div>
             <el-select
-                v-if="field.control === 'party-select' || field.control === 'select'"
+                v-else-if="field.control === 'party-select' || field.control === 'strategy-select' || field.control === 'select'"
                 v-model="editingModule.settings[field.key]"
-                :filterable="field.control === 'party-select'"
-                :allow-create="field.control === 'party-select'"
+                :filterable="field.control === 'party-select' || field.control === 'strategy-select'"
+                :allow-create="field.control === 'party-select' || field.control === 'strategy-select'"
                 :clearable="field.editable"
                 :disabled="!field.editable"
                 placeholder="请选择"
@@ -384,21 +485,42 @@ watch(() => props.uid, () => load(), {immediate: true})
         <article class="action-card">
           <div class="card-heading">
             <h3>自动体力行动</h3>
-            <el-tag effect="plain">{{ projection.resinActions.length }} 项</el-tag>
+            <el-tag effect="plain">{{ resinActions.length }} 项</el-tag>
           </div>
-          <div v-if="projection.resinActions.length" class="action-list">
-            <div v-for="action in projection.resinActions" :key="`${action.materialName}-${action.sourceName}`" class="action-row">
-              <div>
-                <strong>{{ action.sourceName }}</strong>
-                <span>{{ action.actionType }} · {{ action.sourceType }}</span>
-              </div>
-              <div class="action-target">
-                <span>{{ action.materialName }}</span>
-                <strong>还需 {{ action.remaining.toLocaleString() }}</strong>
-              </div>
+          <div v-if="resinActions.length" class="action-list">
+            <div v-for="action in resinActions" :key="`${action.materialName}-${action.sourceName}`" class="plan-entry">
+              <header class="entry-heading">
+                <div>
+                  <strong>{{ action.sourceName }}</strong>
+                  <span>{{ action.actionType }} · {{ action.sourceType }}</span>
+                </div>
+              </header>
+              <CultivationMaterialProgress :items="progressFor(action.materialName)"/>
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有可投影的体力行动"/>
+        </article>
+
+        <article class="action-card crafting-card">
+          <div class="card-heading">
+            <h3>材料合成</h3>
+            <el-tag :type="craftingActions.length ? 'warning' : 'info'" effect="plain">
+              {{ craftingActions.length }} 项
+            </el-tag>
+          </div>
+          <p class="adapter-name">按 3:1 通路合成；每一级需求均单独保留</p>
+          <div v-if="craftingActions.length" class="action-list">
+            <div v-for="action in craftingActions" :key="action.materialName" class="plan-entry">
+              <header class="entry-heading">
+                <div>
+                  <strong>合成 {{ action.materialName }} × {{ action.quantity.toLocaleString() }}</strong>
+                  <span>{{ action.materialType }}</span>
+                </div>
+              </header>
+              <CultivationMaterialProgress :items="progressFor(action.materialName)"/>
+            </div>
+          </div>
+          <el-empty v-else :image-size="64" description="当前没有需要执行的材料合成"/>
         </article>
 
         <article class="action-card boss-card">
@@ -408,15 +530,14 @@ watch(() => props.uid, () => load(), {immediate: true})
           </div>
           <p class="adapter-name">执行模块：AutoPlan 首领任务</p>
           <div v-if="bossActions.length" class="action-list">
-            <div v-for="action in bossActions" :key="action.materialName" class="action-row">
-              <div>
-                <strong>{{ action.bossName }}</strong>
-                <span>{{ action.country }} · 队伍 {{ action.partyName || '沿用默认' }}</span>
-              </div>
-              <div class="action-target">
-                <span>{{ action.materialName }}</span>
-                <strong>还需 {{ action.remaining.toLocaleString() }}</strong>
-              </div>
+            <div v-for="action in bossActions" :key="action.materialName" class="plan-entry">
+              <header class="entry-heading">
+                <div>
+                  <strong>{{ action.bossName }}</strong>
+                  <span>{{ action.country }} · 队伍 {{ action.partyName || '沿用默认' }}</span>
+                </div>
+              </header>
+              <CultivationMaterialProgress :items="progressFor(action.materialName)"/>
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有世界首领材料缺口"/>
@@ -431,10 +552,11 @@ watch(() => props.uid, () => load(), {immediate: true})
           </div>
           <p class="adapter-name">执行脚本：{{ projection.gatherAction.scriptName }}</p>
           <div v-if="gatherTargets.length" class="target-list">
-            <div v-for="target in gatherTargets" :key="target.materialName" class="target-row">
-              <span>{{ target.country }} · {{ target.materialName }}</span>
-              <strong>目标库存 {{ target.required.toLocaleString() }}</strong>
-              <small>当前 {{ target.currentOwned.toLocaleString() }}，还需 {{ target.remaining.toLocaleString() }}</small>
+            <div v-for="target in gatherTargets" :key="target.materialName" class="plan-entry">
+              <header class="entry-heading">
+                <div><strong>{{ target.country }}</strong><span>地方特产路线</span></div>
+              </header>
+              <CultivationMaterialProgress :items="progressFor(target.materialName)"/>
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有地方特产缺口"/>
@@ -449,10 +571,14 @@ watch(() => props.uid, () => load(), {immediate: true})
           </div>
           <p class="adapter-name">执行脚本：{{ projection.monsterAction.scriptName }}</p>
           <div v-if="monsterTargets.length" class="target-list">
-            <div v-for="target in monsterTargets" :key="target.materialName" class="target-row">
-              <span>{{ target.routeFamily }} · {{ target.materialName }}</span>
-              <strong>还需 {{ target.remaining.toLocaleString() }}</strong>
-              <small>{{ target.monsters.slice(0, 3).join('、') }}{{ target.monsters.length > 3 ? ` 等 ${target.monsters.length} 种怪物` : '' }}</small>
+            <div v-for="target in monsterTargets" :key="target.materialName" class="plan-entry">
+              <header class="entry-heading">
+                <div>
+                  <strong>{{ target.routeFamily }}</strong>
+                  <span>{{ target.monsters.slice(0, 3).join('、') }}{{ target.monsters.length > 3 ? ` 等 ${target.monsters.length} 种怪物` : '' }}</span>
+                </div>
+              </header>
+              <CultivationMaterialProgress :items="progressFor(target.materialName)"/>
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有怪物材料缺口"/>
@@ -467,29 +593,28 @@ watch(() => props.uid, () => load(), {immediate: true})
           </div>
           <p class="adapter-name">执行脚本：WeeklyBoss</p>
           <div v-if="weeklyBossActions.length" class="action-list">
-            <div v-for="action in weeklyBossActions" :key="action.materialName" class="action-row">
-              <div>
-                <strong>{{ action.bossName }}</strong>
-                <span>{{ action.actionState }}</span>
-              </div>
-              <div class="action-target">
-                <span>{{ action.materialName }}</span>
-                <strong>还需 {{ action.remaining.toLocaleString() }}</strong>
-              </div>
+            <div v-for="action in weeklyBossActions" :key="action.materialName" class="plan-entry">
+              <header class="entry-heading">
+                <div>
+                  <strong>{{ action.bossName }}</strong>
+                  <span>{{ action.actionState }}</span>
+                </div>
+              </header>
+              <CultivationMaterialProgress :items="progressFor(action.materialName)"/>
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有周本材料缺口"/>
         </article>
 
-        <article v-if="projection.pendingMaterials.length" class="action-card pending-card">
+        <article v-if="pendingMaterials.length" class="action-card pending-card">
           <div class="card-heading">
             <h3>人工与未自动化材料</h3>
-            <el-tag type="info" effect="plain">{{ projection.pendingMaterials.length }} 项</el-tag>
+            <el-tag type="info" effect="plain">{{ pendingMaterials.length }} 项</el-tag>
           </div>
           <div class="pending-list">
-            <div v-for="item in projection.pendingMaterials" :key="item.materialName">
-              <span>{{ item.materialName }} · 还需 {{ item.remaining.toLocaleString() }}</span>
-              <small>{{ item.reason }}</small>
+            <div v-for="item in pendingMaterials" :key="item.materialName" class="plan-entry">
+              <p class="pending-reason">{{ item.reason }}</p>
+              <CultivationMaterialProgress :items="progressFor(item.materialName)"/>
             </div>
           </div>
         </article>
@@ -513,8 +638,7 @@ watch(() => props.uid, () => load(), {immediate: true})
 .title-line,
 .band-heading,
 .card-heading,
-.action-row,
-.target-row {
+.entry-heading {
   display: flex;
   align-items: center;
 }
@@ -528,8 +652,7 @@ watch(() => props.uid, () => load(), {immediate: true})
 
 .panel-header,
 .card-heading,
-.action-row,
-.target-row {
+.entry-heading {
   justify-content: space-between;
 }
 
@@ -570,9 +693,8 @@ watch(() => props.uid, () => load(), {immediate: true})
 }
 
 .module-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
-  gap: 12px;
+  column-count: 3;
+  column-gap: 12px;
 }
 
 .band-heading p,
@@ -584,12 +706,16 @@ watch(() => props.uid, () => load(), {immediate: true})
 
 .module-card {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 10px;
   min-width: 0;
+  margin-bottom: 12px;
   padding: 14px;
-  background: rgba(249, 250, 251, 0.92);
-  border: 1px solid rgba(70, 78, 88, 0.12);
-  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--el-border-radius-base);
+  break-inside: avoid;
 }
 
 .module-header {
@@ -652,10 +778,38 @@ watch(() => props.uid, () => load(), {immediate: true})
   font-size: 11px;
 }
 
+.module-field-wide {
+  grid-column: 1 / -1;
+}
+
+.ordered-multi-select {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(70, 78, 88, 0.14);
+  border-radius: 8px;
+}
+
+.ordered-selection-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ordered-selection-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .settings-dialog-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 18px;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  align-items: start;
+  gap: 14px 20px;
   max-height: min(68vh, 720px);
   overflow-y: auto;
   padding-right: 6px;
@@ -672,17 +826,18 @@ watch(() => props.uid, () => load(), {immediate: true})
 }
 
 .action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  column-count: 2;
+  column-gap: 14px;
 }
 
 .action-card {
   min-width: 0;
+  margin-bottom: 14px;
   padding: 16px;
-  background: rgba(249, 250, 251, 0.9);
-  border: 1px solid rgba(70, 78, 88, 0.12);
-  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--el-border-radius-base);
+  break-inside: avoid;
 }
 
 .card-heading h3 {
@@ -697,32 +852,23 @@ watch(() => props.uid, () => load(), {immediate: true})
   margin-top: 12px;
 }
 
-.action-row,
-.target-row,
-.pending-list > div {
-  gap: 12px;
+.plan-entry {
+  display: grid;
+  gap: 10px;
   padding: 10px 0;
   border-top: 1px solid rgba(70, 78, 88, 0.1);
 }
 
-.action-row > div,
-.action-target,
-.target-row,
-.pending-list > div {
+.entry-heading,
+.entry-heading > div {
   display: grid;
   gap: 3px;
 }
 
-.action-target {
-  text-align: right;
-}
-
-.target-row {
-  grid-template-columns: minmax(120px, 1fr) auto;
-}
-
-.target-row small {
-  grid-column: 1 / -1;
+.entry-heading span,
+.pending-reason {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .adapter-name {
@@ -731,11 +877,12 @@ watch(() => props.uid, () => load(), {immediate: true})
 }
 
 .pending-card {
-  grid-column: 1 / -1;
+  column-span: none;
 }
 
-.pending-list > div {
-  grid-template-columns: minmax(180px, auto) 1fr;
+.pending-reason {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .empty-projection {
@@ -746,7 +893,7 @@ watch(() => props.uid, () => load(), {immediate: true})
 
 @media (max-width: 1050px) {
   .module-grid {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    column-count: 2;
   }
 }
 
@@ -757,13 +904,12 @@ watch(() => props.uid, () => load(), {immediate: true})
 
   .action-grid,
   .module-grid {
-    grid-template-columns: 1fr;
+    column-count: 1;
   }
 
   .panel-header,
   .title-line,
-  .action-row,
-  .target-row {
+  .entry-heading {
     align-items: flex-start;
   }
 
@@ -777,23 +923,8 @@ watch(() => props.uid, () => load(), {immediate: true})
   }
 
   .title-line,
-  .action-row,
-  .target-row {
+  .entry-heading {
     flex-direction: column;
-  }
-
-  .action-target {
-    text-align: left;
-  }
-
-  .target-row,
-  .pending-list > div {
-    grid-template-columns: 1fr;
-  }
-
-  .target-row small,
-  .pending-card {
-    grid-column: auto;
   }
 }
 </style>
