@@ -120,24 +120,22 @@ const watchLockExecution = executionJobId => {
   const generation = ++executionWatchGeneration
   const requestedUid = props.uid.trim()
   const selectedJobId = jobId.value
+  const isCurrentWatch = () => generation === executionWatchGeneration
+    && requestedUid === props.uid.trim()
+    && jobId.value === selectedJobId
   void waitForArtifactJobCompletion(executionJobId, getArtifactJob, {
     attempts: null,
     terminalStatuses: ['COMPLETED', 'FAILED', 'READY_FOR_REVIEW', 'RESCAN_REQUIRED', 'STALE_ABORT'],
-    shouldContinue: () => generation === executionWatchGeneration
-      && requestedUid === props.uid.trim()
-      && jobId.value === selectedJobId,
+    shouldContinue: isCurrentWatch,
     onUpdate: current => {
-      if (generation === executionWatchGeneration
-        && requestedUid === props.uid.trim()
-        && jobId.value === selectedJobId
+      if (isCurrentWatch()
         && current?.uid === requestedUid
         && current?.id === jobId.value) job.value = current
     },
   }).then(async completed => {
-    if (generation !== executionWatchGeneration
-      || requestedUid !== props.uid.trim()
-      || jobId.value !== selectedJobId) return
+    if (!isCurrentWatch()) return
     await load(true)
+    if (!isCurrentWatch()) return
     if (completed?.status === 'COMPLETED') ElMessage.success('锁定方案执行完成')
     else if (['READY_FOR_REVIEW', 'RESCAN_REQUIRED'].includes(completed?.status)) {
       ElMessage.warning('圣遗物数据已变化，请审核重新扫描后的方案')
@@ -146,9 +144,7 @@ const watchLockExecution = executionJobId => {
     else if (completed?.status === 'FAILED') ElMessage.error('锁定方案执行失败，请查看任务详情')
     else ElMessage.warning('锁定方案仍在执行，请稍后刷新')
   }).catch(() => {
-    if (generation === executionWatchGeneration
-      && requestedUid === props.uid.trim()
-      && jobId.value === selectedJobId) {
+    if (isCurrentWatch()) {
       ElMessage.error('无法读取锁定方案执行状态，请稍后刷新')
     }
   })
