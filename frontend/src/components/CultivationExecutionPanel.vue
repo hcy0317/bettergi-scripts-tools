@@ -92,7 +92,6 @@ const bossActions = computed(() => groupByMaterialFamily(
   projection.value?.bossActions, action => action.bossName))
 const weeklyBossActions = computed(() => groupByMaterialFamily(
   projection.value?.weeklyBossActions, action => action.bossName))
-const craftingActions = computed(() => groupByMaterialFamily(projection.value?.craftingActions))
 const pendingMaterials = computed(() => groupByMaterialFamily(projection.value?.pendingMaterials))
 const hasProjection = computed(() => Boolean(projection.value))
 const displayModules = computed(() => [...modules.value].sort((left, right) => {
@@ -499,28 +498,6 @@ watch(() => props.uid, () => load(), {immediate: true})
             </div>
           </div>
           <el-empty v-else :image-size="64" description="当前没有可投影的体力行动"/>
-        </article>
-
-        <article class="action-card crafting-card">
-          <div class="card-heading">
-            <h3>材料合成</h3>
-            <el-tag :type="craftingActions.length ? 'warning' : 'info'" effect="plain">
-              {{ craftingActions.length }} 项
-            </el-tag>
-          </div>
-          <p class="adapter-name">按 3:1 通路合成；每一级需求均单独保留</p>
-          <div v-if="craftingActions.length" class="action-list">
-            <div v-for="action in craftingActions" :key="action.materialName" class="plan-entry">
-              <header class="entry-heading">
-                <div>
-                  <strong>合成 {{ action.materialName }} × {{ action.quantity.toLocaleString() }}</strong>
-                  <span>{{ action.materialType }}</span>
-                </div>
-              </header>
-              <CultivationMaterialProgress :items="progressFor(action.materialName)"/>
-            </div>
-          </div>
-          <el-empty v-else :image-size="64" description="当前没有需要执行的材料合成"/>
         </article>
 
         <article class="action-card boss-card">
