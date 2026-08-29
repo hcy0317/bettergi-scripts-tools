@@ -502,6 +502,46 @@ public class CultivationPlanDrivenExecutionService {
         }
     }
 
+    private Map<String, List<String>> readInventoryTargetGroups(
+            CultivationExecutionActionEntity entity,
+            Map<String, List<String>> currentGroups) {
+        try {
+            var json = objectMapper.readTree(entity.getPlanJson());
+            if (!json.isArray()) {
+                Map<String, List<String>> grouped = objectMapper.convertValue(json, new TypeReference<>() {});
+                return grouped.entrySet().stream().collect(java.util.stream.Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> List.copyOf(entry.getValue()),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+            }
+
+            LinkedHashSet<String> frozen = new LinkedHashSet<>(
+                    objectMapper.convertValue(json, new TypeReference<List<String>>() {}));
+            LinkedHashSet<String> assigned = new LinkedHashSet<>();
+            LinkedHashMap<String, List<String>> grouped = new LinkedHashMap<>();
+            if (currentGroups != null) {
+                currentGroups.forEach((grid, values) -> {
+                    List<String> matching = values.stream()
+                            .filter(frozen::contains)
+                            .filter(assigned::add)
+                            .toList();
+                    if (!matching.isEmpty()) grouped.put(grid, matching);
+                });
+            }
+            List<String> remaining = frozen.stream().filter(assigned::add).toList();
+            if (!remaining.isEmpty()) {
+                List<String> merged = new java.util.ArrayList<>(
+                        grouped.getOrDefault("CharacterDevelopmentItems", List.of()));
+                merged.addAll(remaining);
+                grouped.put("CharacterDevelopmentItems", List.copyOf(merged));
+            }
+            return Map.copyOf(grouped);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("无法读取组末库存复核分组目标", exception);
+        }
+    }
+
     private Map<String, Long> readInventoryObservations(CultivationExecutionActionEntity entity) {
         if (entity.getRewardsJson() == null || entity.getRewardsJson().isBlank()) return Map.of();
         try {
@@ -529,9 +569,11 @@ public class CultivationPlanDrivenExecutionService {
     private CultivationInventoryReconcileTargetsResponse inventoryResponse(
             CultivationExecutionActionEntity entity, String status, String message,
             Map<String, List<String>> materialNamesByGrid) {
+        Map<String, List<String>> frozenGroups = readInventoryTargetGroups(
+                entity, materialNamesByGrid);
         return new CultivationInventoryReconcileTargetsResponse(
                 status, message, entity.getUid(), entity.getPlanRevision(), entity.getId(),
-                entity.getLeaseExpiresAt(), readInventoryTargets(entity), materialNamesByGrid);
+                entity.getLeaseExpiresAt(), readInventoryTargets(entity), frozenGroups);
     }
 
     private static CultivationInventoryReconcileTargetsResponse inventoryStatus(

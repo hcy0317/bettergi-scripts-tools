@@ -499,6 +499,36 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
+    void legacyInventoryRetryKeepsItsFrozenTargetsWhenTheCatalogExpands() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = inventoryBatch("legacy-inventory-retry");
+        awaiting.setStatus("AWAITING_RECONCILE");
+        awaiting.setResultIdempotencyKey("legacy-inventory-retry:result");
+        awaiting.setPlanJson("[\"织金红绸\"]");
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of("破旧的刀镡", "影打刀镡", "名刀镡")));
+        when(mapper.findLeased("102550550", 3)).thenReturn(awaiting);
+        when(mapper.selectById("legacy-inventory-retry")).thenReturn(awaiting);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationInventoryReconcileTargetsResponse response =
+                service.claimInventoryReconcile("102550550", "retry-a");
+        CultivationInventoryObservationResponse completed = service.recordInventoryObservations(
+                "102550550", new CultivationInventoryObservationRequest(
+                        "legacy-inventory-retry", "retry-a", 3,
+                        "legacy-inventory-retry:result", Map.of("织金红绸", 73L)));
+
+        assertThat(response.materialNames()).containsExactly("织金红绸");
+        assertThat(response.materialNamesByGrid())
+                .containsEntry("CharacterDevelopmentItems", List.of("织金红绸"));
+        assertThat(completed.status()).isEqualTo("REPLANNING");
+    }
+
+    @Test
     void persistsFinalGatherAndMonsterInventoryAsOneLeasedIdempotentBatch() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
