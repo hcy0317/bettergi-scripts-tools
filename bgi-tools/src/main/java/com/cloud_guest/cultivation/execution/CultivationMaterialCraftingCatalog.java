@@ -34,8 +34,10 @@ public class CultivationMaterialCraftingCatalog {
         Map<String, CraftFamily> current = familyByMaterial;
         if (current != null) return current;
         synchronized (this) {
-            if (familyByMaterial == null) familyByMaterial = loadFamilies();
-            return familyByMaterial;
+            if (familyByMaterial != null) return familyByMaterial;
+            Map<String, CraftFamily> loaded = loadFamilies();
+            if (!loaded.isEmpty()) familyByMaterial = loaded;
+            return loaded;
         }
     }
 

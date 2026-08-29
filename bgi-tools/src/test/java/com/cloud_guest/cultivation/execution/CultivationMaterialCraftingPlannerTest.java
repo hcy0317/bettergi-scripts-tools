@@ -31,6 +31,19 @@ class CultivationMaterialCraftingPlannerTest {
     }
 
     @Test
+    void retriesCatalogLoadingAfterTheDetectedBetterGiRootBecomesReady() throws Exception {
+        Path unavailableRoot = betterGiRoot.resolve("not-ready");
+        Path readyRoot = betterGiRoot.resolve("ready");
+        writeCatalog(readyRoot);
+        CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        when(sourceCatalog.betterGiRoot()).thenReturn(unavailableRoot, readyRoot);
+        CultivationMaterialCraftingCatalog catalog = new CultivationMaterialCraftingCatalog(sourceCatalog);
+
+        assertThat(catalog.family("哀叙冰玉")).isEmpty();
+        assertThat(catalog.family("哀叙冰玉")).isPresent();
+    }
+
+    @Test
     void reservesEveryTierRequirementBeforePlanningThreeToOneCrafts() throws Exception {
         CultivationMaterialCraftingPlanner planner = new CultivationMaterialCraftingPlanner(catalog());
 
@@ -71,7 +84,14 @@ class CultivationMaterialCraftingPlannerTest {
     }
 
     private CultivationMaterialCraftingCatalog catalog() throws Exception {
-        Path csv = betterGiRoot.resolve(Path.of("Assets", "Model", "ItemV2", "item.csv"));
+        writeCatalog(betterGiRoot);
+        CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        when(sourceCatalog.betterGiRoot()).thenReturn(betterGiRoot);
+        return new CultivationMaterialCraftingCatalog(sourceCatalog);
+    }
+
+    private static void writeCatalog(Path root) throws Exception {
+        Path csv = root.resolve(Path.of("Assets", "Model", "ItemV2", "item.csv"));
         Files.createDirectories(csv.getParent());
         Files.writeString(csv, """
                 variant_id,item_class_id,item_name,material_type,food_base_name,quality_level,weapon_state,weapon_type,embedding
@@ -87,9 +107,6 @@ class CultivationMaterialCraftingPlannerTest {
                 material:112082,material:112082,异色结晶石,角色与武器培养素材,,3,,,x
                 material:101222,material:101222,沙脂蛹,角色突破素材,,0,,,x
                 """);
-        CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
-        when(sourceCatalog.betterGiRoot()).thenReturn(betterGiRoot);
-        return new CultivationMaterialCraftingCatalog(sourceCatalog);
     }
 
     private static CultivationLedgerEntry entry(String name, long required, long owned) {
