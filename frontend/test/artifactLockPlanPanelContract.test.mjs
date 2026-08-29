@@ -15,4 +15,8 @@ test('manual BetterGI connection resumes lock execution observation', () => {
   assert.match(panelSource, /attempts:\s*null/)
   assert.match(panelSource, /shouldContinue:/)
   assert.match(panelSource, /executionWatchGeneration\+\+/)
+  assert.match(panelSource, /const selectedJobId = jobId\.value/)
+  assert.match(panelSource, /jobId\.value === selectedJobId/)
+  assert.match(panelSource, /current\?\.id === jobId\.value/)
+  assert.match(panelSource, /jobId\.value !== selectedJobId/)
 })

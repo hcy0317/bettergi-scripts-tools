@@ -119,18 +119,24 @@ const watchLockExecution = executionJobId => {
   if (!executionJobId) return
   const generation = ++executionWatchGeneration
   const requestedUid = props.uid.trim()
+  const selectedJobId = jobId.value
   void waitForArtifactJobCompletion(executionJobId, getArtifactJob, {
     attempts: null,
     terminalStatuses: ['COMPLETED', 'FAILED', 'READY_FOR_REVIEW', 'RESCAN_REQUIRED', 'STALE_ABORT'],
     shouldContinue: () => generation === executionWatchGeneration
-      && requestedUid === props.uid.trim(),
+      && requestedUid === props.uid.trim()
+      && jobId.value === selectedJobId,
     onUpdate: current => {
       if (generation === executionWatchGeneration
         && requestedUid === props.uid.trim()
-        && current?.uid === requestedUid) job.value = current
+        && jobId.value === selectedJobId
+        && current?.uid === requestedUid
+        && current?.id === jobId.value) job.value = current
     },
   }).then(async completed => {
-    if (generation !== executionWatchGeneration || requestedUid !== props.uid.trim()) return
+    if (generation !== executionWatchGeneration
+      || requestedUid !== props.uid.trim()
+      || jobId.value !== selectedJobId) return
     await load(true)
     if (completed?.status === 'COMPLETED') ElMessage.success('锁定方案执行完成')
     else if (['READY_FOR_REVIEW', 'RESCAN_REQUIRED'].includes(completed?.status)) {
@@ -140,7 +146,9 @@ const watchLockExecution = executionJobId => {
     else if (completed?.status === 'FAILED') ElMessage.error('锁定方案执行失败，请查看任务详情')
     else ElMessage.warning('锁定方案仍在执行，请稍后刷新')
   }).catch(() => {
-    if (generation === executionWatchGeneration) {
+    if (generation === executionWatchGeneration
+      && requestedUid === props.uid.trim()
+      && jobId.value === selectedJobId) {
       ElMessage.error('无法读取锁定方案执行状态，请稍后刷新')
     }
   })
