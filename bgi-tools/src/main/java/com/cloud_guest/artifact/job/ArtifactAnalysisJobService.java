@@ -287,7 +287,9 @@ public class ArtifactAnalysisJobService {
                 .filter(candidate -> candidate.decisionPlan() != null)
                 .filter(candidate -> sourceJob.decisionPlan().planId()
                         .equals(candidate.decisionPlan().planId()))
-                .anyMatch(candidate -> candidate.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                .anyMatch(candidate -> (candidate.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                        && !launchRequestService.isExpired(
+                        candidate.createdAtUtc(), clock.instant()))
                         || candidate.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
                         || candidate.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
         if (activeAttemptExists) {
@@ -577,6 +579,7 @@ public class ArtifactAnalysisJobService {
     private ArtifactAnalysisJob presentPolicyStatus(
             ArtifactAnalysisJob job,
             String currentInputDigest) {
+        job = presentLaunchStatus(job);
         boolean reviewable = job.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
                 || job.status() == ArtifactAnalysisJobStatus.APPROVED;
         boolean currentPolicy = usesCurrentScoringPolicy(job);
@@ -596,6 +599,7 @@ public class ArtifactAnalysisJobService {
     private ArtifactAnalysisJobSummary presentPolicyStatus(
             ArtifactAnalysisJobSummary summary,
             String currentInputDigest) {
+        summary = presentLaunchStatus(summary);
         boolean reviewable = summary.status() == ArtifactAnalysisJobStatus.READY_FOR_REVIEW
                 || summary.status() == ArtifactAnalysisJobStatus.APPROVED;
         if (!reviewable || summary.analysisResult() == null) {
@@ -614,6 +618,34 @@ public class ArtifactAnalysisJobService {
                 currentPolicy
                         ? "Build 或评分设置已更新，请重新计算后再审核。"
                         : "评分算法已更新，请重新扫描后再审核。");
+    }
+
+    private ArtifactAnalysisJob presentLaunchStatus(ArtifactAnalysisJob job) {
+        if (job.status() != ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                || !launchRequestService.isExpired(
+                job.createdAtUtc(), clock.instant())) {
+            return job;
+        }
+        return new ArtifactAnalysisJob(
+                job.id(), job.uid(), job.operation(), ArtifactAnalysisJobStatus.FAILED,
+                job.snapshot(), job.analysisResult(), job.decisionPlan(),
+                job.createdAtUtc(), job.updatedAtUtc(),
+                "连接 BetterGI 的请求已过期，请删除本次任务后重新发起。");
+    }
+
+    private ArtifactAnalysisJobSummary presentLaunchStatus(
+            ArtifactAnalysisJobSummary summary) {
+        if (summary.status() != ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                || !launchRequestService.isExpired(
+                summary.createdAtUtc(), clock.instant())) {
+            return summary;
+        }
+        return new ArtifactAnalysisJobSummary(
+                summary.id(), summary.uid(), summary.operation(),
+                ArtifactAnalysisJobStatus.FAILED,
+                summary.snapshot(), summary.analysisResult(), summary.decisionPlan(),
+                summary.createdAtUtc(), summary.updatedAtUtc(),
+                "连接 BetterGI 的请求已过期，请删除本次任务后重新发起。");
     }
 
     private ArtifactAnalysisJob copy(

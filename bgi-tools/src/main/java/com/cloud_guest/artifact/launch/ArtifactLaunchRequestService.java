@@ -11,6 +11,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.UUID;
 import java.util.List;
 import java.util.function.Supplier;
@@ -117,6 +118,14 @@ public class ArtifactLaunchRequestService {
 
     public ArtifactLaunchRequest consume(String token) {
         return consume(token, null, null, null);
+    }
+
+    public boolean isExpired(String createdAtUtc, Instant now) {
+        try {
+            return !Instant.parse(createdAtUtc).plus(ttl).isAfter(now);
+        } catch (DateTimeParseException exception) {
+            return true;
+        }
     }
 
     public ArtifactLaunchRequest consume(

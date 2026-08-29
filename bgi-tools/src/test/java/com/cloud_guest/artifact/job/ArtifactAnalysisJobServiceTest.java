@@ -419,6 +419,35 @@ class ArtifactAnalysisJobServiceTest {
     }
 
     @Test
+    void expiredUnclaimedExecutionStopsPollingAndDoesNotBlockRelaunch() {
+        InMemoryArtifactAnalysisJobRepository repository =
+                new InMemoryArtifactAnalysisJobRepository();
+        ArtifactAnalysisJobService service = service(repository);
+        ArtifactAnalysisJob sourceJob = service.start(
+                "102550550", ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        service.submitSnapshot(
+                sourceJob.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(sourceJob.id(), source.snapshotDigest());
+
+        ArtifactAnalysisJob firstAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        repository.save(new ArtifactAnalysisJob(
+                firstAttempt.id(), firstAttempt.uid(), firstAttempt.operation(),
+                firstAttempt.status(), firstAttempt.snapshot(), firstAttempt.analysisResult(),
+                firstAttempt.decisionPlan(), "2026-08-26T23:54:00Z",
+                "2026-08-26T23:54:00Z", firstAttempt.errorMessage()));
+
+        ArtifactAnalysisJob expired = service.get(firstAttempt.id());
+        assertThat(expired.status()).isEqualTo(ArtifactAnalysisJobStatus.FAILED);
+        assertThat(expired.errorMessage()).contains("连接 BetterGI 的请求已过期");
+
+        ArtifactAnalysisJob secondAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        assertThat(secondAttempt.id()).isNotEqualTo(firstAttempt.id());
+    }
+
+    @Test
     void approvedPlanCannotLaunchAgainstDifferentBuildInputs() {
         ArtifactAnalysisJobService service = service();
         ArtifactSnapshot source = snapshot(List.of(item(0, false)));

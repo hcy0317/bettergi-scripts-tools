@@ -130,7 +130,7 @@ test("artifact launch does not offer a second start after the host already finis
   assert.equal(artifactHostHasAcceptedJob(job), true);
 });
 
-test("artifact launch tolerates a running BetterGI that is still initializing", async () => {
+test("artifact launch prompt does not wait for a host that has not accepted the request", async () => {
   const states = Array.from({length: 29}, () => ({id: "job-1", status: "WAITING_FOR_HOST"}));
   states.push({id: "job-1", status: "HOST_CLAIMED"});
   let calls = 0;
@@ -141,8 +141,8 @@ test("artifact launch tolerates a running BetterGI that is still initializing", 
     {delay: 0, sleep: async () => {}}
   );
 
-  assert.equal(job.status, "HOST_CLAIMED");
-  assert.equal(calls, 30);
+  assert.equal(job.status, "WAITING_FOR_HOST");
+  assert.equal(calls, 1);
 });
 
 test("artifact states and operations have concise user-facing metadata", () => {

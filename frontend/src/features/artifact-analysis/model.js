@@ -88,7 +88,7 @@ export const artifactHostHasAcceptedJob = job => Boolean(
 export const waitForArtifactHostClaim = async (
   jobId,
   getJob,
-  {attempts = 36, delay = 350, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))} = {}
+  {attempts = 1, delay = 350, sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))} = {}
 ) => {
   let job = null
   for (let attempt = 0; attempt < attempts; attempt++) {

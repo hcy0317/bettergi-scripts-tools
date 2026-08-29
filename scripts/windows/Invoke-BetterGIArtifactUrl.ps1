@@ -120,29 +120,6 @@ if ($NoLaunch) {
     return
 }
 
-$runningBetterGi = @(Get-Process -Name BetterGI -ErrorAction SilentlyContinue | Where-Object {
-    try {
-        [string]::Equals(
-            [System.IO.Path]::GetFullPath($_.Path),
-            [System.IO.Path]::GetFullPath($betterGiExe),
-            [System.StringComparison]::OrdinalIgnoreCase)
-    }
-    catch {
-        $false
-    }
-})
-if ($runningBetterGi.Count -gt 0) {
-    [pscustomobject]@{
-        requestToken = $requestToken
-        operation = $expectedOperation
-        processId = $runningBetterGi[0].Id
-        existingInstance = $true
-        wouldLaunch = $false
-        requestConsumed = $false
-    } | ConvertTo-Json -Depth 4
-    return
-}
-
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
 $startInfo.FileName = $betterGiExe
 $startInfo.UseShellExecute = $true
