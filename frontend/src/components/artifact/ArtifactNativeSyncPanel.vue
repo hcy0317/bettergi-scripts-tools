@@ -54,7 +54,7 @@ const watchNativeSync = jobId => {
   observing.value = true
   const generation = watchGeneration
   void waitForArtifactJobCompletion(jobId, getArtifactJob, {
-    attempts: 1800,
+    attempts: null,
     shouldContinue: () => generation === watchGeneration,
   }).then(async completed => {
     if (generation !== watchGeneration) return

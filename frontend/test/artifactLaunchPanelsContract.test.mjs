@@ -19,6 +19,7 @@ test('manual BetterGI connection resumes analysis observation', () => {
 test('manual BetterGI connection resumes native-plan completion observation', () => {
   const panel = source('ArtifactNativeSyncPanel.vue')
   assert.match(panel, /waitForArtifactJobCompletion/)
+  assert.match(panel, /attempts:\s*null/)
   assert.match(panel, /const continueNativeSync =/)
   assert.match(panel, /@launched="continueNativeSync"/)
   assert.match(panel, /onBeforeUnmount/)

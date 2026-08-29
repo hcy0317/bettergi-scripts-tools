@@ -89,12 +89,22 @@ public class ArtifactAnalysisJobService {
         }
     }
 
-    public ArtifactJobStartResponse startNative(
+    public synchronized ArtifactJobStartResponse startNative(
             String uid,
             ArtifactNativeSyncPlan plan) {
         if (plan.status() != com.cloud_guest.artifact.nativeplan.ArtifactNativeSyncStatus.READY
                 || plan.planDigest() == null || plan.planDigest().isBlank()) {
             throw new IllegalStateException("native artifact plan is not ready for execution");
+        }
+        boolean activeRebuildExists = repository.findByUid(uid).stream()
+                .filter(candidate -> candidate.operation()
+                        == ArtifactLaunchOperation.REBUILD_NATIVE_PLANS)
+                .map(this::presentLaunchStatus)
+                .anyMatch(candidate -> candidate.status() == ArtifactAnalysisJobStatus.WAITING_FOR_HOST
+                        || candidate.status() == ArtifactAnalysisJobStatus.HOST_CLAIMED
+                        || candidate.status() == ArtifactAnalysisJobStatus.READY_TO_EXECUTE);
+        if (activeRebuildExists) {
+            throw new IllegalStateException("native artifact plans are already being rebuilt for this uid");
         }
         String now = clock.instant().toString();
         ArtifactAnalysisJob job = new ArtifactAnalysisJob(

@@ -16,6 +16,8 @@ import com.cloud_guest.artifact.launch.ArtifactLaunchOperation;
 import com.cloud_guest.artifact.launch.ArtifactLaunchRequest;
 import com.cloud_guest.artifact.launch.ArtifactLaunchRequestService;
 import com.cloud_guest.artifact.launch.ArtifactLaunchTarget;
+import com.cloud_guest.artifact.nativeplan.ArtifactNativeSyncPlan;
+import com.cloud_guest.artifact.nativeplan.ArtifactNativeSyncStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -474,6 +476,25 @@ class ArtifactAnalysisJobServiceTest {
                 sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already being executed");
+    }
+
+    @Test
+    void sameUidCannotStartTwoConcurrentNativeRebuilds() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactNativeSyncPlan plan = new ArtifactNativeSyncPlan(
+                ArtifactNativeSyncStatus.READY, true, true,
+                100, 0, List.of(), "native-plan-digest", "REPLACE_ALL", "ready");
+
+        ArtifactAnalysisJob first = service.startNative("102550550", plan).job();
+
+        assertThatThrownBy(() -> service.startNative("102550550", plan))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already being rebuilt");
+
+        service.complete(
+                first.id(), ArtifactLaunchOperation.REBUILD_NATIVE_PLANS, true, null);
+        assertThat(service.startNative("102550550", plan).job().id())
+                .isNotEqualTo(first.id());
     }
 
     @Test
