@@ -56,4 +56,24 @@ class BetterGiCombatOptionCatalogTest {
         assertThat(result.strategies()).containsExactly(
                 "根据队伍自动选择", "00-钟心那万", "自定义首领");
     }
+
+    @Test
+    void skipsMalformedOptionalJsonAndKeepsDiscoveringOtherOptions() throws Exception {
+        Path user = temporaryRoot.resolve("User");
+        Path groups = user.resolve("ScriptGroup");
+        Files.createDirectories(groups);
+        Files.writeString(user.resolve("config.json"), "{partially-written");
+        Files.writeString(groups.resolve("broken.json"), "[");
+        Files.writeString(groups.resolve("valid.json"), """
+                {"config":{"pathingConfig":{"partyName":"有效队伍"}}}
+                """);
+        CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        when(sourceCatalog.betterGiRoot()).thenReturn(temporaryRoot);
+
+        BetterGiCombatOptionCatalog.Options result =
+                new BetterGiCombatOptionCatalog(sourceCatalog, new ObjectMapper()).discover();
+
+        assertThat(result.parties()).containsExactly("有效队伍");
+        assertThat(result.strategies()).containsExactly("根据队伍自动选择");
+    }
 }

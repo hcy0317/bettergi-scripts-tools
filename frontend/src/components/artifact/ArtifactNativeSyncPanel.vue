@@ -3,7 +3,10 @@ import {computed, ref, watch} from 'vue'
 import {Refresh, VideoPlay} from '@element-plus/icons-vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {getArtifactJob, previewArtifactNativeSync, startArtifactJob} from '@api/artifact/artifactAnalysis.js'
-import {artifactHostHasAcceptedJob, validateArtifactLaunch, waitForArtifactHostClaim} from '@/features/artifact-analysis/model.js'
+import {
+  artifactHostHasAcceptedJob, validateArtifactLaunch,
+  waitForArtifactHostClaim, waitForArtifactJobCompletion,
+} from '@/features/artifact-analysis/model.js'
 import {
   artifactNativeSyncStatusMeta, artifactSetLabel, artifactSlotLabel, artifactStatLabel,
   artifactTranslationModeLabel,
@@ -15,8 +18,12 @@ const capacity = ref(100)
 const preview = ref(null)
 const loading = ref(false)
 const starting = ref(false)
+const observing = ref(false)
 const launchDialogOpen = ref(false)
 const pendingLaunch = ref(null)
+const pendingLaunchJobId = ref('')
+let watchGeneration = 0
+let watchedJobId = ''
 const previewMeta = computed(() => artifactNativeSyncStatusMeta(preview.value?.status))
 const statListLabel = values => [...(values || [])].map(artifactStatLabel).join(' / ') || '无'
 const check = async () => {
@@ -24,6 +31,28 @@ const check = async () => {
   try { preview.value = await previewArtifactNativeSync(props.uid.trim(), capacity.value) }
   catch { preview.value = null; ElMessage.error('预检失败，请确认服务已启动后重试') }
   finally { loading.value = false }
+}
+const watchNativeSync = jobId => {
+  if (!jobId || watchedJobId === jobId) return
+  watchedJobId = jobId
+  observing.value = true
+  const generation = watchGeneration
+  void waitForArtifactJobCompletion(jobId, getArtifactJob, {
+    attempts: 1800,
+    shouldContinue: () => generation === watchGeneration,
+  }).then(async completed => {
+    if (generation !== watchGeneration) return
+    if (completed?.status === 'FAILED') ElMessage.error('原神方案重建失败')
+    else if (completed?.status === 'COMPLETED') ElMessage.success('原神方案重建完成')
+    await check()
+  }).finally(() => {
+    if (watchedJobId === jobId) watchedJobId = ''
+    if (generation === watchGeneration) observing.value = false
+  })
+}
+const continueNativeSync = () => {
+  ElMessage.success('正在连接 BetterGI')
+  watchNativeSync(pendingLaunchJobId.value)
 }
 const rebuild = async () => {
   if (!props.uid.trim()) { ElMessage.warning('请选择 UID'); return }
@@ -35,26 +64,35 @@ const rebuild = async () => {
       preview.value.planDigest)
     if (!validateArtifactLaunch(response.launch, 'REBUILD_NATIVE_PLANS')) throw new Error('服务端未返回有效启动请求')
     pendingLaunch.value = response.launch
+    pendingLaunchJobId.value = response.job.id
     const claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
     if (artifactHostHasAcceptedJob(claimed)) {
       if (claimed.status === 'FAILED') ElMessage.error('BetterGI 已接收重建任务，但执行失败')
       else ElMessage.success('BetterGI 已接收重建任务')
+      watchNativeSync(response.job.id)
     } else launchDialogOpen.value = true
   } finally { starting.value = false }
 }
-watch([capacity, () => props.uid], () => { preview.value = null })
+watch(capacity, () => { preview.value = null })
+watch(() => props.uid, () => {
+  watchGeneration++
+  watchedJobId = ''
+  observing.value = false
+  pendingLaunchJobId.value = ''
+  preview.value = null
+})
 </script>
 
 <template>
   <section>
-    <header class="toolbar"><div><h2>原神方案同步</h2><p>完整替换，不与原神默认配装共存。</p></div><div class="commands"><label class="capacity"><span>方案容量</span><el-input-number v-model="capacity" :min="1" :max="999"/></label><el-button :icon="Refresh" :loading="loading" @click="check">预检</el-button><el-button type="primary" :icon="VideoPlay" :loading="starting" :disabled="!uid || preview?.status !== 'READY'" @click="rebuild">开始重建</el-button></div></header>
+    <header class="toolbar"><div><h2>原神方案同步</h2><p>完整替换，不与原神默认配装共存。</p></div><div class="commands"><label class="capacity"><span>方案容量</span><el-input-number v-model="capacity" :min="1" :max="999"/></label><el-button :icon="Refresh" :loading="loading" @click="check">预检</el-button><el-button type="primary" :icon="VideoPlay" :loading="starting || observing" :disabled="!uid || observing || preview?.status !== 'READY'" @click="rebuild">开始重建</el-button></div></header>
     <el-empty v-if="!preview" description="先执行容量与表达能力预检"/>
     <template v-else>
       <el-alert :title="previewMeta.title" :description="previewMeta.description" :type="previewMeta.type" :closable="false" show-icon/>
       <div class="metrics"><div><span>来源配装</span><strong>{{ preview.sourceBuildCount }}</strong></div><div><span>套装与部位规则</span><strong>{{ preview.plans.length }}</strong></div><div><span>转换方式</span><strong>{{ artifactTranslationModeLabel(preview.translationMode) }}</strong></div><div><span>替换范围</span><strong>{{ preview.replaceAll ? '全部方案' : '不允许替换' }}</strong></div><div><span>操作前证据</span><strong>{{ preview.requiresPreMutationEvidence ? '必须保存' : '不要求' }}</strong></div></div>
       <el-table v-if="preview.plans.length" :data="preview.plans" height="360"><el-table-column label="套装" min-width="230"><template #default="{row}">{{ artifactSetLabel(row.setKey) }}</template></el-table-column><el-table-column label="部位" width="110"><template #default="{row}">{{ artifactSlotLabel(row.slotKey) }}</template></el-table-column><el-table-column label="主词条" min-width="220"><template #default="{row}">{{ statListLabel(row.mainStats) }}</template></el-table-column><el-table-column label="副词条" min-width="260"><template #default="{row}">{{ statListLabel(row.substats) }}</template></el-table-column></el-table>
     </template>
-    <ArtifactLaunchDialog v-model:open="launchDialogOpen" :launch="pendingLaunch" task-label="重建原神方案" @launched="ElMessage.success('正在连接 BetterGI')"/>
+    <ArtifactLaunchDialog v-model:open="launchDialogOpen" :launch="pendingLaunch" task-label="重建原神方案" @launched="continueNativeSync"/>
   </section>
 </template>
 

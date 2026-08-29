@@ -42,8 +42,13 @@ public class CultivationMaterialCraftingCatalog {
     }
 
     private Map<String, CraftFamily> loadFamilies() {
-        Path csv = materialSourceCatalog.betterGiRoot()
-                .resolve(Path.of("Assets", "Model", "ItemV2", "item.csv"));
+        Path root;
+        try {
+            root = materialSourceCatalog.betterGiRoot();
+        } catch (IllegalStateException exception) {
+            return Map.of();
+        }
+        Path csv = root.resolve(Path.of("Assets", "Model", "ItemV2", "item.csv"));
         if (!Files.isRegularFile(csv)) return Map.of();
         try {
             List<String> lines = Files.readAllLines(csv);

@@ -60,6 +60,9 @@ public class CultivationModuleConfigurationService {
                 && (entity == null || storedModifiedAt == null
                     || installed.get().modifiedAt().isAfter(storedModifiedAt));
         if (installedWins) {
+            if (entity != null && entity.getSettingsJson() != null && !entity.getSettingsJson().isBlank()) {
+                mergeStored(settings, entity, module);
+            }
             mergeSupported(settings, installed.get().settings(), module);
         } else if (entity != null && entity.getSettingsJson() != null && !entity.getSettingsJson().isBlank()) {
             mergeStored(settings, entity, module);

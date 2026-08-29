@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -70,5 +71,28 @@ class CultivationMaterialSourceCatalogTest {
                 List.of(),
                 List.of(betterGiRoot)))
                 .contains(betterGiRoot.toAbsolutePath().normalize());
+    }
+
+    @Test
+    void knownRootShortCircuitsProcessAndInstallationDiscovery() throws Exception {
+        Path betterGiRoot = temporaryRoot.resolve("configured");
+        Files.createDirectories(betterGiRoot);
+        AtomicInteger processScans = new AtomicInteger();
+        AtomicInteger installationScans = new AtomicInteger();
+
+        assertThat(CultivationMaterialSourceCatalog.resolveBetterGiRoot(
+                betterGiRoot.toString(),
+                temporaryRoot.resolve("source-checkout"),
+                () -> {
+                    processScans.incrementAndGet();
+                    return List.of();
+                },
+                () -> {
+                    installationScans.incrementAndGet();
+                    return List.of();
+                }))
+                .contains(betterGiRoot.toAbsolutePath().normalize());
+        assertThat(processScans).hasValue(0);
+        assertThat(installationScans).hasValue(0);
     }
 }

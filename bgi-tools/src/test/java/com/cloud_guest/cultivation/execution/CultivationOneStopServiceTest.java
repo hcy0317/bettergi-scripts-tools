@@ -69,6 +69,21 @@ class CultivationOneStopServiceTest {
     }
 
     @Test
+    void reconcileOnlyProjectionStillRequiresThePlanDrivenAutoPlanTask() {
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection reconcileOnly = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_RECONCILE", current.executionMode(),
+                List.of(), List.of(), List.of(), List.of(),
+                new CultivationExecutionProjection.GatherAction("gather", "无", Map.of(), List.of()),
+                new CultivationExecutionProjection.MonsterAction("monster", "无", Map.of(), List.of(), List.of()),
+                List.of(), current.preferences(), current.partyOptions());
+
+        assertThat(CultivationOneStopService.hasPlanDrivenAction(
+                reconcileOnly,
+                configuration(AutoPlanResinExecutionModule.ID, Map.of()))).isTrue();
+    }
+
+    @Test
     void generatesDedicatedGroupFromOnlyNeededModules() throws Exception {
         Path source = temporaryRoot.resolve(Path.of("User", "ScriptGroup", "来源组.json"));
         Files.createDirectories(source.getParent());

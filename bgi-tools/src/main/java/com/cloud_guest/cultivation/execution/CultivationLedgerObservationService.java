@@ -49,17 +49,21 @@ public class CultivationLedgerObservationService {
         }
 
         Map<String, Long> latestOwned = new LinkedHashMap<>();
+        Map<String, Long> highestObservedOwned = new LinkedHashMap<>();
         Map<String, Long> actualRewards = new LinkedHashMap<>();
         for (CultivationExecutionActionEntity observation : observations) {
             if ("INVENTORY_RECONCILE_BATCH".equals(observation.getActionType())) {
                 readInventoryBatch(observation.getRewardsJson()).forEach((materialName, observedOwned) -> {
                     if (materialName == null || observedOwned == null || observedOwned < 0) return;
                     latestOwned.putIfAbsent(materialName, observedOwned);
+                    highestObservedOwned.merge(materialName, observedOwned, Math::max);
                 });
                 continue;
             }
             if (observation.getObservedOwned() == null || observation.getObservedOwned() < 0) continue;
             latestOwned.putIfAbsent(observation.getMaterialName(), observation.getObservedOwned());
+            highestObservedOwned.merge(
+                    observation.getMaterialName(), observation.getObservedOwned(), Math::max);
             mergeRewards(actualRewards, observation.getRewardsJson());
         }
         if (latestOwned.isEmpty()) {
@@ -73,6 +77,14 @@ public class CultivationLedgerObservationService {
                 .toList();
         List<CultivationLedgerEntry> effectiveRequirements = progress.stream()
                 .map(EntryProgress::entry).toList();
+        boolean inventoryDecreased = imported.requirements().stream().anyMatch(entry -> {
+            Long latest = latestOwned.get(entry.materialName());
+            if (latest == null) return false;
+            long previousHigh = Math.max(
+                    entry.baselineOwned(),
+                    highestObservedOwned.getOrDefault(entry.materialName(), latest));
+            return latest < previousHigh;
+        });
         CultivationMaterialCraftingPlan craftingPlan = craftingPlan(effectiveRequirements);
         effectiveRequirements = effectiveRequirements.stream().map(entry -> new CultivationLedgerEntry(
                 entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(),
@@ -82,7 +94,7 @@ public class CultivationLedgerObservationService {
         )).toList();
         boolean needsCraft = (craftingPlanner == null && progress.stream().anyMatch(EntryProgress::needsCraft))
                 || craftingPlan.needsCraft();
-        String state = awaitingReconcile
+        String state = awaitingReconcile || inventoryDecreased
                 ? "NEEDS_RECONCILE"
                 : needsCraft
                     ? "NEEDS_CRAFT"

@@ -175,7 +175,8 @@ public class CultivationOneStopService {
     static boolean hasPlanDrivenAction(CultivationExecutionProjection projection,
                                        CultivationModuleConfiguration configuration) {
         if (!configuration.enabled()) return false;
-        return !projection.craftingActions().isEmpty()
+        return "NEEDS_RECONCILE".equals(projection.state())
+                || !projection.craftingActions().isEmpty()
                 || projection.resinActions().stream().anyMatch(action -> resinActionEnabled(action, configuration))
                 || !projection.bossActions().isEmpty();
     }

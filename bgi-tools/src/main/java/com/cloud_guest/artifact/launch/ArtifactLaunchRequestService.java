@@ -232,6 +232,15 @@ public class ArtifactLaunchRequestService {
         }
     }
 
+    public synchronized boolean hasClaimedRequest(String expectedUid, String expectedJobId) {
+        try {
+            return containsMatchingRequest(
+                    requestRoot().resolve("consumed"), expectedUid, expectedJobId);
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法检查 BetterGI 已领取启动请求", exception);
+        }
+    }
+
     private int deleteMatchingRequests(Path directory, String expectedUid, String expectedJobId)
             throws IOException {
         if (!Files.isDirectory(directory)) return 0;

@@ -44,6 +44,20 @@ class CultivationMaterialCraftingPlannerTest {
     }
 
     @Test
+    void unavailableBetterGiRootDoesNotBreakNonCraftingProjections() throws Exception {
+        Path readyRoot = betterGiRoot.resolve("ready-after-discovery");
+        writeCatalog(readyRoot);
+        CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        when(sourceCatalog.betterGiRoot())
+                .thenThrow(new IllegalStateException("BetterGI unavailable"))
+                .thenReturn(readyRoot);
+        CultivationMaterialCraftingCatalog catalog = new CultivationMaterialCraftingCatalog(sourceCatalog);
+
+        assertThat(catalog.family("哀叙冰玉")).isEmpty();
+        assertThat(catalog.family("哀叙冰玉")).isPresent();
+    }
+
+    @Test
     void reservesEveryTierRequirementBeforePlanningThreeToOneCrafts() throws Exception {
         CultivationMaterialCraftingPlanner planner = new CultivationMaterialCraftingPlanner(catalog());
 

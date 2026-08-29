@@ -64,10 +64,18 @@ public class CultivationExecutionService {
         }
 
         CultivationExecutionPreferences preferences = preferences(normalizedUid);
-        CultivationMaterialCraftingPlan craftingPlan = observationService.craftingPlan(revision.requirements());
-        if (craftingPlan == null) {
-            craftingPlan = new CultivationMaterialCraftingPlan(Map.of(), List.of());
-        }
+        CultivationMaterialCraftingPlan plannedCrafting = observationService.craftingPlan(revision.requirements());
+        CultivationMaterialCraftingPlan craftingPlan = plannedCrafting == null
+                ? new CultivationMaterialCraftingPlan(Map.of(), List.of())
+                : plannedCrafting;
+        List<CultivationLedgerEntry> projectedRequirements = revision.requirements().stream()
+                .map(entry -> new CultivationLedgerEntry(
+                        entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(),
+                        entry.currentOwned(), craftingPlan.remainingByMaterial().getOrDefault(
+                                entry.materialName(), entry.remaining()),
+                        entry.remainingEvidence(), entry.ocrConfidence(), entry.manuallyCorrected(),
+                        entry.sourceBlocks()))
+                .toList();
         CultivationModuleConfiguration autoPlanConfiguration = configurationService.find(
                 normalizedUid, AutoPlanResinExecutionModule.ID);
         CultivationModuleConfiguration gatherConfiguration = configurationService.find(
@@ -84,7 +92,7 @@ public class CultivationExecutionService {
         List<CultivationExecutionProjection.MonsterTarget> monsterTargets = new ArrayList<>();
         List<CultivationExecutionProjection.PendingMaterial> pending = new ArrayList<>();
 
-        for (CultivationLedgerEntry entry : revision.requirements()) {
+        for (CultivationLedgerEntry entry : projectedRequirements) {
             if (entry.remaining() <= 0) {
                 continue;
             }
@@ -171,7 +179,7 @@ public class CultivationExecutionService {
                 normalizedUid, revision.revision(), revision.state(), EXECUTION_MODE, craftingPlan.actions(),
                 resinActions, bossActions, weeklyBossActions, gatherAction, monsterAction,
                 pending, preferences, partyOptions(normalizedUid), combatStrategyOptions(normalizedUid),
-                materialProgress(revision.requirements()));
+                materialProgress(projectedRequirements));
     }
 
     public CultivationPlanRevisionResponse latestLedger(String uid) {

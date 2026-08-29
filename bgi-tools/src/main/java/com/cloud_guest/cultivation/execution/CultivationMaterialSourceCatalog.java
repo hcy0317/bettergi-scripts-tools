@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 @Component
 public class CultivationMaterialSourceCatalog {
@@ -31,6 +32,7 @@ public class CultivationMaterialSourceCatalog {
     private final Map<String, BossSource> bossDrops;
     private final Map<String, String> weeklyBossDrops;
     private final Map<String, String> monsterRouteAliases;
+    private volatile Path resolvedBetterGiRoot;
 
     public CultivationMaterialSourceCatalog(CultivationOcrProperties properties,
                                             ObjectMapper objectMapper) {
@@ -103,13 +105,30 @@ public class CultivationMaterialSourceCatalog {
     }
 
     public Path betterGiRoot() {
+        Path current = resolvedBetterGiRoot;
+        if (current != null) return current;
+        synchronized (this) {
+            if (resolvedBetterGiRoot != null) return resolvedBetterGiRoot;
+            resolvedBetterGiRoot = resolveBetterGiRoot(
+                    properties.getBettergiRoot(),
+                    Path.of(System.getProperty("user.dir")),
+                    CultivationMaterialSourceCatalog::runningProcessCommands,
+                    CultivationMaterialSourceCatalog::knownInstallationCandidates)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "未找到 BetterGI 根目录，请设置 BETTERGI_ROOT"));
+            return resolvedBetterGiRoot;
+        }
+    }
+
+    static Optional<Path> resolveBetterGiRoot(String configuredRoot,
+                                              Path workingDirectory,
+                                              Supplier<List<Path>> runningCommands,
+                                              Supplier<List<Path>> installationCandidates) {
+        Optional<Path> known = resolveBetterGiRoot(
+                configuredRoot, workingDirectory, List.of(), List.of());
+        if (known.isPresent()) return known;
         return resolveBetterGiRoot(
-                properties.getBettergiRoot(),
-                Path.of(System.getProperty("user.dir")),
-                runningProcessCommands(),
-                knownInstallationCandidates())
-                .orElseThrow(() -> new IllegalStateException(
-                        "未找到 BetterGI 根目录，请设置 BETTERGI_ROOT"));
+                "", workingDirectory, runningCommands.get(), installationCandidates.get());
     }
 
     static Optional<Path> resolveBetterGiRoot(String configuredRoot,

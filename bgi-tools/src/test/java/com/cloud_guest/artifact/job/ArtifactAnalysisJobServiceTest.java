@@ -448,6 +448,35 @@ class ArtifactAnalysisJobServiceTest {
     }
 
     @Test
+    void consumedExecutionRequestRemainsActivePastItsLaunchTtl() {
+        InMemoryArtifactAnalysisJobRepository repository =
+                new InMemoryArtifactAnalysisJobRepository();
+        ArtifactAnalysisJobService service = service(repository);
+        ArtifactAnalysisJob sourceJob = service.start(
+                "102550550", ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        service.submitSnapshot(
+                sourceJob.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(sourceJob.id(), source.snapshotDigest());
+
+        ArtifactJobStartResponse firstAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+        launchRequestService().consume(firstAttempt.launch().requestToken());
+        ArtifactAnalysisJob waiting = firstAttempt.job();
+        repository.save(new ArtifactAnalysisJob(
+                waiting.id(), waiting.uid(), waiting.operation(), waiting.status(),
+                waiting.snapshot(), waiting.analysisResult(), waiting.decisionPlan(),
+                "2026-08-26T23:54:00Z", "2026-08-26T23:54:00Z", waiting.errorMessage()));
+
+        assertThat(service.get(waiting.id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.WAITING_FOR_HOST);
+        assertThatThrownBy(() -> service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already being executed");
+    }
+
+    @Test
     void approvedPlanCannotLaunchAgainstDifferentBuildInputs() {
         ArtifactAnalysisJobService service = service();
         ArtifactSnapshot source = snapshot(List.of(item(0, false)));

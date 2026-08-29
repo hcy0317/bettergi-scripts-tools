@@ -70,7 +70,7 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
-    void acceptsAuthoritativeInventoryBelowImportBaselineAndSchedulesTheFullDeficit() {
+    void inventoryBelowImportBaselineRequiresReconciliation() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(observation("action-4", 3)));
         CultivationPlanRevisionResponse imported = revision(10, 4, 6);
@@ -78,13 +78,13 @@ class CultivationLedgerObservationServiceTest {
         CultivationPlanRevisionResponse effective =
                 new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
 
-        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().getFirst().remaining()).isEqualTo(7);
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(3);
     }
 
     @Test
-    void acceptsTheLatestAuthoritativeInventoryAfterADecrease() {
+    void inventoryBelowAnEarlierObservationRequiresReconciliation() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
                 observation("newest", 6), observation("older", 8)));
@@ -93,7 +93,7 @@ class CultivationLedgerObservationServiceTest {
                 new CultivationLedgerObservationService(mapper, objectMapper())
                         .effective(revision(10, 4, 6));
 
-        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
         assertThat(effective.requirements().getFirst().remaining()).isEqualTo(4);
     }
@@ -119,7 +119,7 @@ class CultivationLedgerObservationServiceTest {
         CultivationPlanRevisionResponse effective =
                 new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
 
-        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().get(1).currentOwned()).isEqualTo(4);
         assertThat(effective.requirements().get(1).remaining()).isEqualTo(164);
     }

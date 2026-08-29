@@ -82,6 +82,36 @@ class CultivationModuleConfigurationServiceTest {
     }
 
     @Test
+    void newerBetterGiEditPreservesWebOnlyOptionMetadata() {
+        Instant betterGiModifiedAt = Instant.parse("2026-08-26T02:00:00Z");
+        CultivationModuleConfigEntity stored = new CultivationModuleConfigEntity();
+        stored.setUid("102550550");
+        stored.setModuleId(ScriptGroupSettingsExecutionModule.ID);
+        stored.setEnabled(true);
+        stored.setSettingsJson("""
+                {"partyName":"网页队伍","managedPartyOptions":["保留队伍"],"hiddenPartyOptions":["隐藏队伍"]}
+                """);
+        stored.setUpdateTime(LocalDateTime.ofInstant(
+                betterGiModifiedAt.minusSeconds(60), ZoneId.systemDefault()));
+        CultivationModuleConfigMapper mapper = mapperReturning(stored);
+        BetterGiInstalledScriptSettingsReader reader = mock(BetterGiInstalledScriptSettingsReader.class);
+        when(reader.read("102550550", ScriptGroupSettingsExecutionModule.ID)).thenReturn(Optional.of(
+                new BetterGiInstalledScriptSettingsReader.InstalledScriptSettings(
+                        Map.of("partyName", "BetterGI 队伍"), true, betterGiModifiedAt)));
+        CultivationModuleConfigurationService service = new CultivationModuleConfigurationService(
+                new CultivationModuleRegistry(List.of(new ScriptGroupSettingsExecutionModule())),
+                mapper, new ObjectMapper(), reader);
+
+        CultivationModuleConfiguration result = service.find(
+                "102550550", ScriptGroupSettingsExecutionModule.ID);
+
+        assertThat(result.settings())
+                .containsEntry("partyName", "BetterGI 队伍")
+                .containsEntry("managedPartyOptions", List.of("保留队伍"))
+                .containsEntry("hiddenPartyOptions", List.of("隐藏队伍"));
+    }
+
+    @Test
     void newerWebEditWinsOverTheUidSpecificBetterGiConfiguration() {
         Instant betterGiModifiedAt = Instant.parse("2026-08-26T02:00:00Z");
         CultivationModuleConfigEntity stored = storedGatherConfiguration(

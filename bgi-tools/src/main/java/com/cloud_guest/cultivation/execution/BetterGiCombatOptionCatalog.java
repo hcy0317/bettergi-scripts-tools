@@ -3,6 +3,8 @@ package com.cloud_guest.cultivation.execution;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +18,7 @@ import java.util.Set;
 
 @Component
 public class BetterGiCombatOptionCatalog {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BetterGiCombatOptionCatalog.class);
     private static final Set<String> PARTY_KEYS = Set.of(
             "partyname", "teamname", "friendshipteam", "fightteamname", "bosspartyname", "team_fight");
     private static final Set<String> STRATEGY_KEYS = Set.of(
@@ -64,7 +67,7 @@ public class BetterGiCombatOptionCatalog {
         try {
             collect(objectMapper.readTree(file.toFile()), parties, strategies);
         } catch (IOException exception) {
-            throw new IllegalStateException("无法读取 BetterGI 作战配置：" + file.getFileName(), exception);
+            LOGGER.warn("跳过无法读取的 BetterGI 作战配置：{} ({})", file, exception.getMessage());
         }
     }
 

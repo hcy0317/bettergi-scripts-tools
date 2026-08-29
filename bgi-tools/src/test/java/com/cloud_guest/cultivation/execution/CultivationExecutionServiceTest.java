@@ -192,6 +192,46 @@ class CultivationExecutionServiceTest {
                 });
     }
 
+    @Test
+    void craftingAdjustedRemainderRemovesTheStaleMonsterTarget() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        AutoPlanService autoPlanService = mock(AutoPlanService.class);
+        CultivationModuleConfigurationService configurationService = mock(CultivationModuleConfigurationService.class);
+        CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
+        CultivationLedgerEntry target = entry("史莱姆清", 1, 0, 1);
+        CultivationPlanRevisionResponse revision = new CultivationPlanRevisionResponse(
+                1, "102550550", 5, "IMPORTED", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(target), LocalDateTime.now());
+        CultivationModuleConfiguration enabled = configuration(
+                AutoPlanResinExecutionModule.ID, true, Map.of());
+        when(planService.latest("102550550")).thenReturn(revision);
+        when(observationService.effective(revision)).thenReturn(revision);
+        when(observationService.craftingPlan(revision.requirements())).thenReturn(
+                new CultivationMaterialCraftingPlan(
+                        Map.of("史莱姆清", 0L),
+                        List.of(new CultivationCraftingAction("史莱姆清", 1, "史莱姆"))));
+        when(configurationService.find(anyString(), anyString())).thenReturn(enabled);
+        when(configurationService.findAll("102550550")).thenReturn(List.of(enabled));
+        when(autoPlanService.findDomainAll()).thenReturn(List.of());
+        when(autoPlanService.find("102550550", null)).thenReturn(List.of());
+        when(optionCatalog.discover()).thenReturn(
+                new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
+        when(materialSourceCatalog.findMonster("史莱姆清")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.MonsterSource(
+                        "史莱姆", List.of("大型水史莱姆"), List.of("史莱姆"))));
+
+        CultivationExecutionProjection result = new CultivationExecutionService(
+                planService, observationService, autoPlanService, configurationService,
+                materialSourceCatalog, optionCatalog).projection("102550550");
+
+        assertThat(result.craftingActions()).hasSize(1);
+        assertThat(result.monsterAction().targets()).isEmpty();
+        assertThat(result.materialProgress()).singleElement()
+                .satisfies(progress -> assertThat(progress.remaining()).isZero());
+    }
+
     private static CultivationLedgerEntry entry(String name, long required, long owned, long remaining) {
         return new CultivationLedgerEntry(
                 null, name, required, owned, remaining, RemainingEvidence.OCR,
