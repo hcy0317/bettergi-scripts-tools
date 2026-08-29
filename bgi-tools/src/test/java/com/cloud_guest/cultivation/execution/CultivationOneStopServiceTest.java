@@ -184,11 +184,25 @@ class CultivationOneStopServiceTest {
         assertThat(autoPlanSettings.path("auto_check")).isEmpty();
         assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();
         assertThat(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")).exists();
-        assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")))
+        String cultivationPlanSource = Files.readString(
+                autoPlanScript.resolve("utils").resolve("cultivation_plan.js"));
+        assertThat(cultivationPlanSource)
                 .contains("config.run.exclude_run_exception = false")
                 .contains("config.run.loop_plan = false")
                 .contains("GridScreenName.CharacterDevelopmentItems")
-                .doesNotContain("param.GridScreenName = GridScreenName.Materials");
+                .contains("targets.materialNamesByGrid")
+                .contains("async function runInventoryReconcileOnce(config, state, reason)")
+                .contains("const inventoryReconcileState = {attempted: false};")
+                .contains("action.actionType === \"CRAFT\"")
+                .contains("await genshin.CraftMaterial(")
+                .contains("完整库存复核后仍未开放行动")
+                .containsOnlyOnce("if (action.status === \"PLAN_NEEDS_RECONCILE\")")
+                .doesNotContain("param.GridScreenName = GridScreenName.Materials")
+                .doesNotContain("gridScreenName: \"Materials\"")
+                .doesNotContain("组末库存存在未知值，已停止后续执行")
+                .doesNotContain("}        const shouldContinue = await executeAction(")
+                .containsPattern("(?s)if \\(targets\\.status === \\\"BUSY\\\"\\).*?return false;")
+                .containsPattern("(?s)if \\(materialNames\\.length === 0\\).*?return true;");
         assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("load_check_run.js")))
                 .contains("return await dispatcher.RunAutoDomainTask(domainParam);")
                 .contains("return await dispatcher.RunAutoBossTask(param)");
