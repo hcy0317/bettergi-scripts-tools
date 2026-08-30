@@ -1,0 +1,17 @@
+.feature-page-background {
+    position: relative;
+    isolation: isolate;
+    background-color: #eef1f4;
+}
+
+.feature-page-background::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: url("@assets/MHY_XTLL.webp");
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+}

@@ -16,6 +16,8 @@ import com.cloud_guest.artifact.launch.ArtifactLaunchOperation;
 import com.cloud_guest.artifact.launch.ArtifactLaunchRequest;
 import com.cloud_guest.artifact.launch.ArtifactLaunchRequestService;
 import com.cloud_guest.artifact.launch.ArtifactLaunchTarget;
+import com.cloud_guest.artifact.nativeplan.ArtifactNativeSyncPlan;
+import com.cloud_guest.artifact.nativeplan.ArtifactNativeSyncStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -416,6 +418,122 @@ class ArtifactAnalysisJobServiceTest {
                 sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already being executed");
+    }
+
+    @Test
+    void expiredUnclaimedExecutionStopsPollingAndDoesNotBlockRelaunch() {
+        InMemoryArtifactAnalysisJobRepository repository =
+                new InMemoryArtifactAnalysisJobRepository();
+        ArtifactAnalysisJobService service = service(repository);
+        ArtifactAnalysisJob sourceJob = service.start(
+                "102550550", ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        service.submitSnapshot(
+                sourceJob.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(sourceJob.id(), source.snapshotDigest());
+
+        ArtifactAnalysisJob firstAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        repository.save(new ArtifactAnalysisJob(
+                firstAttempt.id(), firstAttempt.uid(), firstAttempt.operation(),
+                firstAttempt.status(), firstAttempt.snapshot(), firstAttempt.analysisResult(),
+                firstAttempt.decisionPlan(), "2026-08-26T23:54:00Z",
+                "2026-08-26T23:54:00Z", firstAttempt.errorMessage()));
+
+        ArtifactAnalysisJob expired = service.get(firstAttempt.id());
+        assertThat(expired.status()).isEqualTo(ArtifactAnalysisJobStatus.FAILED);
+        assertThat(expired.errorMessage()).contains("连接 BetterGI 的请求已过期");
+
+        ArtifactAnalysisJob secondAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN).job();
+        assertThat(secondAttempt.id()).isNotEqualTo(firstAttempt.id());
+    }
+
+    @Test
+    void consumedExecutionRequestRemainsActivePastItsLaunchTtl() {
+        InMemoryArtifactAnalysisJobRepository repository =
+                new InMemoryArtifactAnalysisJobRepository();
+        ArtifactAnalysisJobService service = service(repository);
+        ArtifactAnalysisJob sourceJob = service.start(
+                "102550550", ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        service.submitSnapshot(
+                sourceJob.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(sourceJob.id(), source.snapshotDigest());
+
+        ArtifactJobStartResponse firstAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+        launchRequestService().consume(firstAttempt.launch().requestToken());
+        ArtifactAnalysisJob waiting = firstAttempt.job();
+        repository.save(new ArtifactAnalysisJob(
+                waiting.id(), waiting.uid(), waiting.operation(), waiting.status(),
+                waiting.snapshot(), waiting.analysisResult(), waiting.decisionPlan(),
+                "2026-08-26T23:54:00Z", "2026-08-26T23:54:00Z", waiting.errorMessage()));
+
+        assertThat(service.get(waiting.id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.WAITING_FOR_HOST);
+        assertThatThrownBy(() -> service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already being executed");
+    }
+
+    @Test
+    void sameUidCannotStartTwoConcurrentNativeRebuilds() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactNativeSyncPlan plan = new ArtifactNativeSyncPlan(
+                ArtifactNativeSyncStatus.READY, true, true,
+                100, 0, List.of(), "native-plan-digest", "REPLACE_ALL", "ready");
+
+        ArtifactAnalysisJob first = service.startNative("102550550", plan).job();
+
+        assertThatThrownBy(() -> service.startNative("102550550", plan))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already being rebuilt");
+
+        service.complete(
+                first.id(), ArtifactLaunchOperation.REBUILD_NATIVE_PLANS, true, null);
+        assertThat(service.startNative("102550550", plan).job().id())
+                .isNotEqualTo(first.id());
+    }
+
+    @Test
+    void completedExecutionRequestRemainsActiveUntilTheJobTerminalStateIsSaved() {
+        InMemoryArtifactAnalysisJobRepository repository =
+                new InMemoryArtifactAnalysisJobRepository();
+        ArtifactAnalysisJobService service = service(repository);
+        ArtifactAnalysisJob sourceJob = service.start(
+                "102550550", ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        service.submitSnapshot(
+                sourceJob.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        service.approve(sourceJob.id(), source.snapshotDigest());
+
+        ArtifactJobStartResponse firstAttempt = service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN);
+        ArtifactLaunchRequestService requests = launchRequestService();
+        ArtifactLaunchRequest accepted = requests.consume(firstAttempt.launch().requestToken());
+        requests.complete(
+                firstAttempt.launch().requestToken(), accepted.uid(), accepted.jobId(), accepted.operation());
+        ArtifactAnalysisJob waiting = firstAttempt.job();
+        repository.save(new ArtifactAnalysisJob(
+                waiting.id(), waiting.uid(), waiting.operation(), waiting.status(),
+                waiting.snapshot(), waiting.analysisResult(), waiting.decisionPlan(),
+                "2026-08-26T23:54:00Z", "2026-08-26T23:54:00Z", waiting.errorMessage()));
+
+        assertThat(service.get(waiting.id()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.WAITING_FOR_HOST);
+        assertThatThrownBy(() -> service.launch(
+                sourceJob.id(), ArtifactLaunchOperation.EXECUTE_LOCK_PLAN))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already being executed");
+        assertThatThrownBy(() -> service.delete(waiting.id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("已被 BetterGI 接受");
+        assertThat(requests.complete(
+                firstAttempt.launch().requestToken(),
+                accepted.uid(), accepted.jobId(), accepted.operation()))
+                .isEqualTo(accepted);
     }
 
     @Test

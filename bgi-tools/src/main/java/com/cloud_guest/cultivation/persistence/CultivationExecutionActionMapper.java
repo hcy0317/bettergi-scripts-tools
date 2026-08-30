@@ -12,7 +12,7 @@ public interface CultivationExecutionActionMapper extends BaseMapper<Cultivation
     @Select("""
             SELECT * FROM cultivation_execution_action
             WHERE uid = #{uid} AND plan_revision = #{revision}
-              AND status IN ('LEASED', 'AWAITING_RECONCILE')
+              AND status IN ('LEASED', 'AWAITING_RECONCILE', 'RECONCILE_RETRY_LEASED')
             ORDER BY create_time DESC LIMIT 1
             """)
     CultivationExecutionActionEntity findLeased(@Param("uid") String uid,

@@ -53,6 +53,37 @@ class CultivationOneStopServiceTest {
     }
 
     @Test
+    void craftOnlyProjectionStillRequiresThePlanDrivenAutoPlanTask() {
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection craftOnly = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的指引", 1, "角色天赋素材")),
+                List.of(), List.of(), List.of(),
+                new CultivationExecutionProjection.GatherAction("gather", "无", Map.of(), List.of()),
+                new CultivationExecutionProjection.MonsterAction("monster", "无", Map.of(), List.of(), List.of()),
+                List.of(), current.preferences(), current.partyOptions());
+
+        assertThat(CultivationOneStopService.hasPlanDrivenAction(
+                craftOnly,
+                configuration(AutoPlanResinExecutionModule.ID, Map.of()))).isTrue();
+    }
+
+    @Test
+    void reconcileOnlyProjectionStillRequiresThePlanDrivenAutoPlanTask() {
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection reconcileOnly = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_RECONCILE", current.executionMode(),
+                List.of(), List.of(), List.of(), List.of(),
+                new CultivationExecutionProjection.GatherAction("gather", "无", Map.of(), List.of()),
+                new CultivationExecutionProjection.MonsterAction("monster", "无", Map.of(), List.of(), List.of()),
+                List.of(), current.preferences(), current.partyOptions());
+
+        assertThat(CultivationOneStopService.hasPlanDrivenAction(
+                reconcileOnly,
+                configuration(AutoPlanResinExecutionModule.ID, Map.of()))).isTrue();
+    }
+
+    @Test
     void generatesDedicatedGroupFromOnlyNeededModules() throws Exception {
         Path source = temporaryRoot.resolve(Path.of("User", "ScriptGroup", "来源组.json"));
         Files.createDirectories(source.getParent());
@@ -184,11 +215,42 @@ class CultivationOneStopServiceTest {
         assertThat(autoPlanSettings.path("auto_check")).isEmpty();
         assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();
         assertThat(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")).exists();
-        assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("cultivation_plan.js")))
+        String cultivationPlanSource = Files.readString(
+                autoPlanScript.resolve("utils").resolve("cultivation_plan.js"));
+        assertThat(cultivationPlanSource)
                 .contains("config.run.exclude_run_exception = false")
                 .contains("config.run.loop_plan = false")
                 .contains("GridScreenName.CharacterDevelopmentItems")
-                .doesNotContain("param.GridScreenName = GridScreenName.Materials");
+                .contains("targets.materialNamesByGrid")
+                .contains("for (const [gridScreenName, namesValue] of Object.entries(grouped))")
+                .contains("await countInventoryItems(names, gridScreenName)")
+                .contains("const retryNames = names.filter")
+                .contains("首次识别未知，仅对缺失项再复查一次")
+                .contains("未知项将保留上次可信库存")
+                .contains("async function runInventoryReconcileOnce(config, state, reason)")
+                .contains("const inventoryReconcileState = {attempted: false};")
+                .contains("if (state.attempted)")
+                .contains("本轮已完成一次完整库存复核，不再重复检查")
+                .contains("action.actionType === \"CRAFT\"")
+                .contains("await genshin.GoToCraftingBench(action.craftCountry)")
+                .doesNotContain("await genshin.GoCraftResin(action.craftCountry)")
+                .contains("await genshin.CraftMaterial(")
+                .contains("完整库存复核后仍未开放行动")
+                .contains("return response.status === \"REPLANNING\"")
+                .containsOnlyOnce("if (action.status === \"PLAN_NEEDS_RECONCILE\")")
+                .contains("return result.status === \"REPLANNING\"")
+                .doesNotContain("config, inventoryReconcileState, `合成 ${action.materialName} 后复核`")
+                .containsPattern("(?s)if \\(action\\.actionType === \\\"CRAFT\\\"\\).*?"
+                        + "executeCraftAction.*?runCultivationInventoryReconcile\\(config\\).*?continue;")
+                .doesNotContain("param.GridScreenName = GridScreenName.Materials")
+                .doesNotContain("gridScreenName: \"Materials\"")
+                .doesNotContain("组末库存存在未知值，已停止后续执行")
+                .doesNotContain("重新导入或人工确认")
+                .doesNotContain("停止并等待完整重新清点")
+                .doesNotContain("batchCompleted ? 0 : -1")
+                .doesNotContain("}        const shouldContinue = await executeAction(")
+                .containsPattern("(?s)if \\(targets\\.status === \\\"BUSY\\\"\\).*?return false;")
+                .containsPattern("(?s)if \\(materialNames\\.length === 0\\).*?return true;");
         assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("load_check_run.js")))
                 .contains("return await dispatcher.RunAutoDomainTask(domainParam);")
                 .contains("return await dispatcher.RunAutoBossTask(param)");

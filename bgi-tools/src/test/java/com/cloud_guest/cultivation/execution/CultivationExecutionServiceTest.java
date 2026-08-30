@@ -7,13 +7,16 @@ import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurati
 import com.cloud_guest.cultivation.execution.module.CultivationModuleDefinition;
 import com.cloud_guest.cultivation.execution.module.FullyAutoToolsExecutionModule;
 import com.cloud_guest.cultivation.execution.module.WeeklyBossExecutionModule;
+import com.cloud_guest.cultivation.ocr.CultivationOcrProperties;
 import com.cloud_guest.cultivation.ocr.RemainingEvidence;
 import com.cloud_guest.cultivation.plan.CultivationLedgerEntry;
 import com.cloud_guest.cultivation.plan.CultivationPlanApplicationService;
 import com.cloud_guest.cultivation.plan.CultivationPlanRevisionResponse;
 import com.cloud_guest.service.AutoPlanService;
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +29,61 @@ import static org.mockito.Mockito.when;
 
 class CultivationExecutionServiceTest {
     @Test
+    void expandsCraftableLedgerRowsToEveryFamilyTierForReconciliation() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        CultivationPlanRevisionResponse ledger = new CultivationPlanRevisionResponse(
+                1, "102550550", 4, "NEEDS_CRAFT", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(entry("「笃行」的哲学", 4, 0, 4)),
+                LocalDateTime.now());
+        when(planService.latest("102550550")).thenReturn(ledger);
+        when(observationService.effective(ledger)).thenReturn(ledger);
+        when(materialSourceCatalog.findMonster("「笃行」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.MonsterSource(
+                        "丘丘人", List.of("丘丘人"), List.of("丘丘人"))));
+        when(observationService.craftingFamily("「笃行」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialCraftingCatalog.CraftFamily(
+                        "「笃行」的哲学",
+                        List.of(
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        104335, "「笃行」的教导", "角色天赋素材", 2),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        104336, "「笃行」的指引", "角色天赋素材", 3),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        104337, "「笃行」的哲学", "角色天赋素材", 4)))));
+        CultivationExecutionService service = new CultivationExecutionService(
+                planService, observationService, mock(AutoPlanService.class),
+                mock(CultivationModuleConfigurationService.class),
+                materialSourceCatalog,
+                mock(BetterGiCombatOptionCatalog.class));
+
+        assertThat(service.inventoryReconcileTargets("102550550"))
+                .containsEntry("CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学"));
+    }
+
+    @Test
+    void preservesAnExplicitlyEmptyResinSelection() {
+        CultivationModuleConfigurationService configurationService =
+                mock(CultivationModuleConfigurationService.class);
+        when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID))
+                .thenReturn(configuration(
+                        AutoPlanResinExecutionModule.ID,
+                        true,
+                        Map.of("resinPriority", List.of())));
+        CultivationExecutionService service = new CultivationExecutionService(
+                mock(CultivationPlanApplicationService.class),
+                mock(CultivationLedgerObservationService.class),
+                mock(AutoPlanService.class),
+                configurationService,
+                mock(CultivationMaterialSourceCatalog.class),
+                mock(BetterGiCombatOptionCatalog.class));
+
+        assertThat(service.resinPriority("102550550")).isEmpty();
+    }
+
+    @Test
     void returnsTheEffectiveLedgerWithTheLatestAuthoritativeOwnedCount() {
         CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
         CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
@@ -36,7 +94,8 @@ class CultivationExecutionServiceTest {
 
         CultivationExecutionService service = new CultivationExecutionService(
                 planService, observationService, mock(AutoPlanService.class),
-                mock(CultivationModuleConfigurationService.class), mock(CultivationMaterialSourceCatalog.class));
+                mock(CultivationModuleConfigurationService.class), mock(CultivationMaterialSourceCatalog.class),
+                mock(BetterGiCombatOptionCatalog.class));
 
         CultivationPlanRevisionResponse result = service.latestLedger("102550550");
 
@@ -73,7 +132,9 @@ class CultivationExecutionServiceTest {
                 CdAwareAutoGatherExecutionModule.ID, true,
                 Map.of("partyName", "钟纳久万", "partyName2nd", "钟纳久万"));
         CultivationModuleConfiguration monster = configuration(
-                FullyAutoToolsExecutionModule.ID, true, Map.of("routeFamilies", List.of("巡陆艇")));
+                FullyAutoToolsExecutionModule.ID, true, Map.of(
+                        "routeFamilies", List.of("巡陆艇"),
+                        "visitStatueBeforeSwitchParty", false));
         CultivationModuleConfiguration weekly = configuration(
                 WeeklyBossExecutionModule.ID, true, Map.of("unfairContractTerms", true));
         when(configurationService.find("123456789", AutoPlanResinExecutionModule.ID)).thenReturn(autoPlan);
@@ -95,8 +156,11 @@ class CultivationExecutionServiceTest {
 
         CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
         when(observationService.effective(revision)).thenReturn(revision);
+        BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
+        when(optionCatalog.discover()).thenReturn(new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
         CultivationExecutionProjection result = new CultivationExecutionService(
-                planService, observationService, autoPlanService, configurationService, materialSourceCatalog)
+                planService, observationService, autoPlanService, configurationService, materialSourceCatalog,
+                optionCatalog)
                 .projection("123456789");
 
         assertThat(result.resinActions()).extracting(CultivationExecutionProjection.ResinAction::sourceName)
@@ -120,6 +184,94 @@ class CultivationExecutionServiceTest {
                 .isEqualTo("史莱姆");
         assertThat(result.monsterAction().settings()).containsEntry("routeFamilies", List.of("史莱姆"));
         assertThat(result.pendingMaterials()).isEmpty();
+        assertThat(result.partyOptions()).doesNotContain("false");
+        assertThat(result.materialProgress())
+                .filteredOn(progress -> progress.materialName().equals("沙脂蛹"))
+                .singleElement()
+                .satisfies(progress -> {
+                    assertThat(progress.currentOwned()).isEqualTo(24L);
+                    assertThat(progress.required()).isEqualTo(168L);
+                    assertThat(progress.remaining()).isEqualTo(144L);
+                });
+    }
+
+    @Test
+    void craftingAdjustedRemainderRemovesTheStaleMonsterTarget() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        AutoPlanService autoPlanService = mock(AutoPlanService.class);
+        CultivationModuleConfigurationService configurationService = mock(CultivationModuleConfigurationService.class);
+        CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
+        BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
+        CultivationLedgerEntry target = entry("史莱姆清", 1, 0, 1);
+        CultivationPlanRevisionResponse revision = new CultivationPlanRevisionResponse(
+                1, "102550550", 5, "IMPORTED", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(target), LocalDateTime.now());
+        CultivationModuleConfiguration enabled = configuration(
+                AutoPlanResinExecutionModule.ID, true, Map.of());
+        when(planService.latest("102550550")).thenReturn(revision);
+        when(observationService.effective(revision)).thenReturn(revision);
+        when(observationService.craftingPlan(revision.requirements())).thenReturn(
+                new CultivationMaterialCraftingPlan(
+                        Map.of("史莱姆清", 0L),
+                        List.of(new CultivationCraftingAction("史莱姆清", 1, "史莱姆"))));
+        when(configurationService.find(anyString(), anyString())).thenReturn(enabled);
+        when(configurationService.findAll("102550550")).thenReturn(List.of(enabled));
+        when(autoPlanService.findDomainAll()).thenReturn(List.of());
+        when(autoPlanService.find("102550550", null)).thenReturn(List.of());
+        when(optionCatalog.discover()).thenReturn(
+                new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
+        when(materialSourceCatalog.findMonster("史莱姆清")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.MonsterSource(
+                        "史莱姆", List.of("大型水史莱姆"), List.of("史莱姆"))));
+
+        CultivationExecutionProjection result = new CultivationExecutionService(
+                planService, observationService, autoPlanService, configurationService,
+                materialSourceCatalog, optionCatalog).projection("102550550");
+
+        assertThat(result.craftingActions()).hasSize(1);
+        assertThat(result.monsterAction().targets()).isEmpty();
+        assertThat(result.materialProgress()).singleElement()
+                .satisfies(progress -> assertThat(progress.remaining()).isZero());
+    }
+
+    @Test
+    void projectionDegradesWhenBetterGiCannotBeDiscovered() {
+        CultivationPlanApplicationService planService = mock(CultivationPlanApplicationService.class);
+        CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
+        AutoPlanService autoPlanService = mock(AutoPlanService.class);
+        CultivationModuleConfigurationService configurationService = mock(CultivationModuleConfigurationService.class);
+        BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
+        CultivationMaterialSourceCatalog unavailableCatalog = new CultivationMaterialSourceCatalog(
+                new CultivationOcrProperties(), new ObjectMapper()) {
+            @Override
+            public Path betterGiRoot() {
+                throw new IllegalStateException("BetterGI unavailable");
+            }
+        };
+        CultivationPlanRevisionResponse revision = new CultivationPlanRevisionResponse(
+                1, "102550550", 6, "IMPORTED", "name-only-v1", 2, "hash",
+                "PP-OCRv6", "local", List.of(entry("未知材料", 3, 0, 3)),
+                LocalDateTime.now());
+        CultivationModuleConfiguration enabled = configuration(
+                AutoPlanResinExecutionModule.ID, true, Map.of());
+        when(planService.latest("102550550")).thenReturn(revision);
+        when(observationService.effective(revision)).thenReturn(revision);
+        when(observationService.craftingPlan(revision.requirements())).thenReturn(
+                new CultivationMaterialCraftingPlan(Map.of("未知材料", 3L), List.of()));
+        when(configurationService.find(anyString(), anyString())).thenReturn(enabled);
+        when(configurationService.findAll("102550550")).thenReturn(List.of(enabled));
+        when(autoPlanService.findDomainAll()).thenReturn(List.of());
+        when(autoPlanService.find("102550550", null)).thenReturn(List.of());
+        when(optionCatalog.discover()).thenReturn(
+                new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
+
+        CultivationExecutionProjection result = new CultivationExecutionService(
+                planService, observationService, autoPlanService, configurationService,
+                unavailableCatalog, optionCatalog).projection("102550550");
+
+        assertThat(result.pendingMaterials()).singleElement()
+                .satisfies(item -> assertThat(item.materialName()).isEqualTo("未知材料"));
     }
 
     private static CultivationLedgerEntry entry(String name, long required, long owned, long remaining) {

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 @Component
 public class CultivationMaterialSourceCatalog {
@@ -30,6 +32,7 @@ public class CultivationMaterialSourceCatalog {
     private final Map<String, BossSource> bossDrops;
     private final Map<String, String> weeklyBossDrops;
     private final Map<String, String> monsterRouteAliases;
+    private volatile Path resolvedBetterGiRoot;
 
     public CultivationMaterialSourceCatalog(CultivationOcrProperties properties,
                                             ObjectMapper objectMapper) {
@@ -50,7 +53,9 @@ public class CultivationMaterialSourceCatalog {
     }
 
     public Optional<MonsterSource> findMonster(String materialName) {
-        Path root = betterGiRoot();
+        Optional<Path> discoveredRoot = betterGiRootForRead();
+        if (discoveredRoot.isEmpty()) return Optional.empty();
+        Path root = discoveredRoot.get();
         Path monsterInfo = root.resolve(MONSTER_INFO);
         if (!Files.isRegularFile(monsterInfo)) return Optional.empty();
 
@@ -77,7 +82,9 @@ public class CultivationMaterialSourceCatalog {
 
     public Optional<String> findSpecialtyCountry(String materialName) {
         if (materialName == null || materialName.isBlank()) return Optional.empty();
-        Path routeRoot = betterGiRoot().resolve(SPECIALTY_ROUTES);
+        Optional<Path> discoveredRoot = betterGiRootForRead();
+        if (discoveredRoot.isEmpty()) return Optional.empty();
+        Path routeRoot = discoveredRoot.get().resolve(SPECIALTY_ROUTES);
         if (!Files.isDirectory(routeRoot)) return Optional.empty();
         try (var countries = Files.list(routeRoot)) {
             for (Path country : countries.filter(Files::isDirectory)
@@ -98,18 +105,109 @@ public class CultivationMaterialSourceCatalog {
     }
 
     public List<String> availableMonsterRouteFamilies() {
-        return availableMonsterRouteFamilies(betterGiRoot());
+        return betterGiRootForRead()
+                .map(CultivationMaterialSourceCatalog::availableMonsterRouteFamilies)
+                .orElseGet(List::of);
+    }
+
+    private Optional<Path> betterGiRootForRead() {
+        try {
+            return Optional.of(betterGiRoot());
+        } catch (IllegalStateException exception) {
+            return Optional.empty();
+        }
     }
 
     public Path betterGiRoot() {
-        if (properties.getBettergiRoot() != null && !properties.getBettergiRoot().isBlank()) {
-            return Path.of(properties.getBettergiRoot()).toAbsolutePath().normalize();
+        Path current = resolvedBetterGiRoot;
+        if (current != null) return current;
+        synchronized (this) {
+            if (resolvedBetterGiRoot != null) return resolvedBetterGiRoot;
+            resolvedBetterGiRoot = resolveBetterGiRoot(
+                    properties.getBettergiRoot(),
+                    Path.of(System.getProperty("user.dir")),
+                    CultivationMaterialSourceCatalog::runningProcessCommands,
+                    CultivationMaterialSourceCatalog::knownInstallationCandidates)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "未找到 BetterGI 根目录，请设置 BETTERGI_ROOT"));
+            return resolvedBetterGiRoot;
         }
-        Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+    }
+
+    static Optional<Path> resolveBetterGiRoot(String configuredRoot,
+                                              Path workingDirectory,
+                                              Supplier<List<Path>> runningCommands,
+                                              Supplier<List<Path>> installationCandidates) {
+        Optional<Path> known = resolveBetterGiRoot(
+                configuredRoot, workingDirectory, List.of(), List.of());
+        if (known.isPresent()) return known;
+        return resolveBetterGiRoot(
+                "", workingDirectory, runningCommands.get(), installationCandidates.get());
+    }
+
+    static Optional<Path> resolveBetterGiRoot(String configuredRoot,
+                                              Path workingDirectory,
+                                              List<Path> runningCommands,
+                                              List<Path> installationCandidates) {
+        if (configuredRoot != null && !configuredRoot.isBlank()) {
+            return Optional.of(Path.of(configuredRoot).toAbsolutePath().normalize());
+        }
+        Path current = workingDirectory.toAbsolutePath().normalize();
         for (int depth = 0; current != null && depth < 8; depth++, current = current.getParent()) {
-            if (Files.isDirectory(current.resolve("User").resolve("ScriptGroup"))) return current;
+            if (Files.isDirectory(current.resolve("User").resolve("ScriptGroup"))) {
+                return Optional.of(current);
+            }
         }
-        throw new IllegalStateException("未找到 BetterGI 根目录，请设置 BETTERGI_ROOT");
+        for (Path command : runningCommands) {
+            if (command.getFileName() == null
+                    || !command.getFileName().toString().equalsIgnoreCase("BetterGI.exe")) continue;
+            Path candidate = command.toAbsolutePath().normalize().getParent();
+            if (isBetterGiInstallation(candidate)) return Optional.of(candidate);
+        }
+        return installationCandidates.stream()
+                .map(path -> path.toAbsolutePath().normalize())
+                .filter(CultivationMaterialSourceCatalog::isBetterGiInstallation)
+                .findFirst();
+    }
+
+    private static boolean isBetterGiInstallation(Path root) {
+        return root != null
+                && Files.isDirectory(root.resolve("User"))
+                && Files.isRegularFile(root.resolve("BetterGI.exe"));
+    }
+
+    private static List<Path> runningProcessCommands() {
+        try (var processes = ProcessHandle.allProcesses()) {
+            return processes
+                    .map(process -> process.info().command())
+                    .flatMap(Optional::stream)
+                    .map(CultivationMaterialSourceCatalog::pathOrNull)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+        } catch (SecurityException exception) {
+            return List.of();
+        }
+    }
+
+    private static Path pathOrNull(String value) {
+        try {
+            return Path.of(value);
+        } catch (InvalidPathException exception) {
+            return null;
+        }
+    }
+
+    private static List<Path> knownInstallationCandidates() {
+        List<Path> candidates = new ArrayList<>();
+        String userHome = System.getProperty("user.home", "");
+        if (!userHome.isBlank()) {
+            candidates.add(Path.of(userHome, "Programs", "Genshin Tools", "BetterGI"));
+        }
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData != null && !localAppData.isBlank()) {
+            candidates.add(Path.of(localAppData, "BetterGI"));
+        }
+        return List.copyOf(candidates);
     }
 
     private String resolveRouteFamily(String materialName,

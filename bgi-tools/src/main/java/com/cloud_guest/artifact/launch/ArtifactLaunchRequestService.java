@@ -11,6 +11,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.UUID;
 import java.util.List;
 import java.util.function.Supplier;
@@ -119,6 +120,14 @@ public class ArtifactLaunchRequestService {
         return consume(token, null, null, null);
     }
 
+    public boolean isExpired(String createdAtUtc, Instant now) {
+        try {
+            return !Instant.parse(createdAtUtc).plus(ttl).isAfter(now);
+        } catch (DateTimeParseException exception) {
+            return true;
+        }
+    }
+
     public ArtifactLaunchRequest consume(
             String token,
             String expectedUid,
@@ -207,19 +216,47 @@ public class ArtifactLaunchRequestService {
     }
 
     public synchronized int revokeForJob(String expectedUid, String expectedJobId) {
+        return revokeForJob(expectedUid, expectedJobId, false);
+    }
+
+    public synchronized int revokeForJob(
+            String expectedUid, String expectedJobId, boolean allowCompleted) {
         Path root = requestRoot();
         try {
             if (containsMatchingRequest(root.resolve("consumed"), expectedUid, expectedJobId)) {
                 throw new IllegalStateException("任务已被 BetterGI 接收，当前不能删除");
             }
+            if (!allowCompleted
+                    && containsMatchingRequest(root.resolve("completed"), expectedUid, expectedJobId)) {
+                throw new IllegalStateException("任务已被 BetterGI 接受，终态落库前不能删除");
+            }
             int revoked = deleteMatchingRequests(root, expectedUid, expectedJobId);
-            revoked += deleteMatchingRequests(root.resolve("completed"), expectedUid, expectedJobId);
+            if (allowCompleted) {
+                revoked += deleteMatchingRequests(
+                        root.resolve("completed"), expectedUid, expectedJobId);
+            }
             if (containsMatchingRequest(root.resolve("consumed"), expectedUid, expectedJobId)) {
                 throw new IllegalStateException("任务已被 BetterGI 接收，当前不能删除");
+            }
+            if (!allowCompleted
+                    && containsMatchingRequest(root.resolve("completed"), expectedUid, expectedJobId)) {
+                throw new IllegalStateException("任务已被 BetterGI 接受，终态落库前不能删除");
             }
             return revoked;
         } catch (IOException exception) {
             throw new IllegalStateException("无法撤销 BetterGI 启动请求", exception);
+        }
+    }
+
+    public synchronized boolean hasAcceptedRequest(String expectedUid, String expectedJobId) {
+        try {
+            Path root = requestRoot();
+            return containsMatchingRequest(
+                    root.resolve("consumed"), expectedUid, expectedJobId)
+                    || containsMatchingRequest(
+                    root.resolve("completed"), expectedUid, expectedJobId);
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法检查 BetterGI 已接受启动请求", exception);
         }
     }
 

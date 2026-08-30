@@ -8,6 +8,7 @@ public record CultivationExecutionProjection(
         int revision,
         String state,
         String executionMode,
+        List<CultivationCraftingAction> craftingActions,
         List<ResinAction> resinActions,
         List<BossAction> bossActions,
         List<WeeklyBossAction> weeklyBossActions,
@@ -15,8 +16,57 @@ public record CultivationExecutionProjection(
         MonsterAction monsterAction,
         List<PendingMaterial> pendingMaterials,
         CultivationExecutionPreferences preferences,
-        List<String> partyOptions
+        List<String> partyOptions,
+        List<String> combatStrategyOptions,
+        List<MaterialProgress> materialProgress
 ) {
+    public CultivationExecutionProjection(
+            String uid,
+            int revision,
+            String state,
+            String executionMode,
+            List<CultivationCraftingAction> craftingActions,
+            List<ResinAction> resinActions,
+            List<BossAction> bossActions,
+            List<WeeklyBossAction> weeklyBossActions,
+            GatherAction gatherAction,
+            MonsterAction monsterAction,
+            List<PendingMaterial> pendingMaterials,
+            CultivationExecutionPreferences preferences,
+            List<String> partyOptions) {
+        this(uid, revision, state, executionMode, craftingActions, resinActions, bossActions, weeklyBossActions,
+                gatherAction, monsterAction, pendingMaterials, preferences, partyOptions, List.of(), List.of());
+    }
+
+    public CultivationExecutionProjection(
+            String uid,
+            int revision,
+            String state,
+            String executionMode,
+            List<ResinAction> resinActions,
+            List<BossAction> bossActions,
+            List<WeeklyBossAction> weeklyBossActions,
+            GatherAction gatherAction,
+            MonsterAction monsterAction,
+            List<PendingMaterial> pendingMaterials,
+            CultivationExecutionPreferences preferences,
+            List<String> partyOptions) {
+        this(uid, revision, state, executionMode, List.of(), resinActions, bossActions, weeklyBossActions,
+                gatherAction, monsterAction, pendingMaterials, preferences, partyOptions, List.of(), List.of());
+    }
+
+    public record MaterialProgress(
+            String materialName,
+            long currentOwned,
+            long required,
+            long remaining,
+            String familyName,
+            int tierIndex,
+            int tierCount,
+            int qualityLevel
+    ) {
+    }
+
     public record ResinAction(
             String materialName,
             long remaining,

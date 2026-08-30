@@ -17,7 +17,7 @@ import {
 } from '@/features/artifact-analysis/buildModel.js'
 import {
   artifactCharacterScanStatusMeta, artifactHostHasAcceptedJob,
-  waitForArtifactHostClaim, waitForArtifactJobCompletion,
+  validateArtifactLaunch, waitForArtifactHostClaim, waitForArtifactJobCompletion,
 } from '@/features/artifact-analysis/model.js'
 import {artifactSetLabel} from '@/features/artifact-analysis/buildModel.js'
 import ArtifactBuildEditorDialog from './ArtifactBuildEditorDialog.vue'
@@ -164,7 +164,9 @@ const waitForCharacterScan = async jobId => {
 const watchCharacterScan = jobId => {
   if (!jobId || characterScanWatchJobId.value === jobId) return
   characterScanWatchJobId.value = jobId
-  void waitForCharacterScan(jobId).finally(() => {
+  void waitForCharacterScan(jobId).catch(() => {
+    ElMessage.error('角色检测状态连续读取失败，请稍后刷新')
+  }).finally(() => {
     if (characterScanWatchJobId.value === jobId) characterScanWatchJobId.value = ''
   })
 }
@@ -182,6 +184,8 @@ const connectCharacterScan = async () => {
 const scanCharacters = async () => {
   if (!props.uid.trim()) { ElMessage.warning('请选择 UID'); return }
   autoActivationLoading.value = true
+  characterScanJobId.value = ''
+  characterLaunch.value = null
   try {
     const settings = normalizeArtifactAutoActivationSettings(autoActivation.value)
     autoActivation.value = await saveArtifactBuildAutoActivationSettings(settings)
@@ -192,10 +196,18 @@ const scanCharacters = async () => {
       String(uidInfo?.miliastraNickname || '').trim(),
       uidInfo?.miliastraCharacterKey === 'MannequinBoy'
         ? 'MannequinBoy' : 'MannequinGirl')
+    if (!validateArtifactLaunch(response.launch, 'SCAN_CHARACTER_ROSTER')) {
+      throw new Error('服务端未返回有效启动请求')
+    }
     characterScanJobId.value = response.job.id
     characterScanJob.value = response.job
     characterLaunch.value = response.launch
-    void connectCharacterScan()
+    void connectCharacterScan().catch(() => {
+      ElMessage.warning('角色检测状态读取暂时失败，已继续在后台观察')
+      watchCharacterScan(characterScanJobId.value)
+    })
+  } catch {
+    ElMessage.error('无法创建角色检测任务，请稍后重试')
   } finally { autoActivationLoading.value = false }
 }
 const continueCharacterScan = async () => {

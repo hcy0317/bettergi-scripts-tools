@@ -172,10 +172,12 @@ public class CultivationOneStopService {
         }
     }
 
-    private static boolean hasPlanDrivenAction(CultivationExecutionProjection projection,
-                                               CultivationModuleConfiguration configuration) {
+    static boolean hasPlanDrivenAction(CultivationExecutionProjection projection,
+                                       CultivationModuleConfiguration configuration) {
         if (!configuration.enabled()) return false;
-        return projection.resinActions().stream().anyMatch(action -> resinActionEnabled(action, configuration))
+        return "NEEDS_RECONCILE".equals(projection.state())
+                || !projection.craftingActions().isEmpty()
+                || projection.resinActions().stream().anyMatch(action -> resinActionEnabled(action, configuration))
                 || !projection.bossActions().isEmpty();
     }
 
@@ -203,9 +205,7 @@ public class CultivationOneStopService {
         applyGroupSettings(root, template, groupSettings.settings());
         ArrayNode projects = objectMapper.createArrayNode();
 
-        boolean hasEnabledResinAction = projection.resinActions().stream()
-                .anyMatch(action -> resinActionEnabled(action, autoPlan));
-        if (autoPlan.enabled() && (hasEnabledResinAction || !projection.bossActions().isEmpty())) {
+        if (hasPlanDrivenAction(projection, autoPlan)) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
             ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
@@ -854,6 +854,7 @@ public class CultivationOneStopService {
                 .filter(action -> resinActionEnabled(action, configuration))
                 .map(CultivationOneStopService::resinActionLabel)
                 .forEach(labels::add);
+        if (!projection.craftingActions().isEmpty()) labels.add("材料合成");
         if (!projection.bossActions().isEmpty()) labels.add("世界首领");
         return taskName("养成体力", labels);
     }

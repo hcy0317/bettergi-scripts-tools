@@ -15,6 +15,7 @@ import {
   shouldRefreshArtifactJobs,
   hasActiveArtifactJobs,
   artifactCharacterScanStatusMeta,
+  artifactLoadSettlement,
 } from "../src/features/artifact-analysis/model.js";
 
 test("manual non-five-star count reconciles analyzable items with total inventory", () => {
@@ -130,9 +131,12 @@ test("artifact launch does not offer a second start after the host already finis
   assert.equal(artifactHostHasAcceptedJob(job), true);
 });
 
-test("artifact launch tolerates a running BetterGI that is still initializing", async () => {
-  const states = Array.from({length: 29}, () => ({id: "job-1", status: "WAITING_FOR_HOST"}));
-  states.push({id: "job-1", status: "HOST_CLAIMED"});
+test("artifact launch gives an already-running host a bounded claim window before prompting", async () => {
+  const states = [
+    {id: "job-1", status: "WAITING_FOR_HOST"},
+    {id: "job-1", status: "WAITING_FOR_HOST"},
+    {id: "job-1", status: "HOST_CLAIMED"},
+  ];
   let calls = 0;
 
   const job = await waitForArtifactHostClaim(
@@ -142,7 +146,33 @@ test("artifact launch tolerates a running BetterGI that is still initializing", 
   );
 
   assert.equal(job.status, "HOST_CLAIMED");
-  assert.equal(calls, 30);
+  assert.equal(calls, 3);
+});
+
+test("artifact launch claim tolerates transient status read failures", async () => {
+  let calls = 0;
+  const errors = [];
+  const job = await waitForArtifactHostClaim(
+    "job-retry",
+    async () => {
+      calls++;
+      if (calls <= 2) throw new Error("temporary status failure");
+      return {id: "job-retry", status: "HOST_CLAIMED"};
+    },
+    {delay: 0, sleep: async () => {}, onError: (_error, count) => errors.push(count)}
+  );
+
+  assert.equal(job.status, "HOST_CLAIMED");
+  assert.equal(calls, 3);
+  assert.deepEqual(errors, [1, 2]);
+});
+
+test("latest silent lock-plan refresh always settles an older visible loading state", () => {
+  assert.equal(artifactLoadSettlement(1, 2), null);
+  assert.deepEqual(artifactLoadSettlement(2, 2), {
+    loading: false,
+    refreshing: false,
+  });
 });
 
 test("artifact states and operations have concise user-facing metadata", () => {
@@ -182,4 +212,62 @@ test("character scan waits for the host to finish applying build activation", as
   assert.equal(job.status, "COMPLETED");
   assert.equal(calls, 2);
   assert.deepEqual(observed, ["HOST_CLAIMED", "COMPLETED"]);
+});
+
+test("unbounded completion observation continues past the finite polling budget", async () => {
+  const states = [
+    ...Array.from({length: 305}, () => ({id: "job-lock", status: "HOST_CLAIMED"})),
+    {id: "job-lock", status: "COMPLETED"},
+  ];
+  let calls = 0;
+
+  const job = await waitForArtifactJobCompletion(
+    "job-lock",
+    async () => states[Math.min(calls++, states.length - 1)],
+    {attempts: null, delay: 0, sleep: async () => {}},
+  );
+
+  assert.equal(job.status, "COMPLETED");
+  assert.equal(calls, 306);
+});
+
+test("artifact completion observation retries a transient request failure", async () => {
+  let calls = 0;
+  const errors = [];
+
+  const job = await waitForArtifactJobCompletion(
+    "job-retry",
+    async () => {
+      calls++;
+      if (calls === 1) throw new Error("temporary network failure");
+      return {id: "job-retry", status: "COMPLETED"};
+    },
+    {
+      attempts: 3,
+      delay: 0,
+      sleep: async () => {},
+      onError: (_error, count) => errors.push(count),
+    },
+  );
+
+  assert.equal(job.status, "COMPLETED");
+  assert.equal(calls, 2);
+  assert.deepEqual(errors, [1]);
+});
+
+test("artifact completion observation stops after its consecutive error budget", async () => {
+  let calls = 0;
+
+  await assert.rejects(
+    waitForArtifactJobCompletion(
+      "job-failing",
+      async () => {
+        calls++;
+        throw new Error("service unavailable");
+      },
+      {attempts: null, delay: 0, sleep: async () => {}, maxConsecutiveErrors: 2},
+    ),
+    /service unavailable/,
+  );
+  assert.equal(calls, 2);
 });

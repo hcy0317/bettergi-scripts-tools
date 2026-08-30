@@ -10,9 +10,12 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.when;
 
 class CultivationLedgerObservationServiceTest {
@@ -69,7 +72,7 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
-    void requiresReconcileInsteadOfSchedulingMoreWhenInventoryDropsBelowImportBaseline() {
+    void inventoryBelowImportBaselineRequiresReconciliation() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(observation("action-4", 3)));
         CultivationPlanRevisionResponse imported = revision(10, 4, 6);
@@ -78,12 +81,12 @@ class CultivationLedgerObservationServiceTest {
                 new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
 
         assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
-        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(6);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(7);
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(3);
     }
 
     @Test
-    void requiresReconcileForAnyNegativeInventoryDeltaAfterThePlanStarted() {
+    void inventoryBelowAnEarlierObservationRequiresReconciliation() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
                 observation("newest", 6), observation("older", 8)));
@@ -94,11 +97,82 @@ class CultivationLedgerObservationServiceTest {
 
         assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
-        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(4);
     }
 
     @Test
-    void keepsUnobservedMaterialsAtBaselineWhenAnotherMaterialTriggersReconcile() {
+    void plannedCraftConsumptionDoesNotTriggerTheDecreaseGate() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity before = inventoryBatch(
+                "before-craft", Map.of("史莱姆凝液", 18L, "史莱姆清", 0L));
+        CultivationExecutionActionEntity craft = new CultivationExecutionActionEntity();
+        craft.setId("craft-action");
+        craft.setUid("102550550");
+        craft.setPlanRevision(3);
+        craft.setStatus("COMPLETED");
+        craft.setActionType("CRAFT");
+        craft.setMaterialName("史莱姆清");
+        craft.setPlanJson("{\"materialType\":\"角色与武器培养素材\",\"country\":\"枫丹\",\"quantity\":3}");
+        craft.setObservedOwned(3L);
+        craft.setRewardsJson("{\"史莱姆清\":3}");
+        CultivationExecutionActionEntity after = inventoryBatch(
+                "after-craft", Map.of("史莱姆凝液", 9L, "史莱姆清", 3L));
+        when(mapper.findCompletedObservations("102550550", 3))
+                .thenReturn(List.of(after, craft, before));
+        var family = new CultivationMaterialCraftingCatalog.CraftFamily(
+                "史莱姆",
+                List.of(
+                        new CultivationMaterialCraftingCatalog.CraftTier(
+                                1, "史莱姆凝液", "角色与武器培养素材", 1),
+                        new CultivationMaterialCraftingCatalog.CraftTier(
+                                2, "史莱姆清", "角色与武器培养素材", 2)));
+        when(planner.family("史莱姆清")).thenReturn(Optional.of(family));
+        when(planner.plan(anyList())).thenReturn(new CultivationMaterialCraftingPlan(
+                Map.of("史莱姆凝液", 0L, "史莱姆清", 0L), List.of()));
+        CultivationPlanRevisionResponse imported = new CultivationPlanRevisionResponse(
+                1L, "102550550", 3, "IMPORTED", "name-only-v1", 2L,
+                "sha", "engine", "model",
+                List.of(
+                        new CultivationLedgerEntry(
+                                0, "史莱姆凝液", 0L, 18L, 18L, 0L,
+                                RemainingEvidence.OCR, 1.0, false, List.of()),
+                        new CultivationLedgerEntry(
+                                1, "史莱姆清", 3L, 0L, 0L, 3L,
+                                RemainingEvidence.OCR, 1.0, false, List.of())),
+                LocalDateTime.of(2026, 8, 23, 20, 0));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner)
+                        .effective(imported);
+
+        assertThat(effective.state()).isEqualTo("COMPLETED");
+        assertThat(effective.requirements())
+                .allSatisfy(entry -> assertThat(entry.remaining()).isZero());
+    }
+
+    @Test
+    void repeatedCompleteInventoryBatchCannotReplaceANewImportBaseline() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity before = inventoryBatch(
+                "before-external-consumption", Map.of("「公平」的哲学", 8L));
+        CultivationExecutionActionEntity decrease = inventoryBatch(
+                "observed-decrease", Map.of("「公平」的哲学", 6L));
+        CultivationExecutionActionEntity confirmation = inventoryBatch(
+                "confirmed-decrease", Map.of("「公平」的哲学", 6L));
+        when(mapper.findCompletedObservations("102550550", 3))
+                .thenReturn(List.of(confirmation, decrease, before));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper())
+                        .effective(revision(10, 4, 6));
+
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
+    }
+
+    @Test
+    void keepsUnobservedMaterialsAtBaselineWhenAnObservedMaterialDecreases() {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity newest = observation("newest", 6);
         CultivationExecutionActionEntity older = observation("older", 8);
@@ -173,6 +247,81 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
+    void excludesCraftOutputsFromAcquisitionRewardEquivalents() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity acquired = observation("domain-action", 0);
+        acquired.setActionType("DOMAIN");
+        acquired.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of(
+                "「公平」的指引", 3)));
+        CultivationExecutionActionEntity crafted = observation("craft-action", 1);
+        crafted.setActionType("CRAFT");
+        crafted.setPlanJson("{\"materialType\":\"角色天赋素材\",\"country\":\"枫丹\",\"quantity\":1}");
+        crafted.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of(
+                "「公平」的哲学", 1)));
+        when(mapper.findCompletedObservations("102550550", 3))
+                .thenReturn(List.of(crafted, acquired));
+        when(planner.family("「公平」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialCraftingCatalog.CraftFamily(
+                        "「公平」",
+                        List.of(
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        1, "「公平」的指引", "角色天赋素材", 3),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        2, "「公平」的哲学", "角色天赋素材", 4)))));
+        when(planner.plan(anyList())).thenAnswer(invocation -> {
+            List<CultivationLedgerEntry> entries = invocation.getArgument(0);
+            assertThat(entries).singleElement()
+                    .satisfies(entry -> assertThat(entry.remaining()).isEqualTo(1));
+            return new CultivationMaterialCraftingPlan(
+                    Map.of("「公平」的哲学", 1L), List.of());
+        });
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner)
+                        .effective(revision(2, 0, 2));
+
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(1);
+    }
+
+    @Test
+    void reservesTheLowerTierRequirementBeforeTreatingRewardsAsCraftable() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity action = observation("action-tier-reserve", 0);
+        action.setRewardsJson(objectMapper().writeValueAsString(java.util.Map.of(
+                "「公平」的指引", 3)));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(action));
+        when(planner.plan(anyList())).thenAnswer(invocation -> {
+            List<CultivationLedgerEntry> entries = invocation.getArgument(0);
+            assertThat(entries).filteredOn(entry -> "「公平」的指引".equals(entry.materialName()))
+                    .singleElement().satisfies(entry -> assertThat(entry.currentOwned()).isEqualTo(7));
+            return new CultivationMaterialCraftingPlan(java.util.Map.of(
+                    "「公平」的指引", 0L,
+                    "「公平」的哲学", 1L), List.of());
+        });
+        CultivationPlanRevisionResponse imported = new CultivationPlanRevisionResponse(
+                1L, "102550550", 3, "IMPORTED", "name-only-v1", 2L,
+                "sha", "engine", "model",
+                List.of(
+                        new CultivationLedgerEntry(
+                                0, "「公平」的指引", 6, 4, 2,
+                                RemainingEvidence.OCR, 1.0, false, List.of()),
+                        new CultivationLedgerEntry(
+                                1, "「公平」的哲学", 1, 0, 1,
+                                RemainingEvidence.OCR, 1.0, false, List.of())),
+                LocalDateTime.of(2026, 8, 23, 20, 0));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner).effective(imported);
+
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements()).filteredOn(entry -> "「公平」的哲学".equals(entry.materialName()))
+                .singleElement().satisfies(entry -> assertThat(entry.remaining()).isEqualTo(1));
+    }
+
+    @Test
     void derivesCurrentOwnedFromACompletedInventoryReconcileBatch() throws Exception {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity batch = new CultivationExecutionActionEntity();
@@ -215,6 +364,18 @@ class CultivationLedgerObservationServiceTest {
         entity.setStatus("COMPLETED");
         entity.setObservedOwned(owned);
         return entity;
+    }
+
+    private static CultivationExecutionActionEntity inventoryBatch(
+            String id, Map<String, Long> observations) throws Exception {
+        CultivationExecutionActionEntity batch = new CultivationExecutionActionEntity();
+        batch.setId(id);
+        batch.setUid("102550550");
+        batch.setPlanRevision(3);
+        batch.setStatus("COMPLETED");
+        batch.setActionType("INVENTORY_RECONCILE_BATCH");
+        batch.setRewardsJson(objectMapper().writeValueAsString(observations));
+        return batch;
     }
 
     private static CultivationPlanRevisionResponse revision(long required, long owned, long remaining) {

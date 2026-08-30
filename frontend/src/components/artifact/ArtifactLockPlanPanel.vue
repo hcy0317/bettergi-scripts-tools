@@ -1,12 +1,16 @@
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, onBeforeUnmount, ref, watch} from 'vue'
 import {Check, Refresh, VideoPlay} from '@element-plus/icons-vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {
   approveArtifactJob, getArtifactBuilds, getArtifactJob, getArtifactJobs,
   getArtifactSettings, launchArtifactPlan,
 } from '@api/artifact/artifactAnalysis.js'
-import {artifactHostHasAcceptedJob, artifactJobStatusMeta, canApproveArtifactJob, canExecuteArtifactJob, validateArtifactLaunch, waitForArtifactHostClaim} from '@/features/artifact-analysis/model.js'
+import {
+  artifactHostHasAcceptedJob, artifactJobStatusMeta, artifactLoadSettlement,
+  canApproveArtifactJob, canExecuteArtifactJob,
+  validateArtifactLaunch, waitForArtifactHostClaim, waitForArtifactJobCompletion,
+} from '@/features/artifact-analysis/model.js'
 import {artifactSetLabel, artifactSlotLabel, formatArtifactDate} from '@/features/artifact-analysis/buildModel.js'
 import {
   artifactDecisionEvaluation, artifactDecisionRows, artifactLockPlanFilterOptions,
@@ -32,7 +36,7 @@ const approving = ref(false)
 const launching = ref(false)
 const launchDialogOpen = ref(false)
 const pendingLaunch = ref(null)
-const panelRoot = ref(null)
+const pendingExecutionJobId = ref('')
 const page = ref(1)
 const view = ref('all')
 const setKey = ref('all')
@@ -40,9 +44,9 @@ const slotKey = ref('all')
 const levelRange = ref([0, 20])
 const sort = ref('potential-desc')
 const pageSize = 30
-let visibilityObserver = null
 let detailGeneration = 0
 let loadGeneration = 0
+let executionWatchGeneration = 0
 
 const analyzable = computed(() => jobs.value.filter(item => item.analysisResult))
 const rows = computed(() => artifactDecisionRows(job.value))
@@ -79,27 +83,39 @@ const loadJobDetail = async (
 const load = async (silent = false) => {
   const generation = ++loadGeneration
   const requestedUid = props.uid.trim()
-  if (!requestedUid) { jobs.value = []; jobId.value = ''; job.value = null; return }
+  if (!requestedUid) {
+    jobs.value = []
+    jobId.value = ''
+    job.value = null
+    loading.value = false
+    refreshing.value = false
+    detailLoading.value = false
+    return
+  }
   refreshing.value = true
   if (!silent) loading.value = true
   const previousNewestId = analyzable.value[0]?.id || ''
   try {
-    const [nextJobs, nextBuilds, nextSettings] = await Promise.all([
-      getArtifactJobs(requestedUid), getArtifactBuilds(requestedUid), getArtifactSettings(),
-    ])
+    const nextJobs = await getArtifactJobs(requestedUid)
     if (generation !== loadGeneration || requestedUid !== props.uid.trim()) return
     const nextJobId = preferredArtifactJobId(nextJobs, jobId.value, previousNewestId)
     jobs.value = nextJobs
+    jobId.value = nextJobId
+    const [nextBuilds, nextSettings] = await Promise.all([
+      getArtifactBuilds(requestedUid),
+      getArtifactSettings(),
+      loadJobDetail(nextJobId, requestedUid, generation),
+    ])
+    if (generation !== loadGeneration || requestedUid !== props.uid.trim()) return
     builds.value = nextBuilds
     settings.value = {...DEFAULT_ARTIFACT_ANALYSIS_THRESHOLDS, ...(nextSettings || {})}
-    jobId.value = nextJobId
-    await loadJobDetail(nextJobId, requestedUid, generation)
   }
   catch { if (!silent) ElMessage.error('锁定方案加载失败，请稍后重试') }
   finally {
-    if (generation === loadGeneration) {
-      refreshing.value = false
-      if (!silent) loading.value = false
+    const settlement = artifactLoadSettlement(generation, loadGeneration)
+    if (settlement) {
+      loading.value = settlement.loading
+      refreshing.value = settlement.refreshing
     }
   }
 }
@@ -110,47 +126,102 @@ const approve = async () => {
   try { await approveArtifactJob(job.value.id, job.value.snapshot.snapshotDigest); ElMessage.success('方案已批准'); await load() }
   finally { approving.value = false }
 }
+const watchLockExecution = executionJobId => {
+  if (!executionJobId) return
+  const generation = ++executionWatchGeneration
+  const requestedUid = props.uid.trim()
+  const selectedJobId = jobId.value
+  const isCurrentWatch = () => generation === executionWatchGeneration
+    && requestedUid === props.uid.trim()
+    && jobId.value === selectedJobId
+  void waitForArtifactJobCompletion(executionJobId, getArtifactJob, {
+    attempts: null,
+    terminalStatuses: ['COMPLETED', 'FAILED', 'READY_FOR_REVIEW', 'RESCAN_REQUIRED', 'STALE_ABORT'],
+    shouldContinue: isCurrentWatch,
+    onUpdate: current => {
+      if (isCurrentWatch()
+        && current?.uid === requestedUid
+        && current?.id === jobId.value) job.value = current
+    },
+  }).then(async completed => {
+    if (!isCurrentWatch()) return
+    await load(true)
+    if (!isCurrentWatch()) return
+    if (completed?.status === 'COMPLETED') ElMessage.success('锁定方案执行完成')
+    else if (['READY_FOR_REVIEW', 'RESCAN_REQUIRED'].includes(completed?.status)) {
+      ElMessage.warning('圣遗物数据已变化，请审核重新扫描后的方案')
+    }
+    else if (completed?.status === 'STALE_ABORT') ElMessage.warning('锁定方案数据已变化，任务已安全停止')
+    else if (completed?.status === 'FAILED') ElMessage.error('锁定方案执行失败，请查看任务详情')
+    else ElMessage.warning('锁定方案仍在执行，请稍后刷新')
+  }).catch(() => {
+    if (isCurrentWatch()) {
+      ElMessage.error('无法读取锁定方案执行状态，请稍后刷新')
+    }
+  })
+}
+const continueLockExecution = () => {
+  if (!pendingExecutionJobId.value) return
+  ElMessage.info('已连接 BetterGI，正在等待锁定方案执行结果')
+  watchLockExecution(pendingExecutionJobId.value)
+}
 const execute = async () => {
   if (!job.value || job.value.id !== jobId.value) return
   if (!executionTargets.value.length) { ElMessage.info('当前筛选没有需要加解锁的目标'); return }
   try { await ElMessageBox.confirm(`当前筛选将锁定 ${executionSummary.value.lock} 件、解锁 ${executionSummary.value.unlock} 件。BetterGI 会先核对圣遗物总数；数量不变就直接执行，数量变化则全量复扫并返回审核。`, '执行筛选后的锁定方案', {type:'warning'}) } catch { return }
   launching.value = true
+  pendingExecutionJobId.value = ''
+  pendingLaunch.value = null
   try {
-    const response = await launchArtifactPlan(
-      job.value.id, executionTargets.value.map(row => row.scanIndex)
-    )
-    if (!validateArtifactLaunch(response.launch, 'EXECUTE_LOCK_PLAN')) throw new Error('服务端未返回有效启动请求')
+    let response
+    try {
+      response = await launchArtifactPlan(
+        job.value.id, executionTargets.value.map(row => row.scanIndex)
+      )
+      if (!validateArtifactLaunch(response.launch, 'EXECUTE_LOCK_PLAN')) throw new Error('服务端未返回有效启动请求')
+    } catch {
+      ElMessage.error('无法创建锁定执行任务，请稍后重试')
+      return
+    }
     pendingLaunch.value = response.launch
-    const claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    pendingExecutionJobId.value = response.job.id
+    let claimed
+    try {
+      claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    } catch {
+      ElMessage.warning('锁定任务状态读取暂时失败，已继续在后台观察')
+      watchLockExecution(response.job.id)
+      return
+    }
     await load(true)
     if (artifactHostHasAcceptedJob(claimed)) {
       if (claimed.status === 'FAILED') ElMessage.error('BetterGI 已接收锁定任务，但执行失败')
-      else ElMessage.success('BetterGI 已接收锁定任务')
+      else {
+        ElMessage.success('BetterGI 已接收锁定任务')
+        watchLockExecution(response.job.id)
+      }
     } else launchDialogOpen.value = true
   } finally { launching.value = false }
 }
 watch(() => props.uid, () => {
+  executionWatchGeneration++
   detailGeneration++
   detailLoading.value = false
   job.value = null
   jobId.value = ''
   jobs.value = []
   builds.value = []
+  pendingExecutionJobId.value = ''
   void load()
 }, {immediate: true})
 watch([jobId, view, setKey, slotKey, levelRange, sort], () => { page.value = 1 })
-onMounted(() => {
-  if (!window.IntersectionObserver || !panelRoot.value) return
-  visibilityObserver = new window.IntersectionObserver(entries => {
-    if (entries.some(entry => entry.isIntersecting)) void load(true)
-  }, {threshold: 0.01})
-  visibilityObserver.observe(panelRoot.value)
+onBeforeUnmount(() => {
+  executionWatchGeneration++
 })
-onBeforeUnmount(() => visibilityObserver?.disconnect())
 </script>
 
 <template>
-  <section ref="panelRoot" v-loading="loading">
+  <section v-loading="loading">
     <header class="toolbar">
       <div><h2>锁定方案</h2><p>审核评分结果后，独立启动原生锁定执行。</p></div>
       <div class="commands">
@@ -180,7 +251,7 @@ onBeforeUnmount(() => visibilityObserver?.disconnect())
       </el-table>
       <el-pagination v-model:current-page="page" layout="prev, pager, next, total" :page-size="pageSize" :total="filtered.length" class="pagination"/>
     </template>
-    <ArtifactLaunchDialog v-model:open="launchDialogOpen" :launch="pendingLaunch" task-label="执行锁定方案" @launched="ElMessage.success('正在连接 BetterGI')"/>
+    <ArtifactLaunchDialog v-model:open="launchDialogOpen" :launch="pendingLaunch" task-label="执行锁定方案" @launched="continueLockExecution"/>
   </section>
 </template>
 

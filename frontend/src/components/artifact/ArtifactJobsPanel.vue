@@ -28,6 +28,7 @@ const starting = ref(false)
 const selectedId = ref('')
 const launchDialogOpen = ref(false)
 const pendingLaunch = ref(null)
+const pendingLaunchJobId = ref('')
 const deletingIds = ref(new Set())
 const manualNonFiveStarCount = ref(null)
 const selected = computed(() => jobs.value.find(job => job.id === selectedId.value) || jobs.value[0])
@@ -102,13 +103,29 @@ const start = async () => {
     )
   } catch { return }
   starting.value = true
+  pendingLaunchJobId.value = ''
+  pendingLaunch.value = null
   try {
-    const response = await startArtifactJob(props.uid.trim(), 'ANALYZE')
-    if (!validateArtifactLaunch(response.launch, 'ANALYZE')) throw new Error('服务端未返回有效启动请求')
+    let response
+    try {
+      response = await startArtifactJob(props.uid.trim(), 'ANALYZE')
+      if (!validateArtifactLaunch(response.launch, 'ANALYZE')) throw new Error('服务端未返回有效启动请求')
+    } catch {
+      ElMessage.error('无法创建扫描任务，请稍后重试')
+      return
+    }
     jobs.value.unshift(response.job)
     selectedId.value = response.job.id
     pendingLaunch.value = response.launch
-    const claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    pendingLaunchJobId.value = response.job.id
+    let claimed
+    try {
+      claimed = await waitForArtifactHostClaim(response.job.id, getArtifactJob)
+    } catch {
+      ElMessage.warning('扫描任务状态读取暂时失败，已继续在后台观察')
+      watchActiveJob(response.job.id)
+      return
+    }
     const index = jobs.value.findIndex(job => job.id === claimed.id)
     if (index >= 0) jobs.value[index] = claimed
     if (artifactHostHasAcceptedJob(claimed)) {
@@ -138,12 +155,21 @@ const watchActiveJob = jobId => {
     },
   }).then(() => {
     if (generation === watchGeneration) void load(true)
+  }).catch(() => {
+    if (generation === watchGeneration) {
+      ElMessage.error('分析任务状态连续读取失败，请稍后刷新')
+    }
   }).finally(() => watchedJobIds.delete(jobId))
 }
 
 const resumeActiveWatches = () => {
   jobs.value.filter(job => hasActiveArtifactJobs([job]))
     .forEach(job => watchActiveJob(job.id))
+}
+
+const continueAnalysis = () => {
+  ElMessage.success('正在连接 BetterGI')
+  watchActiveJob(pendingLaunchJobId.value)
 }
 
 const remove = async job => {
@@ -162,6 +188,7 @@ const remove = async job => {
 watch(() => props.uid, () => {
   watchGeneration++
   watchedJobIds.clear()
+  pendingLaunchJobId.value = ''
   restoreManualCount()
   void load()
 }, {immediate: true})
@@ -232,7 +259,7 @@ onBeforeUnmount(() => { watchGeneration++ })
         <el-alert v-if="selected.errorMessage" :title="artifactHostErrorLabel(selected.errorMessage)" :type="artifactJobWasStopped(selected) ? 'info' : 'error'" :closable="false" show-icon/>
       </section>
     </template>
-    <ArtifactLaunchDialog v-model:open="launchDialogOpen" :launch="pendingLaunch" task-label="扫描并分析" @launched="ElMessage.success('正在连接 BetterGI')"/>
+    <ArtifactLaunchDialog v-model:open="launchDialogOpen" :launch="pendingLaunch" task-label="扫描并分析" @launched="continueAnalysis"/>
   </section>
 </template>
 
