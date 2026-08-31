@@ -193,7 +193,7 @@ class CultivationOneStopServiceTest {
 
         assertThat(result.autoPlanActions()).isEqualTo(1);
         assertThat(result.message()).contains("计划驱动");
-        assertThat(result.scriptTasks()).isEqualTo(5);
+        assertThat(result.scriptTasks()).isEqualTo(4);
         assertThat(result.scriptGroupName()).isEqualTo("养成一条龙-102550550");
         assertThat(result.warnings()).anyMatch(warning -> warning.contains("混合族") && warning.contains("没有有效候选"));
         JsonNode group = new ObjectMapper().readTree(Path.of(result.scriptGroupFile()).toFile());
@@ -201,11 +201,11 @@ class CultivationOneStopServiceTest {
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("folderName").asText()).toList())
                 .containsExactly("AutoPlan", "CD-Aware-AutoGather",
-                        "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss", "AutoPlan");
+                        "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("name").asText()).toList())
                 .containsExactly("养成体力：摩拉·世界首领", "养成采集：沙脂蛹",
-                        "养成怪物：镀金旅团·盗宝团", "周本 - 博士", "养成收尾：权威库存复核");
+                        "养成怪物：镀金旅团·盗宝团", "周本 - 博士");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
@@ -280,9 +280,9 @@ class CultivationOneStopServiceTest {
                 .containsExactly("镀金旅团路线乙");
         assertThat(monsterSettings.path("http_api").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/cron/next-timestamp/all");
-        JsonNode reconcileSettings = group.path("projects").get(4).path("jsScriptSettingsObject");
-        assertThat(reconcileSettings.path("cultivation_inventory_reconcile_mode").asBoolean()).isTrue();
-        assertThat(reconcileSettings.path("cultivation_plan_mode").asBoolean()).isFalse();
+        assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
+                .map(project -> project.path("name").asText()).toList())
+                .doesNotContain("养成收尾：权威库存复核");
         assertThat(group.path("config").path("pathingConfig").path("partyName").asText())
                 .isEqualTo("养成队伍");
         assertThat(group.path("config").path("pathingConfig").path("autoPickEnabled").asBoolean()).isTrue();
@@ -329,7 +329,7 @@ class CultivationOneStopServiceTest {
         CultivationOneStopResult repeated = service.prepare("102550550");
         assertThat(repeated.scriptGroupName()).isEqualTo(result.scriptGroupName());
         assertThat(new ObjectMapper().readTree(Path.of(repeated.scriptGroupFile()).toFile())
-                .path("projects").size()).isEqualTo(5);
+                .path("projects").size()).isEqualTo(4);
         assertThat(duplicate).doesNotExist();
         assertThat(Path.of(repeated.backupDirectory()).resolve("ScriptGroup")
                 .resolve(duplicate.getFileName())).exists();
