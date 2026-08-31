@@ -204,8 +204,9 @@ public class CultivationOneStopService {
         template.put("name", groupName);
         applyGroupSettings(root, template, groupSettings.settings());
         ArrayNode projects = objectMapper.createArrayNode();
+        boolean planDrivenAction = hasPlanDrivenAction(projection, autoPlan);
 
-        if (hasPlanDrivenAction(projection, autoPlan)) {
+        if (planDrivenAction) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
             ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
@@ -260,7 +261,7 @@ public class CultivationOneStopService {
                 }
             }
         }
-        if (hasInventoryReconcileTargets(projection)) {
+        if (hasInventoryReconcileTargets(projection) && !planDrivenAction) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
             ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
