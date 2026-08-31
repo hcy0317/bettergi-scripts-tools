@@ -168,6 +168,7 @@ class CultivationOneStopServiceTest {
                         "bgi_tools_token", "Authorization= ",
                         "leyLineCountry", "挪德卡莱",
                         "talentDomainEnabled", false,
+                        "weaponDomainEnabled", false,
                         "moraLeyLineEnabled", true,
                         "experienceLeyLineEnabled", false)));
         when(configurationService.find("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(
@@ -210,6 +211,7 @@ class CultivationOneStopServiceTest {
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
         assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();
         assertThat(autoPlanSettings.path("talentDomainEnabled").asBoolean()).isFalse();
+        assertThat(autoPlanSettings.path("weaponDomainEnabled").asBoolean()).isFalse();
         assertThat(autoPlanSettings.path("moraLeyLineEnabled").asBoolean()).isTrue();
         assertThat(autoPlanSettings.path("run_config").asText()).isEmpty();
         assertThat(autoPlanSettings.path("auto_check")).isEmpty();
@@ -228,6 +230,10 @@ class CultivationOneStopServiceTest {
                 .contains("首次识别未知，仅对缺失项再复查一次")
                 .contains("未知项将保留上次可信库存")
                 .contains("async function runInventoryReconcileOnce(config, state, reason)")
+                .contains("async function refreshCurrentOwned(config, phase)")
+                .contains("不把单个未知材料升级为配置组失败")
+                .contains("继续使用上次可信库存")
+                .doesNotContain("throw new Error(`${phase}库存刷新未闭合`)")
                 .contains("const inventoryReconcileState = {attempted: false};")
                 .contains("if (state.attempted)")
                 .contains("本轮已完成一次完整库存复核，不再重复检查")
@@ -366,6 +372,9 @@ class CultivationOneStopServiceTest {
         var experience = new CultivationExecutionProjection.ResinAction(
                 "大英雄的经验", 100, "地脉", "启示之花", "经验与摩拉", "速通",
                 "可生成下一步行动", null, "大英雄的经验", List.of());
+        var weapon = new CultivationExecutionProjection.ResinAction(
+                "凛风奔狼的怀乡", 3, "秘境", "塞西莉亚苗圃", "武器", "速通",
+                "可生成下一步行动", 3, "凛风奔狼的怀乡", List.of(0, 3, 6));
         var boss = new CultivationExecutionProjection.BossAction(
                 "谜土的护符", 45, "灵觉隐修的迷者", "纳塔", "速通", Map.of(), "待执行");
         var weekly = new CultivationExecutionProjection.WeeklyBossAction(
@@ -395,7 +404,7 @@ class CultivationOneStopServiceTest {
                 List.of(monsterTarget, directRootMonsterTarget, mixedRootMonsterTarget),
                 List.of("镀金旅团", "盗宝团", "混合族"));
         return new CultivationExecutionProjection(
-                "102550550", 1, "IMPORTED", "单轮执行", List.of(resin, mora, experience), List.of(boss),
+                "102550550", 1, "IMPORTED", "单轮执行", List.of(resin, weapon, mora, experience), List.of(boss),
                 List.of(weekly), gather, monster, List.of(),
                 new CultivationExecutionPreferences("102550550", "速通", "采集", "采集", true),
                 List.of("速通", "采集"));

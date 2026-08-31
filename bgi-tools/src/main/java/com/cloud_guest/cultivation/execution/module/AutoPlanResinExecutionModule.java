@@ -12,10 +12,10 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
 
     @Override public String moduleId() { return ID; }
     @Override public String displayName() { return "自动体力计划"; }
-    @Override public String adapterVersion() { return "1.1"; }
+    @Override public String adapterVersion() { return "1.2"; }
     @Override public String description() { return "秘境、地脉与首领的单轮行动入口"; }
     @Override public String integrationState() { return "已接入行动投影"; }
-    @Override public List<String> capabilities() { return List.of("秘境", "地脉", "世界首领", "执行后重规划"); }
+    @Override public List<String> capabilities() { return List.of("天赋秘境", "武器秘境", "地脉", "世界首领", "执行后重规划"); }
 
     @Override
     public List<CultivationModuleSettingField> settingsSchema() {
@@ -38,6 +38,7 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
                 new CultivationModuleSettingField("bgi_tools_token", "工具集授权", "text", true, null),
                 new CultivationModuleSettingField("debug", "开发者模式", "switch", true, null),
                 new CultivationModuleSettingField("talentDomainEnabled", "天赋书秘境", "switch", true, null),
+                new CultivationModuleSettingField("weaponDomainEnabled", "武器突破秘境", "switch", true, null),
                 new CultivationModuleSettingField("moraLeyLineEnabled", "摩拉地脉", "switch", true, null),
                 new CultivationModuleSettingField("experienceLeyLineEnabled", "大英雄经验地脉", "switch", true, null),
                 new CultivationModuleSettingField("resinPriority", "秘境树脂启用项与优先顺序",
@@ -76,6 +77,7 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
         result.put("bgi_tools_token", "Authorization= ");
         result.put("debug", false);
         result.put("talentDomainEnabled", true);
+        result.put("weaponDomainEnabled", true);
         result.put("moraLeyLineEnabled", true);
         result.put("experienceLeyLineEnabled", true);
         result.put("resinPriority", List.of("浓缩树脂", "原粹树脂"));

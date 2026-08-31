@@ -253,6 +253,24 @@ async function runInventoryReconcileOnce(config, state, reason) {
         succeeded: await runCultivationInventoryReconcile(config),
     };
 }
+
+async function refreshCurrentOwned(config, phase) {
+    log.warn("[计划驱动] {0}刷新当前拥有", phase);
+    try {
+        const refreshed = await runCultivationInventoryReconcile(config);
+        if (!refreshed) {
+            log.warn("[计划驱动] {0}库存刷新未闭合；保留上次可信库存，不把单个未知材料升级为配置组失败", phase);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        log.error("[计划驱动] {0}库存刷新失败，保留上次可信库存：{1}",
+            phase,
+            error?.message ?? String(error));
+        return false;
+    }
+}
+
 export async function runPlanDrivenCultivation(config) {
     const baseUrl = cultivationApiBase(config.bgi_tools.api.httpPullJsonConfig);
     const uid = String(config.user.uid ?? "").trim();
@@ -263,58 +281,68 @@ export async function runPlanDrivenCultivation(config) {
     const inventoryReconcileState = {attempted: false};
     log.info(`[计划驱动] 已启用：每次只领取一个行动，权威库存回写后重新规划`);
 
-    while (true) {
-        const claimUrl = `${baseUrl}/execution/next-action?uid=${encodeURIComponent(uid)}`
-            + `&executorId=${encodeURIComponent(executorId)}`;
-        const action = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
-        if (action.status === "NEEDS_RECONCILE") {
-            log.warn(`[计划驱动] 上一行动仅执行背包复核，不再消耗树脂：{0}`, action.materialName);
-            let observedOwned = null;
-            try {
-                observedOwned = await observeOwned(action.materialName, action.reconcileGrid);
-            } catch (error) {
-                log.error(`[计划驱动] 补充背包复核失败：{0}`, error?.message ?? String(error));
+    const startRefreshCompleted = await refreshCurrentOwned(config, "计划开始前");
+    if (!startRefreshCompleted) {
+        log.warn("[计划驱动] 计划开始前库存存在未知项，继续使用上次可信库存；计划器可再请求一次有界复核");
+    }
+    try {
+        while (true) {
+            const claimUrl = `${baseUrl}/execution/next-action?uid=${encodeURIComponent(uid)}`
+                + `&executorId=${encodeURIComponent(executorId)}`;
+            const action = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
+            if (action.status === "NEEDS_RECONCILE") {
+                log.warn(`[计划驱动] 上一行动仅执行背包复核，不再消耗树脂：{0}`, action.materialName);
+                let observedOwned = null;
+                try {
+                    observedOwned = await observeOwned(action.materialName, action.reconcileGrid);
+                } catch (error) {
+                    log.error(`[计划驱动] 补充背包复核失败：{0}`, error?.message ?? String(error));
+                }
+                const result = await reportResult(
+                    baseUrl, action, executorId, observedOwned, false, "RECONCILE_ONLY",
+                    {}, config.bgi_tools.token);
+                if (result.status === "REPLANNING") continue;
+                log.info(`[计划驱动] 停止领取：{0}，{1}`, result.status, result.message);
+                return;
             }
-            const result = await reportResult(
-                baseUrl, action, executorId, observedOwned, false, "RECONCILE_ONLY",
-                {}, config.bgi_tools.token);
-            if (result.status === "REPLANNING") continue;
-            log.info(`[计划驱动] 停止领取：{0}，{1}`, result.status, result.message);
-            return;
-        }
-        if (action.status === "PLAN_NEEDS_RECONCILE") {
-            const reconcile = await runInventoryReconcileOnce(
-                config, inventoryReconcileState, `计划请求复核：${action.message}`);
-            if (reconcile.succeeded && reconcile.performed) {
-                const afterReconcile = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
-                if (afterReconcile.status === "ACTION" || afterReconcile.status === "NEEDS_RECONCILE") {
-                    action.status = afterReconcile.status;
-                    Object.assign(action, afterReconcile);
+            if (action.status === "PLAN_NEEDS_RECONCILE") {
+                const reconcile = await runInventoryReconcileOnce(
+                    config, inventoryReconcileState, `计划请求复核：${action.message}`);
+                if (reconcile.succeeded && reconcile.performed) {
+                    const afterReconcile = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
+                    if (afterReconcile.status === "ACTION" || afterReconcile.status === "NEEDS_RECONCILE") {
+                        action.status = afterReconcile.status;
+                        Object.assign(action, afterReconcile);
+                    } else {
+                        log.warn("[计划驱动] 完整库存复核后仍未开放行动，本轮停止：{0}，{1}",
+                            afterReconcile.status, afterReconcile.message);
+                        return;
+                    }
+                } else if (!reconcile.succeeded) {
+                    log.warn("[计划驱动] 完整库存复核未闭合，停止本轮执行");
+                    return;
                 } else {
-                    log.warn("[计划驱动] 完整库存复核后仍未开放行动，本轮停止：{0}，{1}",
-                        afterReconcile.status, afterReconcile.message);
                     return;
                 }
-            } else if (!reconcile.succeeded) {
-                log.warn("[计划驱动] 完整库存复核未闭合，停止本轮执行");
-                return;
-            } else {
+            }
+            if (action.status !== "ACTION") {
+                log.info(`[计划驱动] 停止领取：{0}，{1}`, action.status, action.message);
                 return;
             }
-        }
-        if (action.status !== "ACTION") {
-            log.info(`[计划驱动] 停止领取：{0}，{1}`, action.status, action.message);
-            return;
-        }
-        if (action.actionType === "CRAFT") {
-            const shouldContinue = await executeCraftAction(baseUrl, action, executorId, config);
+            if (action.actionType === "CRAFT") {
+                const shouldContinue = await executeCraftAction(baseUrl, action, executorId, config);
+                if (!shouldContinue) return;
+                log.warn("[计划驱动] 合成 {0} 后强制完整库存复核", action.materialName);
+                if (!await runCultivationInventoryReconcile(config)) return;
+                continue;
+            }
+            const shouldContinue = await executeAction(
+                baseUrl, action, executorId, config.bgi_tools.token);
             if (!shouldContinue) return;
-            log.warn("[计划驱动] 合成 {0} 后强制完整库存复核", action.materialName);
-            if (!await runCultivationInventoryReconcile(config)) return;
-            continue;
         }
-        const shouldContinue = await executeAction(
-            baseUrl, action, executorId, config.bgi_tools.token);
-        if (!shouldContinue) return;
+    } finally {
+        if (startRefreshCompleted) {
+            await refreshCurrentOwned(config, "计划结束后");
+        }
     }
 }
