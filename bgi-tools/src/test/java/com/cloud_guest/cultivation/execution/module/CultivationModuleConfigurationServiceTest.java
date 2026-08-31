@@ -34,6 +34,14 @@ class CultivationModuleConfigurationServiceTest {
         });
         assertThat(module.defaultSettings("102550550").get("resinPriority"))
                 .isEqualTo(List.of("浓缩树脂", "原粹树脂"));
+        assertThat(module.settingsSchema()).anySatisfy(field -> {
+            assertThat(field.key()).isEqualTo("weaponDomainEnabled");
+            assertThat(field.label()).isEqualTo("武器突破秘境");
+            assertThat(field.control()).isEqualTo("switch");
+        });
+        assertThat(module.defaultSettings("102550550"))
+                .containsEntry("talentDomainEnabled", true)
+                .containsEntry("weaponDomainEnabled", true);
     }
 
     @Test

@@ -861,6 +861,7 @@ public class CultivationOneStopService {
 
     private static String resinActionLabel(CultivationExecutionProjection.ResinAction action) {
         if ("天赋".equals(action.sourceType())) return "天赋书";
+        if ("武器".equals(action.sourceType())) return "武器突破";
         if ("藏金之花".equals(action.sourceName()) || "摩拉".equals(action.materialName())) return "摩拉";
         if ("启示之花".equals(action.sourceName()) || "大英雄的经验".equals(action.materialName())) {
             return "大英雄经验";
@@ -880,6 +881,9 @@ public class CultivationOneStopService {
                                               CultivationModuleConfiguration configuration) {
         if ("天赋".equals(action.sourceType())) {
             return booleanSetting(configuration, "talentDomainEnabled", true);
+        }
+        if ("武器".equals(action.sourceType())) {
+            return booleanSetting(configuration, "weaponDomainEnabled", true);
         }
         if ("藏金之花".equals(action.sourceName()) || "摩拉".equals(action.materialName())) {
             return booleanSetting(configuration, "moraLeyLineEnabled", true);

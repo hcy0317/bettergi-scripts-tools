@@ -362,6 +362,7 @@ watch(() => props.uid, () => load(), {immediate: true})
             </div>
             <div v-if="isAutoPlan(module)" class="resin-switch-grid">
               <label><span>天赋书秘境</span><el-switch v-model="module.settings.talentDomainEnabled"/></label>
+              <label><span>武器突破秘境</span><el-switch v-model="module.settings.weaponDomainEnabled"/></label>
               <label><span>摩拉地脉</span><el-switch v-model="module.settings.moraLeyLineEnabled"/></label>
               <label><span>大英雄经验地脉</span><el-switch v-model="module.settings.experienceLeyLineEnabled"/></label>
             </div>
