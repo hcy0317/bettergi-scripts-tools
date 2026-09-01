@@ -1,6 +1,7 @@
 package com.cloud_guest.artifact.build;
 
 import com.cloud_guest.artifact.domain.ArtifactBuild;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -45,6 +46,64 @@ class ArtifactBuildBulkStateTest {
     }
 
     @Test
+    void singleFieldStateUpdatePreservesTheOtherFieldAndTheBuildDefinition() {
+        ArtifactBuildService service = new ArtifactBuildService(new InMemoryArtifactBuildRepository());
+        ArtifactBuild original = build(
+                "preset-a", "genshin-artifact-analyzer@abc", true, false);
+        service.save(original.id(), original);
+
+        ArtifactBuild updated = service.updateState(
+                original.id(),
+                new ArtifactBuildStateUpdateRequest("analysisEnabled", false));
+
+        assertThat(updated.analysisEnabled()).isFalse();
+        assertThat(updated.nativeSyncEnabled()).isFalse();
+        assertThat(updated.quickEquipSyncEnabled()).isFalse();
+        assertThat(updated.name()).isEqualTo(original.name());
+        assertThat(updated.substatWeights()).isEqualTo(original.substatWeights());
+    }
+
+    @Test
+    void historicalJsonDefaultsQuickEquipSyncToFalse() throws Exception {
+        ArtifactBuild build = new ObjectMapper().readValue("""
+                {
+                  "id":"preset-a",
+                  "name":"preset-a",
+                  "characterKey":"Furina",
+                  "sets":[],
+                  "alternativeSetRecipes":[],
+                  "mainStatsBySlot":{"flower":["hp"]},
+                  "substatWeights":{"critRate_":1.0},
+                  "analysisEnabled":true,
+                  "nativeSyncEnabled":true,
+                  "sourceVersion":"legacy"
+                }
+                """, ArtifactBuild.class);
+
+        assertThat(build.quickEquipSyncEnabled()).isFalse();
+    }
+
+    @Test
+    void thirdQuickEquipSelectionForTheSameCharacterIsRejectedAtomically() {
+        ArtifactBuildService service = new ArtifactBuildService(new InMemoryArtifactBuildRepository());
+        service.importAll(List.of(
+                build("furina-a", "custom", true, true, true),
+                build("furina-b", "custom", true, true, true),
+                build("furina-c", "custom", true, true, false)));
+
+        assertThatThrownBy(() -> service.updateState(
+                "furina-c",
+                new ArtifactBuildStateUpdateRequest("quickEquipSyncEnabled", true)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("two quick-equip builds");
+
+        assertThat(service.list())
+                .filteredOn(ArtifactBuild::quickEquipSyncEnabled)
+                .extracting(ArtifactBuild::id)
+                .containsExactly("furina-a", "furina-b");
+    }
+
+    @Test
     void bundledPresetCannotBeDeletedButCustomBuildCan() {
         ArtifactBuildService service = new ArtifactBuildService(new InMemoryArtifactBuildRepository());
         service.importAll(List.of(
@@ -63,10 +122,19 @@ class ArtifactBuildBulkStateTest {
             String sourceVersion,
             boolean analysisEnabled,
             boolean nativeSyncEnabled) {
+        return build(id, sourceVersion, analysisEnabled, nativeSyncEnabled, false);
+    }
+
+    private static ArtifactBuild build(
+            String id,
+            String sourceVersion,
+            boolean analysisEnabled,
+            boolean nativeSyncEnabled,
+            boolean quickEquipSyncEnabled) {
         return new ArtifactBuild(
                 id, id, "Furina", List.of(),
                 Map.of("flower", Set.of("hp")),
                 Map.of("critRate_", 1.0),
-                analysisEnabled, nativeSyncEnabled, sourceVersion);
+                analysisEnabled, nativeSyncEnabled, quickEquipSyncEnabled, sourceVersion);
     }
 }

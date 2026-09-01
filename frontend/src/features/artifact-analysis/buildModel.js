@@ -13,8 +13,8 @@ const alternativeTones = Object.freeze(['amber', 'teal', 'violet', 'rose'])
 
 const nativeSyncStatusMap = Object.freeze({
   READY: {
-    title: '预检通过，可以完整重建',
-    description: '所有已启用配装都能转换到当前方案容量内。',
+    title: '预检通过，可以同步',
+    description: '套装锁定与角色快速装备方案都能按 Build 表达。',
     type: 'success',
   },
   NO_GO_EMPTY: {
@@ -24,7 +24,7 @@ const nativeSyncStatusMap = Object.freeze({
   },
   NO_GO_CAPACITY: {
     title: '方案容量不足',
-    description: '转换后的套装方案数量超过当前容量，请提高容量后重新预检。',
+    description: '某个套装超过 3 个 Build、某个角色超过 2 个快速装备 Build，或总套装容量不足。',
     type: 'error',
   },
 })
@@ -64,7 +64,10 @@ export const artifactNativeSyncStatusMeta = status => nativeSyncStatusMap[status
   description: '无法识别服务端返回的预检状态，请刷新后重试。',
   type: 'error',
 }
-export const artifactTranslationModeLabel = mode => mode === 'CONSERVATIVE_SET_UNION' ? '保守套装并集' : '未知转换方式'
+export const artifactTranslationModeLabel = mode =>
+  mode === 'BUILD_SCOPED_LOCK_AND_QUICK_EQUIP_V1'
+    ? 'Build 独立锁定与快速装备'
+    : '未知转换方式'
 export const artifactHostErrorLabel = message => {
   if (/[\u4e00-\u9fff]/.test(String(message || ''))) return String(message)
   const value = String(message || '').toLocaleLowerCase()
@@ -155,9 +158,30 @@ export const summarizeArtifactBuild = build => {
   }
 }
 
-export const prepareArtifactBuilds = builds => (builds || []).map(build =>
-  build?.summary ? build : {...build, summary: summarizeArtifactBuild(build)}
-)
+export const prepareArtifactBuilds = builds => (builds || []).map(build => {
+  const normalized = {quickEquipSyncEnabled: false, ...build}
+  return normalized?.summary
+    ? normalized
+    : {...normalized, summary: summarizeArtifactBuild(normalized)}
+})
+
+export const replaceArtifactBuild = (builds, saved) =>
+  (builds || []).map(build => build.id === saved?.id ? saved : build)
+
+export const createArtifactBuildMutationQueue = () => {
+  const tails = new Map()
+  return (queueKey, operation) => {
+    if (typeof operation !== 'function') throw new TypeError('配装更新操作必须是函数')
+    const previous = tails.get(queueKey) || Promise.resolve()
+    const current = previous.catch(() => undefined).then(operation)
+    tails.set(queueKey, current)
+    const cleanup = () => {
+      if (tails.get(queueKey) === current) tails.delete(queueKey)
+    }
+    void current.then(cleanup, cleanup)
+    return current
+  }
+}
 
 export const filterArtifactBuilds = (builds, filters = {}) => {
   const query = String(filters.query || '').trim().toLocaleLowerCase()
@@ -172,7 +196,9 @@ export const filterArtifactBuilds = (builds, filters = {}) => {
     if (source !== 'all' && summary.sourceKind !== source) return false
     if (status === 'analysis' && !build.analysisEnabled) return false
     if (status === 'native' && !build.nativeSyncEnabled) return false
-    if (status === 'disabled' && (build.analysisEnabled || build.nativeSyncEnabled)) return false
+    if (status === 'quick' && !build.quickEquipSyncEnabled) return false
+    if (status === 'disabled'
+      && (build.analysisEnabled || build.nativeSyncEnabled || build.quickEquipSyncEnabled)) return false
     return true
   })
 }
@@ -193,6 +219,7 @@ export const artifactBuildPayload = build => {
   ))
   payload.sets = normalizeArtifactRecipe(payload.sets)
   payload.alternativeSetRecipes = (payload.alternativeSetRecipes || []).map(normalizeArtifactRecipe)
+  payload.quickEquipSyncEnabled = Boolean(payload.quickEquipSyncEnabled)
   return payload
 }
 
@@ -201,5 +228,6 @@ export const cloneArtifactBuild = (build, timestamp = Date.now()) => {
   clone.id = `custom-${timestamp}`
   clone.name = `${build.name} 副本`
   clone.sourceVersion = 'custom'
+  clone.quickEquipSyncEnabled = false
   return clone
 }

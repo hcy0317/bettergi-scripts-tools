@@ -5,19 +5,23 @@ import {
 } from '@/features/artifact-analysis/buildModel.js'
 import ArtifactCharacterAvatar from './ArtifactCharacterAvatar.vue'
 
-defineProps({
+const props = defineProps({
   rows: {type: Array, default: () => []},
   pendingIds: {type: Set, default: () => new Set()},
+  pendingFields: {type: Set, default: () => new Set()},
 })
 const emit = defineEmits(['toggle', 'edit', 'clone', 'remove'])
 const recipeTone = index => `tone-${artifactAlternativeTone(index)}`
+const isPending = (row, field) =>
+  props.pendingIds.has(row.id) || props.pendingFields.has(`${row.id}:${field}`)
 </script>
 
 <template>
   <el-table :data="rows" row-key="id" table-layout="fixed" class="build-table">
-    <el-table-column label="状态" width="126" fixed="left"><template #default="{row}"><div class="status-cell">
-      <label><span>分析</span><el-switch size="small" :loading="pendingIds.has(row.id)" :model-value="row.analysisEnabled" @change="value => emit('toggle', row, 'analysisEnabled', value)"/></label>
-      <label><span>同步</span><el-switch size="small" :loading="pendingIds.has(row.id)" :model-value="row.nativeSyncEnabled" @change="value => emit('toggle', row, 'nativeSyncEnabled', value)"/></label>
+    <el-table-column label="状态" width="148" fixed="left"><template #default="{row}"><div class="status-cell">
+      <label><span>分析</span><el-switch size="small" :loading="isPending(row, 'analysisEnabled')" :model-value="row.analysisEnabled" @change="value => emit('toggle', row, 'analysisEnabled', value)"/></label>
+      <label><span>锁定</span><el-switch size="small" :loading="isPending(row, 'nativeSyncEnabled')" :model-value="row.nativeSyncEnabled" @change="value => emit('toggle', row, 'nativeSyncEnabled', value)"/></label>
+      <label><span>速装</span><el-switch size="small" :loading="isPending(row, 'quickEquipSyncEnabled')" :model-value="row.quickEquipSyncEnabled" @change="value => emit('toggle', row, 'quickEquipSyncEnabled', value)"/></label>
     </div></template></el-table-column>
     <el-table-column label="角色 / 配装" width="220" fixed="left"><template #default="{row}"><div class="identity-cell">
       <ArtifactCharacterAvatar :character-key="row.characterKey"/>

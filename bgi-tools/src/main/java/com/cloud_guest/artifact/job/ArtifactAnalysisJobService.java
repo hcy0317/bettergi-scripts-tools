@@ -456,6 +456,17 @@ public class ArtifactAnalysisJobService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public synchronized <T> T mutateAnalysisConfigurationWithoutReanalysis(
+            String uid,
+            Supplier<T> mutation) {
+        requireNoActiveLockExecutionGlobally();
+        T result = mutation.get();
+        invalidateWaitingLockExecutionsGlobally();
+        invalidateWaitingLockExecutions(uid);
+        return result;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public synchronized <T> T mutateUidActivationAndReanalyze(
             String uid,
             Supplier<T> mutation,

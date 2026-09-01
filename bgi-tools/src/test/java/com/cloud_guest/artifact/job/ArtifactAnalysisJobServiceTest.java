@@ -173,6 +173,28 @@ class ArtifactAnalysisJobServiceTest {
     }
 
     @Test
+    void lightweightStateMutationReturnsWithoutReanalyzingHistoricalSnapshots() {
+        ArtifactAnalysisJobService service = service();
+        ArtifactSnapshot source = snapshot(List.of(item(0, false)));
+        ArtifactAnalysisJob job = service.start(
+                source.uid(), ArtifactLaunchOperation.ANALYZE).job();
+        ArtifactAnalysisJob reviewed = service.submitSnapshot(
+                job.id(), source, List.of(build()), ArtifactAnalysisPolicy.defaults());
+        ArtifactBuild changedBuild = build().withStates(false, true);
+
+        service.mutateAnalysisConfigurationWithoutReanalysis(
+                source.uid(), () -> changedBuild);
+
+        ArtifactAnalysisJob persisted = service.get(job.id());
+        assertThat(persisted.decisionPlan().planId())
+                .isEqualTo(reviewed.decisionPlan().planId());
+        assertThat(persisted.analysisResult().buildIds()).containsExactly(build().id());
+        assertThat(service.get(
+                job.id(), List.of(changedBuild), ArtifactAnalysisPolicy.defaults()).status())
+                .isEqualTo(ArtifactAnalysisJobStatus.RESCAN_REQUIRED);
+    }
+
+    @Test
     void buildChangeRevokesWaitingExecutionBeforeReanalyzing() {
         ArtifactAnalysisJobService service = service();
         ArtifactSnapshot source = snapshot(List.of(item(0, false)));
@@ -483,7 +505,8 @@ class ArtifactAnalysisJobServiceTest {
         ArtifactAnalysisJobService service = service();
         ArtifactNativeSyncPlan plan = new ArtifactNativeSyncPlan(
                 ArtifactNativeSyncStatus.READY, true, true,
-                100, 0, List.of(), "native-plan-digest", "REPLACE_ALL", "ready");
+                100, 0, List.of(), List.of(), List.of(),
+                "native-plan-digest", "BUILD_SCOPED_LOCK_AND_QUICK_EQUIP_V1", "ready");
 
         ArtifactAnalysisJob first = service.startNative("102550550", plan).job();
 

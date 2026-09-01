@@ -8,6 +8,7 @@ import com.cloud_guest.artifact.build.ArtifactBuildAutoActivationSettingsService
 import com.cloud_guest.artifact.build.InMemoryArtifactBuildAutoActivationSettingsRepository;
 import com.cloud_guest.artifact.build.InMemoryArtifactBuildAutoActivationResultRepository;
 import com.cloud_guest.artifact.build.ArtifactBuildAutoActivationService;
+import com.cloud_guest.artifact.build.ArtifactBuildStateUpdateRequest;
 import com.cloud_guest.artifact.build.InMemoryArtifactBuildRepository;
 import com.cloud_guest.artifact.domain.ArtifactBuild;
 import com.cloud_guest.artifact.domain.ArtifactSetRule;
@@ -63,6 +64,23 @@ class ArtifactAnalysisControllerTest {
     }
 
     @Test
+    void singleBuildStatePatchUsesTheLightweightConfigurationBoundary() {
+        ArtifactAnalysisController controller = controller();
+        ArtifactBuild build = build();
+        controller.saveBuild(build.id(), build, "102550550");
+
+        ArtifactBuild updated = controller.updateBuildState(
+                build.id(),
+                new ArtifactBuildStateUpdateRequest("analysisEnabled", false),
+                "102550550").getData();
+
+        assertThat(updated.analysisEnabled()).isFalse();
+        assertThat(updated.nativeSyncEnabled()).isTrue();
+        assertThat(controller.builds("102550550").getData())
+                .containsExactly(updated);
+    }
+
+    @Test
     void previewsCompleteNativeReplacementWithoutMutatingTheGame() {
         ArtifactAnalysisController controller = controller();
         controller.saveBuild(build().id(), build(), "102550550");
@@ -70,9 +88,9 @@ class ArtifactAnalysisControllerTest {
         var preview = controller.previewNativeSync(100, "102550550").getData();
 
         assertThat(preview.status()).isEqualTo(ArtifactNativeSyncStatus.READY);
-        assertThat(preview.replaceAll()).isTrue();
+        assertThat(preview.replaceLockPlans()).isTrue();
         assertThat(preview.requiresPreMutationEvidence()).isTrue();
-        assertThat(preview.plans()).isNotEmpty();
+        assertThat(preview.lockPlans()).isNotEmpty();
 
         assertThatThrownBy(() -> controller.startJob(
                 "102550550", ArtifactLaunchOperation.REBUILD_NATIVE_PLANS, 100, false, ""))

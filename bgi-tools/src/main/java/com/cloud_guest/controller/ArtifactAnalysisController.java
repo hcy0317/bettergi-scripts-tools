@@ -2,6 +2,7 @@ package com.cloud_guest.controller;
 
 import com.cloud_guest.artifact.analysis.ArtifactAnalysisPolicy;
 import com.cloud_guest.artifact.build.ArtifactBuildService;
+import com.cloud_guest.artifact.build.ArtifactBuildStateUpdateRequest;
 import com.cloud_guest.artifact.build.ArtifactBuildBulkStateRequest;
 import com.cloud_guest.artifact.build.ArtifactBuildAutoActivationSettings;
 import com.cloud_guest.artifact.build.ArtifactBuildAutoActivationSettingsService;
@@ -25,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -82,6 +84,22 @@ public class ArtifactAnalysisController {
             autoActivationService.clear(uid);
             return value;
         });
+        return ok(saved);
+    }
+
+    @PatchMapping("builds/{buildId}/state")
+    @Operation(summary = "快速更新一个圣遗物 Build 状态字段")
+    @Transactional(rollbackFor = Exception.class)
+    public Result<ArtifactBuild> updateBuildState(
+            @PathVariable String buildId,
+            @RequestBody ArtifactBuildStateUpdateRequest request,
+            @RequestParam String uid) {
+        ArtifactBuild saved = jobService.mutateAnalysisConfigurationWithoutReanalysis(
+                uid, () -> {
+                    ArtifactBuild value = buildService.updateState(buildId, request);
+                    autoActivationService.clear(uid);
+                    return value;
+                });
         return ok(saved);
     }
 

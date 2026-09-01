@@ -10,6 +10,15 @@ export async function saveArtifactBuild(build, uid) {
   return data
 }
 
+export async function updateArtifactBuildState(buildId, field, enabled, uid) {
+  const {data} = await service.patch(
+    `/jwt/artifacts/builds/${encodeURIComponent(buildId)}/state`,
+    {field, enabled},
+    {params: {uid}},
+  )
+  return data
+}
+
 export async function importArtifactBuilds(builds, uid) {
   const {data} = await service.post('/jwt/artifacts/builds/import', builds, {params: {uid}})
   return data

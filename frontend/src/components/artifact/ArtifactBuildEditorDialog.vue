@@ -16,7 +16,8 @@ const createBuild = () => artifactBuildPayload(props.build || {
   alternativeSetRecipes: [],
   mainStatsBySlot: {flower: ['hp'], plume: ['atk'], sands: [], goblet: [], circlet: []},
   substatWeights: {critRate_: 1, critDMG_: 1},
-  analysisEnabled: true, nativeSyncEnabled: true, sourceVersion: 'custom',
+  analysisEnabled: true, nativeSyncEnabled: true, quickEquipSyncEnabled: false,
+  sourceVersion: 'custom',
 })
 watch(() => [props.open, props.build], () => { form.value = createBuild() }, {immediate: true, deep: true})
 
@@ -43,7 +44,7 @@ const save = () => { if (canSave.value) emit('save', artifactBuildPayload(form.v
           <el-form-item label="名称"><el-input v-model="form.name" maxlength="40" show-word-limit/></el-form-item>
           <el-form-item label="角色"><el-select v-model="form.characterKey" filterable allow-create placeholder="选择角色"><el-option v-for="item in characterOptions" :key="item" :label="artifactCharacterLabel(item)" :value="item"/></el-select></el-form-item>
         </div>
-        <div class="status-row"><el-checkbox v-model="form.analysisEnabled">参与圣遗物分析</el-checkbox><el-checkbox v-model="form.nativeSyncEnabled">参与原神方案生成</el-checkbox></div>
+        <div class="status-row"><el-checkbox v-model="form.analysisEnabled">参与圣遗物分析</el-checkbox><el-checkbox v-model="form.nativeSyncEnabled">参与套装锁定同步</el-checkbox><el-checkbox v-model="form.quickEquipSyncEnabled">参与角色快速装备同步</el-checkbox></div>
       </section>
 
       <ArtifactBuildRecipeEditor v-model:sets="form.sets" v-model:alternatives="form.alternativeSetRecipes" :set-options="setOptions"/>
