@@ -9,11 +9,12 @@ import {
   getArtifactBuildAutoActivationSettings, getArtifactBuilds,
   getArtifactJob, importArtifactBuilds, saveArtifactBuild,
   saveArtifactBuildAutoActivationSettings, startArtifactCharacterRosterJob,
-  updateArtifactBuildBulkState,
+  updateArtifactBuildBulkState, updateArtifactBuildState,
 } from '@api/artifact/artifactAnalysis.js'
 import {
   applyArtifactBuildBulkState, artifactBuildPayload, artifactCharacterLabel, artifactPageSize, cloneArtifactBuild,
-  filterArtifactBuilds, normalizeArtifactAutoActivationSettings, prepareArtifactBuilds,
+  createArtifactBuildMutationQueue,
+  filterArtifactBuilds, normalizeArtifactAutoActivationSettings, prepareArtifactBuilds, replaceArtifactBuild,
 } from '@/features/artifact-analysis/buildModel.js'
 import {
   artifactCharacterScanStatusMeta, artifactHostHasAcceptedJob,
@@ -28,6 +29,7 @@ import {getUid} from '@api/uid/uid.js'
 const props = defineProps({uid: {type: String, default: ''}})
 
 const builds = ref([])
+const loadedUid = ref('')
 const loading = ref(false)
 const refreshing = ref(false)
 const error = ref('')
@@ -41,6 +43,7 @@ const dialogOpen = ref(false)
 const editing = ref(null)
 const fileInput = ref(null)
 const pendingIds = ref(new Set())
+const pendingFields = ref(new Set())
 const autoActivation = ref(normalizeArtifactAutoActivationSettings())
 const autoActivationResult = ref(null)
 const autoActivationLoading = ref(false)
@@ -70,7 +73,8 @@ const sourceOptions = [
 ]
 const statusOptions = [
   {label: '全部状态', value: 'all'}, {label: '参与分析', value: 'analysis'},
-  {label: '参与原神同步', value: 'native'}, {label: '全部停用', value: 'disabled'},
+  {label: '参与套装锁定', value: 'native'}, {label: '参与快速装备', value: 'quick'},
+  {label: '全部停用', value: 'disabled'},
 ]
 const pageSizeOptions = [
   {label: '25 条', value: 25}, {label: '50 条', value: 50},
@@ -93,23 +97,38 @@ const metrics = computed(() => ({
   total: builds.value.length,
   analysis: builds.value.filter(build => build.analysisEnabled).length,
   native: builds.value.filter(build => build.nativeSyncEnabled).length,
+  quick: builds.value.filter(build => build.quickEquipPresetIndex > 0).length,
   characters: characters.value.length,
 }))
 
 let loadGeneration = 0
+let uidGeneration = 0
+let buildMutationGeneration = 0
 let refreshScheduled = false
+const enqueueBuildMutation = createArtifactBuildMutationQueue()
 
 watch([query, character, source, status, pageSize], () => { page.value = 1 })
 
 const load = async (silent = false) => {
   const generation = ++loadGeneration
+  const mutationGeneration = buildMutationGeneration
+  const requestUid = props.uid.trim()
   if (!silent) loading.value = true
   error.value = ''
   try {
-    const nextBuilds = await getArtifactBuilds(props.uid.trim())
-    if (generation === loadGeneration) builds.value = nextBuilds
+    const nextBuilds = await getArtifactBuilds(requestUid)
+    if (generation === loadGeneration
+      && mutationGeneration === buildMutationGeneration
+      && requestUid === props.uid.trim()) {
+      builds.value = nextBuilds
+      loadedUid.value = requestUid
+    }
   }
-  catch { error.value = '配装数据加载失败，请稍后重试' }
+  catch {
+    if (generation === loadGeneration && requestUid === props.uid.trim()) {
+      error.value = '配装数据加载失败，请稍后重试'
+    }
+  }
   finally { if (!silent && generation === loadGeneration) loading.value = false }
 }
 const refresh = async () => {
@@ -219,6 +238,13 @@ const markPending = (id, pending) => {
   pending ? next.add(id) : next.delete(id)
   pendingIds.value = next
 }
+const pendingFieldKey = (id, key) => `${id}:${key}`
+const markPendingField = (id, key, pending) => {
+  const next = new Set(pendingFields.value)
+  const field = pendingFieldKey(id, key)
+  pending ? next.add(field) : next.delete(field)
+  pendingFields.value = next
+}
 const openEditor = build => { editing.value = build ? artifactBuildPayload(build) : null; dialogOpen.value = true }
 const save = async build => {
   markPending(build.id, true)
@@ -226,9 +252,40 @@ const save = async build => {
   finally { markPending(build.id, false) }
 }
 const toggle = async (build, key, value) => {
-  markPending(build.id, true)
-  try { await saveArtifactBuild({...artifactBuildPayload(build), [key]: value}, props.uid.trim()); await load() }
-  finally { markPending(build.id, false) }
+  const requestUid = props.uid.trim()
+  const generation = uidGeneration
+  if (loadedUid.value !== requestUid) return
+  buildMutationGeneration += 1
+  markPendingField(build.id, key, true)
+  try {
+    await enqueueBuildMutation(`${requestUid}:${build.id}`, async () => {
+      if (requestUid !== props.uid.trim()
+        || generation !== uidGeneration
+        || loadedUid.value !== requestUid) return
+      if (!builds.value.some(candidate => candidate.id === build.id)) return
+      let saved
+      try {
+        saved = await updateArtifactBuildState(
+          build.id, key, value, requestUid)
+      } finally {
+        buildMutationGeneration += 1
+      }
+      if (requestUid === props.uid.trim()
+        && generation === uidGeneration
+        && loadedUid.value === requestUid) {
+        builds.value = replaceArtifactBuild(builds.value, saved)
+      }
+      return saved
+    })
+  }
+  catch (requestError) {
+    ElMessage.error(requestError?.response?.data?.msg
+      || requestError?.response?.data?.message
+      || '配装状态更新失败')
+  }
+  finally {
+    if (generation === uidGeneration) markPendingField(build.id, key, false)
+  }
 }
 const clone = async build => {
   const copy = cloneArtifactBuild(build)
@@ -282,9 +339,17 @@ onMounted(() => {
   document.addEventListener('visibilitychange', scheduleVisibilityRefresh)
 })
 watch(() => props.uid, () => {
-  void Promise.all([load(true), loadAutoActivationResult()])
+  uidGeneration += 1
+  buildMutationGeneration += 1
+  loadedUid.value = ''
+  builds.value = []
+  pendingIds.value = new Set()
+  pendingFields.value = new Set()
+  void Promise.all([load(false), loadAutoActivationResult()])
 })
 onBeforeUnmount(() => {
+  uidGeneration += 1
+  loadGeneration += 1
   window.removeEventListener('focus', scheduleVisibilityRefresh)
   document.removeEventListener('visibilitychange', scheduleVisibilityRefresh)
 })
@@ -307,8 +372,7 @@ onBeforeUnmount(() => {
             <el-dropdown-item command="custom:analysisEnabled:false">停用全部自定义分析</el-dropdown-item>
             <el-dropdown-item divided command="all:analysisEnabled:true">启用全部分析</el-dropdown-item>
             <el-dropdown-item command="all:analysisEnabled:false">停用全部分析</el-dropdown-item>
-            <el-dropdown-item divided command="all:nativeSyncEnabled:true">启用全部原神同步</el-dropdown-item>
-            <el-dropdown-item command="all:nativeSyncEnabled:false">停用全部原神同步</el-dropdown-item>
+            <el-dropdown-item divided command="all:nativeSyncEnabled:false">停用全部套装锁定</el-dropdown-item>
           </el-dropdown-menu></template>
         </el-dropdown>
         <el-button type="primary" :icon="Plus" @click="openEditor(null)">新增</el-button>
@@ -319,14 +383,15 @@ onBeforeUnmount(() => {
     <div class="summary-strip" aria-label="配装统计">
       <div><span>全部配装</span><strong>{{ metrics.total }}</strong></div>
       <div><span>参与分析</span><strong>{{ metrics.analysis }}</strong></div>
-      <div><span>原神同步</span><strong>{{ metrics.native }}</strong></div>
+      <div><span>套装锁定</span><strong>{{ metrics.native }}</strong></div>
+      <div><span>快速装备</span><strong>{{ metrics.quick }}</strong></div>
       <div><span>角色人数</span><strong>{{ metrics.characters }}</strong></div>
     </div>
 
     <section class="auto-activation-card" aria-label="按游戏角色自动启停配装">
       <div class="auto-activation-copy">
         <h3>按游戏角色自动启停</h3>
-        <p>检测完整角色列表；符合条件的角色同时启用分析与原神同步，其余角色的相关配装会停用。</p>
+        <p>检测完整角色列表并自动启停分析；套装锁定与快速装备方案保持手动选择，快速装备会按 UID 名单过滤。</p>
       </div>
       <label class="level-threshold">
         <span>启用等级</span>
@@ -380,7 +445,7 @@ onBeforeUnmount(() => {
     <el-empty v-if="!loading && !filtered.length" description="没有符合条件的配装"/>
     <template v-else>
       <div class="table-scroll">
-        <ArtifactBuildTable :rows="visibleRows" :pending-ids="pendingIds" @toggle="toggle" @edit="openEditor" @clone="clone" @remove="remove"/>
+        <ArtifactBuildTable :rows="visibleRows" :pending-ids="pendingIds" :pending-fields="pendingFields" @toggle="toggle" @edit="openEditor" @clone="clone" @remove="remove"/>
       </div>
       <div class="page-controls">
         <label>每页显示<el-select v-model="pageSize" aria-label="每页显示数量"><el-option v-for="item in pageSizeOptions" :key="item.value" :label="item.label" :value="item.value"/></el-select></label>

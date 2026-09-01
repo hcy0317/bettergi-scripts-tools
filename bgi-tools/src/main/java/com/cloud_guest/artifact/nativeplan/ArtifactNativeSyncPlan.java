@@ -4,16 +4,20 @@ import java.util.List;
 
 public record ArtifactNativeSyncPlan(
         ArtifactNativeSyncStatus status,
-        boolean replaceAll,
+        boolean replaceLockPlans,
         boolean requiresPreMutationEvidence,
         int capacity,
         int sourceBuildCount,
-        List<ArtifactNativeSetPlan> plans,
+        List<ArtifactNativeSetPlan> lockPlans,
+        List<ArtifactNativeQuickEquipPlan> quickEquipPlans,
+        List<ArtifactNativePlanIssue> issues,
         String planDigest,
         String translationMode,
         String message) {
 
     public ArtifactNativeSyncPlan {
-        plans = List.copyOf(plans);
+        lockPlans = List.copyOf(lockPlans);
+        quickEquipPlans = List.copyOf(quickEquipPlans);
+        issues = List.copyOf(issues);
     }
 }

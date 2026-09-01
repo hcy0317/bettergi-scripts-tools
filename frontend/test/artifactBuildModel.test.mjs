@@ -16,12 +16,50 @@ import {
   artifactSlotLabel,
   artifactStatLabel,
   cloneArtifactBuild,
+  createArtifactBuildMutationQueue,
   filterArtifactBuilds,
   normalizeArtifactRecipe,
   normalizeArtifactAutoActivationSettings,
   prepareArtifactBuilds,
+  replaceArtifactBuild,
   summarizeArtifactBuild,
 } from '../src/features/artifact-analysis/buildModel.js'
+
+test('artifact build mutations for one build are serialized', async () => {
+  const enqueue = createArtifactBuildMutationQueue()
+  const events = []
+  let releaseFirst
+  const firstGate = new Promise(resolve => { releaseFirst = resolve })
+
+  const first = enqueue('uid-1:build-1', async () => {
+    events.push('first:start')
+    await firstGate
+    events.push('first:end')
+  })
+  const second = enqueue('uid-1:build-1', async () => {
+    events.push('second:start')
+    events.push('second:end')
+  })
+
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(events, ['first:start'])
+  releaseFirst()
+  await Promise.all([first, second])
+  assert.deepEqual(events, ['first:start', 'first:end', 'second:start', 'second:end'])
+})
+
+test('artifact build mutation queue passes the authoritative saved row forward', async () => {
+  const enqueue = createArtifactBuildMutationQueue()
+  const initial = {id: 'build-1', analysisEnabled: true, nativeSyncEnabled: false}
+  const first = enqueue('uid-1:build-1', async () => ({...initial, analysisEnabled: false}))
+  const second = enqueue('uid-1:build-1', async previousSaved => ({
+    ...previousSaved,
+    nativeSyncEnabled: true,
+  }))
+
+  assert.deepEqual(await first, {id: 'build-1', analysisEnabled: false, nativeSyncEnabled: false})
+  assert.deepEqual(await second, {id: 'build-1', analysisEnabled: false, nativeSyncEnabled: true})
+})
 
 const upstreamBuild = {
   id: 'furina-off-field',
@@ -112,8 +150,8 @@ test('recipe pieces follow selected set count and two-piece effects expose equiv
 
 test('native sync and host errors are translated without exposing backend messages', () => {
   assert.deepEqual(artifactNativeSyncStatusMeta('READY'), {
-    title: '预检通过，可以完整重建',
-    description: '所有已启用配装都能转换到当前方案容量内。',
+    title: '预检通过，可以同步',
+    description: '套装锁定与角色快速装备方案都能按 Build 表达。',
     type: 'success',
   })
   assert.equal(artifactNativeSyncStatusMeta('NO_GO_CAPACITY').title, '方案容量不足')
@@ -174,6 +212,7 @@ test('cloning creates an independent custom build', () => {
   assert.equal(clone.id, 'custom-1724688000000')
   assert.equal(clone.name, '后台C 副本')
   assert.equal(clone.sourceVersion, 'custom')
+  assert.equal(clone.quickEquipPresetIndex, 0)
   assert.notEqual(clone.sets, upstreamBuild.sets)
   assert.notEqual(clone.alternativeSetRecipes[0], upstreamBuild.alternativeSetRecipes[0])
   clone.sets[0].pieces = 2
@@ -232,4 +271,14 @@ test('prepared builds reuse one summary across filtering and pagination', () => 
   assert.equal(filtered[0], prepared[0])
   assert.equal(filtered[0].summary, prepared[0].summary)
   assert.equal(filtered[0].summary.primaryRecipe, '黄金剧团 4件')
+})
+
+test('saved build replaces only its matching row without a full reload', () => {
+  const other = {...structuredClone(upstreamBuild), id: 'other'}
+  const saved = {...structuredClone(upstreamBuild), analysisEnabled: false}
+
+  const updated = replaceArtifactBuild([upstreamBuild, other], saved)
+
+  assert.equal(updated[0], saved)
+  assert.equal(updated[1], other)
 })

@@ -10,6 +10,18 @@ export async function saveArtifactBuild(build, uid) {
   return data
 }
 
+export async function updateArtifactBuildState(buildId, field, value, uid) {
+  const payload = field === 'quickEquipPresetIndex'
+    ? {field, presetIndex: Number(value)}
+    : {field, enabled: Boolean(value)}
+  const {data} = await service.patch(
+    `/jwt/artifacts/builds/${encodeURIComponent(buildId)}/state`,
+    payload,
+    {params: {uid}},
+  )
+  return data
+}
+
 export async function importArtifactBuilds(builds, uid) {
   const {data} = await service.post('/jwt/artifacts/builds/import', builds, {params: {uid}})
   return data

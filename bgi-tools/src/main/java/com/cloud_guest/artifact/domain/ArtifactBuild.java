@@ -17,6 +17,7 @@ public record ArtifactBuild(
         Map<String, Double> substatWeights,
         boolean analysisEnabled,
         boolean nativeSyncEnabled,
+        int quickEquipPresetIndex,
         String sourceVersion) {
 
     public ArtifactBuild {
@@ -42,7 +43,26 @@ public record ArtifactBuild(
             });
         }
         substatWeights = Map.copyOf(weights);
+        if (quickEquipPresetIndex < 0 || quickEquipPresetIndex > 2) {
+            throw new IllegalArgumentException("quick-equip preset index must be 0, 1, or 2");
+        }
         sourceVersion = sourceVersion == null ? "" : sourceVersion;
+    }
+
+    public ArtifactBuild(
+            String id,
+            String name,
+            String characterKey,
+            List<ArtifactSetRule> sets,
+            List<List<ArtifactSetRule>> alternativeSetRecipes,
+            Map<String, Set<String>> mainStatsBySlot,
+            Map<String, Double> substatWeights,
+            boolean analysisEnabled,
+            boolean nativeSyncEnabled,
+            String sourceVersion) {
+        this(id, name, characterKey, sets, alternativeSetRecipes,
+                mainStatsBySlot, substatWeights, analysisEnabled, nativeSyncEnabled,
+                0, sourceVersion);
     }
 
     public ArtifactBuild(
@@ -56,7 +76,22 @@ public record ArtifactBuild(
             boolean nativeSyncEnabled,
             String sourceVersion) {
         this(id, name, characterKey, sets, List.of(), mainStatsBySlot, substatWeights,
-                analysisEnabled, nativeSyncEnabled, sourceVersion);
+                analysisEnabled, nativeSyncEnabled, 0, sourceVersion);
+    }
+
+    public ArtifactBuild(
+            String id,
+            String name,
+            String characterKey,
+            List<ArtifactSetRule> sets,
+            Map<String, Set<String>> mainStatsBySlot,
+            Map<String, Double> substatWeights,
+            boolean analysisEnabled,
+            boolean nativeSyncEnabled,
+            int quickEquipPresetIndex,
+            String sourceVersion) {
+        this(id, name, characterKey, sets, List.of(), mainStatsBySlot, substatWeights,
+                analysisEnabled, nativeSyncEnabled, quickEquipPresetIndex, sourceVersion);
     }
 
     public boolean acceptsMainStat(ArtifactItem artifact) {
@@ -79,18 +114,30 @@ public record ArtifactBuild(
     public ArtifactBuild withName(String localizedName) {
         return new ArtifactBuild(
                 id, localizedName, characterKey, sets, alternativeSetRecipes,
-                mainStatsBySlot, substatWeights, analysisEnabled, nativeSyncEnabled, sourceVersion);
+                mainStatsBySlot, substatWeights, analysisEnabled, nativeSyncEnabled,
+                quickEquipPresetIndex, sourceVersion);
     }
 
     public ArtifactBuild withActivation(boolean enabled) {
-        return withStates(enabled, enabled);
+        return withStates(enabled, nativeSyncEnabled);
     }
 
     public ArtifactBuild withStates(boolean analysisEnabled, boolean nativeSyncEnabled) {
         return new ArtifactBuild(
             id, name, characterKey, sets, alternativeSetRecipes,
                 mainStatsBySlot, substatWeights,
-                analysisEnabled, nativeSyncEnabled, sourceVersion);
+                analysisEnabled, nativeSyncEnabled, quickEquipPresetIndex, sourceVersion);
+    }
+
+    public ArtifactBuild withQuickEquipPresetIndex(int presetIndex) {
+        return new ArtifactBuild(
+                id, name, characterKey, sets, alternativeSetRecipes,
+                mainStatsBySlot, substatWeights,
+                analysisEnabled, nativeSyncEnabled, presetIndex, sourceVersion);
+    }
+
+    public boolean quickEquipSyncEnabled() {
+        return quickEquipPresetIndex > 0;
     }
 
     private static List<ArtifactSetRule> normalizeRecipe(List<ArtifactSetRule> recipe) {

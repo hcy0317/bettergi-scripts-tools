@@ -49,9 +49,9 @@ class ArtifactBuildAutoActivationServiceTest {
                 .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled, ArtifactBuild::nativeSyncEnabled)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("clorinde", true, true),
-                        org.assertj.core.groups.Tuple.tuple("diluc", false, false),
-                        org.assertj.core.groups.Tuple.tuple("furina", true, true),
-                        org.assertj.core.groups.Tuple.tuple("noelle", true, true));
+                        org.assertj.core.groups.Tuple.tuple("diluc", false, true),
+                        org.assertj.core.groups.Tuple.tuple("furina", true, false),
+                        org.assertj.core.groups.Tuple.tuple("noelle", true, false));
     }
 
     @Test
@@ -71,7 +71,7 @@ class ArtifactBuildAutoActivationServiceTest {
         assertThat(service.resolve("102550550", buildService.list()).getFirst()
                 .analysisEnabled()).isFalse();
         assertThat(service.resolve("102550550", buildService.list()).getFirst()
-                .nativeSyncEnabled()).isFalse();
+                .nativeSyncEnabled()).isTrue();
     }
 
     @Test
@@ -124,8 +124,8 @@ class ArtifactBuildAutoActivationServiceTest {
         InMemoryArtifactBuildRepository repository = new InMemoryArtifactBuildRepository();
         ArtifactBuildService buildService = new ArtifactBuildService(repository);
         buildService.importAll(List.of(
-                build("furina", "Furina", false),
-                build("noelle", "Noelle", false)));
+                build("furina", "Furina", false).withQuickEquipPresetIndex(1),
+                build("noelle", "Noelle", false).withQuickEquipPresetIndex(1)));
         ArtifactBuildAutoActivationService service = new ArtifactBuildAutoActivationService(
                 buildService, new InMemoryArtifactBuildAutoActivationResultRepository());
         ArtifactBuildAutoActivationSettings settings =
@@ -141,15 +141,17 @@ class ArtifactBuildAutoActivationServiceTest {
                 settings);
 
         assertThat(service.resolve("102550550", buildService.list()))
-                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
+                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled,
+                        ArtifactBuild::quickEquipPresetIndex)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("furina", true),
-                        org.assertj.core.groups.Tuple.tuple("noelle", false));
+                        org.assertj.core.groups.Tuple.tuple("furina", true, 1),
+                        org.assertj.core.groups.Tuple.tuple("noelle", false, 0));
         assertThat(service.resolve("123456789", buildService.list()))
-                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled)
+                .extracting(ArtifactBuild::id, ArtifactBuild::analysisEnabled,
+                        ArtifactBuild::quickEquipPresetIndex)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("furina", false),
-                        org.assertj.core.groups.Tuple.tuple("noelle", true));
+                        org.assertj.core.groups.Tuple.tuple("furina", false, 0),
+                        org.assertj.core.groups.Tuple.tuple("noelle", true, 1));
     }
 
     @Test

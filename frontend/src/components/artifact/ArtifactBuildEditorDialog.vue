@@ -16,7 +16,8 @@ const createBuild = () => artifactBuildPayload(props.build || {
   alternativeSetRecipes: [],
   mainStatsBySlot: {flower: ['hp'], plume: ['atk'], sands: [], goblet: [], circlet: []},
   substatWeights: {critRate_: 1, critDMG_: 1},
-  analysisEnabled: true, nativeSyncEnabled: true, sourceVersion: 'custom',
+  analysisEnabled: true, nativeSyncEnabled: true, quickEquipPresetIndex: 0,
+  sourceVersion: 'custom',
 })
 watch(() => [props.open, props.build], () => { form.value = createBuild() }, {immediate: true, deep: true})
 
@@ -43,7 +44,7 @@ const save = () => { if (canSave.value) emit('save', artifactBuildPayload(form.v
           <el-form-item label="名称"><el-input v-model="form.name" maxlength="40" show-word-limit/></el-form-item>
           <el-form-item label="角色"><el-select v-model="form.characterKey" filterable allow-create placeholder="选择角色"><el-option v-for="item in characterOptions" :key="item" :label="artifactCharacterLabel(item)" :value="item"/></el-select></el-form-item>
         </div>
-        <div class="status-row"><el-checkbox v-model="form.analysisEnabled">参与圣遗物分析</el-checkbox><el-checkbox v-model="form.nativeSyncEnabled">参与原神方案生成</el-checkbox></div>
+        <div class="status-row"><el-checkbox v-model="form.analysisEnabled">参与圣遗物分析</el-checkbox><el-checkbox v-model="form.nativeSyncEnabled">参与套装锁定同步</el-checkbox><label>角色快速装备<el-select v-model="form.quickEquipPresetIndex" size="small"><el-option label="关闭" :value="0"/><el-option label="方案 1" :value="1"/><el-option label="方案 2" :value="2"/></el-select></label></div>
       </section>
 
       <ArtifactBuildRecipeEditor v-model:sets="form.sets" v-model:alternatives="form.alternativeSetRecipes" :set-options="setOptions"/>
@@ -54,7 +55,7 @@ const save = () => { if (canSave.value) emit('save', artifactBuildPayload(form.v
 </template>
 
 <style scoped>
-.build-form{display:grid;gap:20px}.editor-section{padding-bottom:18px;border-bottom:1px solid var(--el-border-color-lighter)}.editor-section:last-child{border-bottom:0}.editor-section>header,.status-row,.dialog-footer{display:flex;align-items:center}.editor-section>header{justify-content:space-between;gap:16px;margin-bottom:12px}.editor-section h3{margin:0;font-size:16px}.editor-section p{margin:3px 0 0;color:var(--el-text-color-secondary);font-size:12px}.basic-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.basic-grid .el-select{width:100%}.status-row{gap:20px}.dialog-footer{justify-content:space-between;gap:16px}.dialog-footer>span{color:var(--el-color-danger);font-size:12px}.dialog-footer>div{display:flex;gap:8px;margin-left:auto}
+.build-form{display:grid;gap:20px}.editor-section{padding-bottom:18px;border-bottom:1px solid var(--el-border-color-lighter)}.editor-section:last-child{border-bottom:0}.editor-section>header,.status-row,.dialog-footer{display:flex;align-items:center}.editor-section>header{justify-content:space-between;gap:16px;margin-bottom:12px}.editor-section h3{margin:0;font-size:16px}.editor-section p{margin:3px 0 0;color:var(--el-text-color-secondary);font-size:12px}.basic-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.basic-grid .el-select{width:100%}.status-row{gap:20px}.status-row>label{display:flex;align-items:center;gap:8px;font-size:14px}.status-row>label .el-select{width:96px}.dialog-footer{justify-content:space-between;gap:16px}.dialog-footer>span{color:var(--el-color-danger);font-size:12px}.dialog-footer>div{display:flex;gap:8px;margin-left:auto}
 :global(.build-editor-dialog){display:flex;flex-direction:column;height:min(900px,90dvh);margin:5dvh auto 0;overflow:hidden}:global(.build-editor-dialog .el-dialog__header),:global(.build-editor-dialog .el-dialog__footer){flex:0 0 auto}:global(.build-editor-dialog .el-dialog__body){flex:1;min-height:0;max-height:none;overflow-y:auto;padding-block:14px}
 @media(max-width:640px){.basic-grid{grid-template-columns:1fr}.status-row{align-items:flex-start;flex-direction:column;gap:4px}.dialog-footer{align-items:flex-end;flex-direction:column}:global(.build-editor-dialog){width:100%!important;height:100dvh;margin:0;border-radius:0}}
 </style>
