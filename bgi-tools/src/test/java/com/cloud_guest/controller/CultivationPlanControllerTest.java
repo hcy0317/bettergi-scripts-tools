@@ -126,6 +126,19 @@ class CultivationPlanControllerTest {
     }
 
     @Test
+    void topLevelSyncRegeneratesTheUidSpecificBetterGiGroupWithoutLaunching() {
+        CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);
+        CultivationPlanController controller = new CultivationPlanController(
+                mock(CultivationPlanApplicationService.class), mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                oneStopService, mock(CultivationPlanDrivenExecutionService.class));
+
+        controller.syncOneStop("102550550");
+
+        verify(oneStopService).prepare("102550550");
+    }
+
+    @Test
     void finalGatherAndMonsterInventoryWritebackRegeneratesTheUidSpecificPlan() {
         CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
         CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);

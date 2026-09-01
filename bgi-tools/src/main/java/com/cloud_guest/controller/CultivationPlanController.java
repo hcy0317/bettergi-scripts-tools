@@ -183,6 +183,12 @@ public class CultivationPlanController {
         return ok(oneStopService.prepare(uid));
     }
 
+    @PostMapping("execution/one-stop/sync")
+    @Operation(summary = "将当前养成账本与脚本设置同步到 UID 专属 BetterGI 脚本组")
+    public Result<CultivationOneStopResult> syncOneStop(@RequestParam String uid) {
+        return ok(oneStopService.prepare(uid));
+    }
+
     @PostMapping("execution/one-stop/start")
     @Operation(summary = "同步并通过 BetterGI 启动 UID 专属养成脚本组")
     public Result<CultivationLaunchResult> startOneStop(@RequestParam String uid) {

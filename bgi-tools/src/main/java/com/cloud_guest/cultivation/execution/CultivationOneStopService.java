@@ -103,7 +103,7 @@ public class CultivationOneStopService {
         CultivationModuleConfiguration groupSettings = configurationService.find(
                 normalizedUid, ScriptGroupSettingsExecutionModule.ID);
 
-        boolean hasPlanDrivenAction = hasPlanDrivenAction(projection, autoPlan);
+        boolean hasPlanDrivenAction = hasPlanDrivenAction(projection);
         boolean hasInventoryReconcileTargets = hasInventoryReconcileTargets(projection);
         autoPlanService.remove(Wrappers.lambdaQuery(AutoPlanConfig.class)
                 .eq(AutoPlanConfig::getUid, normalizedUid)
@@ -172,12 +172,10 @@ public class CultivationOneStopService {
         }
     }
 
-    static boolean hasPlanDrivenAction(CultivationExecutionProjection projection,
-                                       CultivationModuleConfiguration configuration) {
-        if (!configuration.enabled()) return false;
+    static boolean hasPlanDrivenAction(CultivationExecutionProjection projection) {
         return "NEEDS_RECONCILE".equals(projection.state())
                 || !projection.craftingActions().isEmpty()
-                || projection.resinActions().stream().anyMatch(action -> resinActionEnabled(action, configuration))
+                || !projection.resinActions().isEmpty()
                 || !projection.bossActions().isEmpty();
     }
 
@@ -204,7 +202,7 @@ public class CultivationOneStopService {
         template.put("name", groupName);
         applyGroupSettings(root, template, groupSettings.settings());
         ArrayNode projects = objectMapper.createArrayNode();
-        boolean planDrivenAction = hasPlanDrivenAction(projection, autoPlan);
+        boolean planDrivenAction = hasPlanDrivenAction(projection);
 
         if (planDrivenAction) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
@@ -220,11 +218,11 @@ public class CultivationOneStopService {
             settings.put("run_config", "");
             settings.set("auto_check", objectMapper.createArrayNode());
             settings.put("bgi_tools_token", "");
-            project.put("name", autoPlanTaskName(projection, autoPlan));
+            project.put("name", autoPlanTaskName(projection));
             prepareProject(project, projects.size() + 1, settings);
             projects.add(project);
         }
-        if (gather.enabled() && !projection.gatherAction().csvTargets().isEmpty()) {
+        if (!projection.gatherAction().csvTargets().isEmpty()) {
             ObjectNode project = copyProject(documents, Set.of("CD-Aware-AutoGather"));
             if (project == null) throw new IllegalStateException("未找到已安装的 CD-Aware-AutoGather 脚本任务");
             ObjectNode settings = cultivationOnlyGatherSettings(root, projection.gatherAction(), warnings);
@@ -235,7 +233,7 @@ public class CultivationOneStopService {
                 projects.add(project);
             }
         }
-        if (monster.enabled() && !projection.monsterAction().targets().isEmpty()) {
+        if (!projection.monsterAction().targets().isEmpty()) {
             ObjectNode project = copyProject(documents,
                     Set.of("FullyAutoAndSemiAutoTools", "HCY-FullyAutoAndSemiAutoTools"));
             if (project == null) throw new IllegalStateException("未找到已安装的 FullyAutoAndSemiAutoTools 脚本任务");
@@ -249,7 +247,7 @@ public class CultivationOneStopService {
                 projects.add(project);
             }
         }
-        if (weekly.enabled() && !projection.weeklyBossActions().isEmpty()) {
+        if (!projection.weeklyBossActions().isEmpty()) {
             if (!Boolean.TRUE.equals(weekly.settings().get("unfairContractTerms"))) {
                 warnings.add("周本脚本尚未确认风险条款，本次未加入专属脚本组");
             } else {
@@ -848,11 +846,9 @@ public class CultivationOneStopService {
                 .collect(java.util.stream.Collectors.joining(","));
     }
 
-    private static String autoPlanTaskName(CultivationExecutionProjection projection,
-                                           CultivationModuleConfiguration configuration) {
+    private static String autoPlanTaskName(CultivationExecutionProjection projection) {
         LinkedHashSet<String> labels = new LinkedHashSet<>();
         projection.resinActions().stream()
-                .filter(action -> resinActionEnabled(action, configuration))
                 .map(CultivationOneStopService::resinActionLabel)
                 .forEach(labels::add);
         if (!projection.craftingActions().isEmpty()) labels.add("材料合成");
@@ -876,23 +872,6 @@ public class CultivationOneStopService {
         if (values.isEmpty()) return prefix;
         if (values.size() <= 4) return prefix + "：" + String.join("·", values);
         return prefix + "：" + String.join("·", values.subList(0, 3)) + "等" + values.size() + "项";
-    }
-
-    private static boolean resinActionEnabled(CultivationExecutionProjection.ResinAction action,
-                                              CultivationModuleConfiguration configuration) {
-        if ("天赋".equals(action.sourceType())) {
-            return booleanSetting(configuration, "talentDomainEnabled", true);
-        }
-        if ("武器".equals(action.sourceType())) {
-            return booleanSetting(configuration, "weaponDomainEnabled", true);
-        }
-        if ("藏金之花".equals(action.sourceName()) || "摩拉".equals(action.materialName())) {
-            return booleanSetting(configuration, "moraLeyLineEnabled", true);
-        }
-        if ("启示之花".equals(action.sourceName()) || "大英雄的经验".equals(action.materialName())) {
-            return booleanSetting(configuration, "experienceLeyLineEnabled", true);
-        }
-        return true;
     }
 
     private List<Path> findManagedGroupDuplicates(Path root, String uid, Path canonicalFile) {
@@ -1092,13 +1071,6 @@ public class CultivationOneStopService {
         } finally {
             Files.deleteIfExists(temporary);
         }
-    }
-
-    private static boolean booleanSetting(CultivationModuleConfiguration configuration,
-                                          String key,
-                                          boolean fallback) {
-        Object value = configuration.settings().get(key);
-        return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
     }
 
     private static String stringSetting(Map<String, Object> settings, String key, String fallback) {

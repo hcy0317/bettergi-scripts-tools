@@ -15,9 +15,10 @@ export async function confirmCultivationPlan(payload) {
   return data
 }
 
-export async function getLatestCultivationPlan(uid) {
+export async function getLatestCultivationPlan(uid, {silentError = false} = {}) {
   const {data} = await service.get('/jwt/auto/plan/cultivation/plan/latest', {
-    params: {uid}
+    params: {uid},
+    silentError
   })
   return data
 }
@@ -64,6 +65,13 @@ export async function syncCultivationExecutionModule(uid, moduleId) {
 
 export async function prepareCultivationOneStop(uid) {
   const {data} = await service.post('/jwt/auto/plan/cultivation/execution/one-stop/prepare', null, {
+    params: {uid}
+  })
+  return data
+}
+
+export async function syncCultivationOneStop(uid) {
+  const {data} = await service.post('/jwt/auto/plan/cultivation/execution/one-stop/sync', null, {
     params: {uid}
   })
   return data

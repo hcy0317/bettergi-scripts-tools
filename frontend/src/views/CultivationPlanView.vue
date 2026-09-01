@@ -1,5 +1,5 @@
 <script setup>
-import {computed, ref} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {
   ArrowLeft,
@@ -34,6 +34,10 @@ const loadingLatest = ref(false)
 const recognitionError = ref('')
 const recognitionMessage = ref('')
 const confirmationError = ref('')
+const AUTO_LEDGER_REFRESH_INTERVAL_MS = 5000
+let ledgerRefreshTimer = null
+let ledgerRefreshInFlight = false
+let latestLoadGeneration = 0
 
 const canRecognize = computed(() => selectedFile.value && !recognizing.value)
 const canConfirm = computed(() => preview.value && rows.value.length > 0 && !confirming.value)
@@ -183,17 +187,34 @@ const confirm = async () => {
   }
 }
 
-const loadLatest = async () => {
-  if (!uid.value.trim()) {
-    ElMessage.warning('请输入 UID')
+const loadLatest = async (silent = false) => {
+  const normalizedUid = uid.value.trim()
+  if (!normalizedUid) {
+    if (!silent) ElMessage.warning('请输入 UID')
     return
   }
-  loadingLatest.value = true
+  const generation = ++latestLoadGeneration
+  if (!silent) loadingLatest.value = true
   try {
-    currentPlan.value = await getLatestCultivationPlan(uid.value.trim())
-    if (!currentPlan.value) ElMessage.info('该 UID 暂无养成账本')
+    const latest = await getLatestCultivationPlan(normalizedUid, {silentError: silent})
+    if (generation !== latestLoadGeneration || normalizedUid !== uid.value.trim()) return
+    currentPlan.value = latest
+    if (!silent && !latest) ElMessage.info('该 UID 暂无养成账本')
   } finally {
-    loadingLatest.value = false
+    if (!silent && generation === latestLoadGeneration) loadingLatest.value = false
+  }
+}
+
+const autoRefreshLedger = async () => {
+  if (document.hidden || !uid.value.trim() || loadingLatest.value || recognizing.value
+      || confirming.value || ledgerRefreshInFlight) return
+  ledgerRefreshInFlight = true
+  try {
+    await loadLatest(true)
+  } catch {
+    // 静默轮询失败时保留当前账本；手动读取仍由全局请求层展示错误。
+  } finally {
+    ledgerRefreshInFlight = false
   }
 }
 
@@ -232,6 +253,15 @@ const handleUidChange = async nextUid => {
 }
 
 const goToExecution = () => { activeTab.value = 'execution' }
+
+onMounted(() => {
+  ledgerRefreshTimer = window.setInterval(autoRefreshLedger, AUTO_LEDGER_REFRESH_INTERVAL_MS)
+  void autoRefreshLedger()
+})
+
+onBeforeUnmount(() => {
+  if (ledgerRefreshTimer !== null) window.clearInterval(ledgerRefreshTimer)
+})
 </script>
 
 <template>
@@ -255,7 +285,7 @@ const goToExecution = () => { activeTab.value = 'execution' }
 
     <section class="identity-bar">
       <UidSelector v-model="uid" class="uid-input" @change="handleUidChange"/>
-      <el-button :icon="Refresh" :loading="loadingLatest" @click="loadLatest">读取账本</el-button>
+      <el-button :icon="Refresh" :loading="loadingLatest" @click="loadLatest()">读取账本</el-button>
     </section>
 
     <el-tabs v-model="activeTab" class="workspace-tabs">
