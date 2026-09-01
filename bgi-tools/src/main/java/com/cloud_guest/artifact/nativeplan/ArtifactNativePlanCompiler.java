@@ -35,6 +35,7 @@ public class ArtifactNativePlanCompiler {
         List<ArtifactBuild> quickBuilds = builds.stream()
                 .filter(ArtifactBuild::quickEquipSyncEnabled)
                 .sorted(Comparator.comparing(ArtifactBuild::characterKey)
+                        .thenComparingInt(ArtifactBuild::quickEquipPresetIndex)
                         .thenComparing(ArtifactBuild::id))
                 .toList();
         int sourceBuildCount = selectedBuildCount(lockBuilds, quickBuilds);
@@ -195,8 +196,16 @@ public class ArtifactNativePlanCompiler {
                         "character supports at most two quick-equip builds"));
                 return;
             }
-            for (int index = 0; index < characterBuilds.size(); index++) {
-                ArtifactBuild build = characterBuilds.get(index);
+            if (characterBuilds.stream().map(ArtifactBuild::quickEquipPresetIndex)
+                    .distinct().count() != characterBuilds.size()) {
+                issues.add(new ArtifactNativePlanIssue(
+                        "QUICK_EQUIP_SLOT_CONFLICT",
+                        characterKey,
+                        characterBuilds.stream().map(ArtifactBuild::id).toList(),
+                        "quick-equip preset slot is selected by more than one build"));
+                return;
+            }
+            for (ArtifactBuild build : characterBuilds) {
                 if (build.sets().isEmpty()) {
                     issues.add(new ArtifactNativePlanIssue(
                             "QUICK_EQUIP_BUILD_UNREPRESENTABLE",
@@ -218,7 +227,7 @@ public class ArtifactNativePlanCompiler {
                         build.id(),
                         build.name(),
                         characterKey,
-                        index + 1,
+                        build.quickEquipPresetIndex(),
                         build.sets(),
                         sortedMainStats(build.mainStatsBySlot()),
                         strongSubstats.stream().limit(3).toList(),

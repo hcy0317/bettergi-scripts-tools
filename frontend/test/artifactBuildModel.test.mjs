@@ -212,6 +212,7 @@ test('cloning creates an independent custom build', () => {
   assert.equal(clone.id, 'custom-1724688000000')
   assert.equal(clone.name, '后台C 副本')
   assert.equal(clone.sourceVersion, 'custom')
+  assert.equal(clone.quickEquipPresetIndex, 0)
   assert.notEqual(clone.sets, upstreamBuild.sets)
   assert.notEqual(clone.alternativeSetRecipes[0], upstreamBuild.alternativeSetRecipes[0])
   clone.sets[0].pieces = 2

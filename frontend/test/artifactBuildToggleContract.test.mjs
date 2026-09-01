@@ -35,9 +35,10 @@ test('artifact toggles serialize a build and reject stale UID responses', () => 
   assert.doesNotMatch(toggleSource, /await load\(\)/)
   assert.match(tableSource, /isPending\(row, 'analysisEnabled'\)/)
   assert.match(tableSource, /isPending\(row, 'nativeSyncEnabled'\)/)
-  assert.match(tableSource, /isPending\(row, 'quickEquipSyncEnabled'\)/)
-  assert.match(tableSource, /emit\('toggle', row, 'quickEquipSyncEnabled', value\)/)
+  assert.match(tableSource, /isPending\(row, 'quickEquipPresetIndex'\)/)
+  assert.match(tableSource, /emit\('toggle', row, 'quickEquipPresetIndex', value\)/)
   assert.match(apiSource, /service\.patch\(\s*`\/jwt\/artifacts\/builds\/\$\{encodeURIComponent\(buildId\)\}\/state`/)
+  assert.match(apiSource, /presetIndex: Number\(value\)/)
 })
 
 test('UID changes hide stale rows before loading the next account', () => {

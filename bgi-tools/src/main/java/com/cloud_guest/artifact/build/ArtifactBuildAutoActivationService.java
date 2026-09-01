@@ -82,13 +82,13 @@ public class ArtifactBuildAutoActivationService {
             return List.copyOf(builds);
         }
         if (result.rosterDigest() == null || result.rosterDigest().isBlank()) {
-            return builds.stream().map(build -> build.withActivation(false)).toList();
+            return builds.stream().map(build -> forUid(build, false)).toList();
         }
         Set<String> enabledCharacters = Set.copyOf(
                 result.appliedEligibleCharacterKeys());
         return builds.stream()
-                .map(build -> build.withActivation(
-                        enabledCharacters.contains(build.characterKey())))
+                .map(build -> forUid(
+                        build, enabledCharacters.contains(build.characterKey())))
                 .toList();
     }
 
@@ -117,6 +117,11 @@ public class ArtifactBuildAutoActivationService {
                 .filter(entry -> !entry.getValue().equals(before.get(entry.getKey())))
                 .map(Map.Entry::getKey).sorted().toList();
         return new RosterDifference(added, removed, changed);
+    }
+
+    private static ArtifactBuild forUid(ArtifactBuild build, boolean enabled) {
+        ArtifactBuild activated = build.withActivation(enabled);
+        return enabled ? activated : activated.withQuickEquipPresetIndex(0);
     }
 
     private static String digest(List<ArtifactCharacterRosterEntry> characters) {

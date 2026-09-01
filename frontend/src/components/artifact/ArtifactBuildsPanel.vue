@@ -97,7 +97,7 @@ const metrics = computed(() => ({
   total: builds.value.length,
   analysis: builds.value.filter(build => build.analysisEnabled).length,
   native: builds.value.filter(build => build.nativeSyncEnabled).length,
-  quick: builds.value.filter(build => build.quickEquipSyncEnabled).length,
+  quick: builds.value.filter(build => build.quickEquipPresetIndex > 0).length,
   characters: characters.value.length,
 }))
 
@@ -372,8 +372,7 @@ onBeforeUnmount(() => {
             <el-dropdown-item command="custom:analysisEnabled:false">停用全部自定义分析</el-dropdown-item>
             <el-dropdown-item divided command="all:analysisEnabled:true">启用全部分析</el-dropdown-item>
             <el-dropdown-item command="all:analysisEnabled:false">停用全部分析</el-dropdown-item>
-            <el-dropdown-item divided command="all:nativeSyncEnabled:true">启用全部原神同步</el-dropdown-item>
-            <el-dropdown-item command="all:nativeSyncEnabled:false">停用全部原神同步</el-dropdown-item>
+            <el-dropdown-item divided command="all:nativeSyncEnabled:false">停用全部套装锁定</el-dropdown-item>
           </el-dropdown-menu></template>
         </el-dropdown>
         <el-button type="primary" :icon="Plus" @click="openEditor(null)">新增</el-button>
@@ -392,7 +391,7 @@ onBeforeUnmount(() => {
     <section class="auto-activation-card" aria-label="按游戏角色自动启停配装">
       <div class="auto-activation-copy">
         <h3>按游戏角色自动启停</h3>
-        <p>检测完整角色列表；符合条件的角色同时启用分析与原神同步，其余角色的相关配装会停用。</p>
+        <p>检测完整角色列表并自动启停分析；套装锁定与快速装备方案保持手动选择，快速装备会按 UID 名单过滤。</p>
       </div>
       <label class="level-threshold">
         <span>启用等级</span>

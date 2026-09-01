@@ -159,7 +159,7 @@ export const summarizeArtifactBuild = build => {
 }
 
 export const prepareArtifactBuilds = builds => (builds || []).map(build => {
-  const normalized = {quickEquipSyncEnabled: false, ...build}
+  const normalized = {quickEquipPresetIndex: 0, ...build}
   return normalized?.summary
     ? normalized
     : {...normalized, summary: summarizeArtifactBuild(normalized)}
@@ -196,9 +196,9 @@ export const filterArtifactBuilds = (builds, filters = {}) => {
     if (source !== 'all' && summary.sourceKind !== source) return false
     if (status === 'analysis' && !build.analysisEnabled) return false
     if (status === 'native' && !build.nativeSyncEnabled) return false
-    if (status === 'quick' && !build.quickEquipSyncEnabled) return false
+    if (status === 'quick' && !(build.quickEquipPresetIndex > 0)) return false
     if (status === 'disabled'
-      && (build.analysisEnabled || build.nativeSyncEnabled || build.quickEquipSyncEnabled)) return false
+      && (build.analysisEnabled || build.nativeSyncEnabled || build.quickEquipPresetIndex > 0)) return false
     return true
   })
 }
@@ -219,7 +219,8 @@ export const artifactBuildPayload = build => {
   ))
   payload.sets = normalizeArtifactRecipe(payload.sets)
   payload.alternativeSetRecipes = (payload.alternativeSetRecipes || []).map(normalizeArtifactRecipe)
-  payload.quickEquipSyncEnabled = Boolean(payload.quickEquipSyncEnabled)
+  payload.quickEquipPresetIndex = Math.min(2, Math.max(0,
+    Math.trunc(Number(payload.quickEquipPresetIndex || 0))))
   return payload
 }
 
@@ -228,6 +229,6 @@ export const cloneArtifactBuild = (build, timestamp = Date.now()) => {
   clone.id = `custom-${timestamp}`
   clone.name = `${build.name} 副本`
   clone.sourceVersion = 'custom'
-  clone.quickEquipSyncEnabled = false
+  clone.quickEquipPresetIndex = 0
   return clone
 }

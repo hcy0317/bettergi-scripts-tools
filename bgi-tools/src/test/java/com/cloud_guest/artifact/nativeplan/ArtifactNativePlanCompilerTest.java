@@ -18,7 +18,7 @@ class ArtifactNativePlanCompilerTest {
     @Test
     void preservesBuildIdentityAndUsesTheStrictStrongSubstatThreshold() {
         ArtifactBuild build = build(
-                "furina-crit", "Furina", true, true,
+                "furina-crit", "Furina", true, 1,
                 List.of(new ArtifactSetRule("GoldenTroupe", 4)), List.of(),
                 weights("critRate_", 1.0, "eleMas", 0.9, "enerRech_", 0.8));
 
@@ -41,14 +41,14 @@ class ArtifactNativePlanCompilerTest {
     @Test
     void threeLockPlansPerSetAreReadyButTheFourthIsNoGo() {
         List<ArtifactBuild> three = List.of(
-                build("a", "Furina", true, false),
-                build("b", "Neuvillette", true, false),
-                build("c", "Yelan", true, false));
+                build("a", "Furina", true, 0),
+                build("b", "Neuvillette", true, 0),
+                build("c", "Yelan", true, 0));
 
         ArtifactNativeSyncPlan ready = compiler.compileReplaceAll(three, 10);
         ArtifactNativeSyncPlan rejected = compiler.compileReplaceAll(
                 List.of(three.get(0), three.get(1), three.get(2),
-                        build("d", "Xingqiu", true, false)), 10);
+                        build("d", "Xingqiu", true, 0)), 10);
 
         assertThat(ready.status()).isEqualTo(ArtifactNativeSyncStatus.READY);
         assertThat(ready.lockPlans()).extracting(ArtifactNativeSetPlan::buildId)
@@ -63,12 +63,12 @@ class ArtifactNativePlanCompilerTest {
     @Test
     void twoQuickEquipBuildsPerCharacterAreStableButTheThirdIsNoGo() {
         ArtifactNativeSyncPlan ready = compiler.compileReplaceAll(List.of(
-                build("furina-a", "Furina", false, true),
-                build("furina-b", "Furina", false, true)), 10);
+                build("furina-a", "Furina", false, 1),
+                build("furina-b", "Furina", false, 2)), 10);
         ArtifactNativeSyncPlan rejected = compiler.compileReplaceAll(List.of(
-                build("furina-a", "Furina", false, true),
-                build("furina-b", "Furina", false, true),
-                build("furina-c", "Furina", false, true)), 10);
+                build("furina-a", "Furina", false, 1),
+                build("furina-b", "Furina", false, 2),
+                build("furina-c", "Furina", false, 1)), 10);
 
         assertThat(ready.quickEquipPlans())
                 .extracting(ArtifactNativeQuickEquipPlan::buildId,
@@ -85,7 +85,7 @@ class ArtifactNativePlanCompilerTest {
     @Test
     void alternativeRecipesExpandOnlyLockPlans() {
         ArtifactBuild build = build(
-                "furina", "Furina", true, true,
+                "furina", "Furina", true, 1,
                 List.of(new ArtifactSetRule("GoldenTroupe", 4)),
                 List.of(List.of(new ArtifactSetRule("MarechausseeHunter", 4))),
                 weights("critRate_", 1.0));
@@ -102,7 +102,7 @@ class ArtifactNativePlanCompilerTest {
     @Test
     void quickEquipSplitsFourStrongSubstatsIntoThreePriorityAndOneSecondary() {
         ArtifactBuild build = build(
-                "mona-nuke", "Mona", false, true,
+                "mona-nuke", "Mona", false, 1,
                 List.of(new ArtifactSetRule("HeartOfDepth", 4)), List.of(),
                 weights("critRate_", 1.0, "critDMG_", 1.0,
                         "atk_", 0.9, "eleMas", 0.9, "enerRech_", 0.8));
@@ -118,13 +118,13 @@ class ArtifactNativePlanCompilerTest {
     @Test
     void capacityFailureAndUnrepresentableBuildsAreNoGoBeforeMutation() {
         ArtifactNativeSyncPlan capacity = compiler.compileReplaceAll(List.of(
-                build("first", "Furina", true, false),
-                build("second", "Yelan", true, false,
+                build("first", "Furina", true, 0),
+                build("second", "Yelan", true, 0,
                         List.of(new ArtifactSetRule("MarechausseeHunter", 4)),
                         List.of(), weights("critDMG_", 1.0))), 1);
         ArtifactBuild invalid = new ArtifactBuild(
                 "invalid", "invalid", "Furina", List.of(), Map.of(),
-                Map.of("critRate_", 1.0), true, false, false, "custom");
+                Map.of("critRate_", 1.0), true, false, 0, "custom");
         ArtifactNativeSyncPlan empty = compiler.compileReplaceAll(List.of(invalid), 10);
 
         assertThat(capacity.status()).isEqualTo(ArtifactNativeSyncStatus.NO_GO_CAPACITY);
@@ -135,8 +135,8 @@ class ArtifactNativePlanCompilerTest {
 
     @Test
     void digestChangesWhenQuickEquipSelectionChanges() {
-        ArtifactBuild selected = build("furina", "Furina", true, true);
-        ArtifactBuild lockOnly = selected.withStates(true, true, false);
+        ArtifactBuild selected = build("furina", "Furina", true, 1);
+        ArtifactBuild lockOnly = selected.withQuickEquipPresetIndex(0);
 
         assertThat(compiler.compileReplaceAll(List.of(selected), 10).planDigest())
                 .isNotEqualTo(compiler.compileReplaceAll(List.of(lockOnly), 10).planDigest());
@@ -146,8 +146,8 @@ class ArtifactNativePlanCompilerTest {
             String id,
             String characterKey,
             boolean nativeSyncEnabled,
-            boolean quickEquipSyncEnabled) {
-        return build(id, characterKey, nativeSyncEnabled, quickEquipSyncEnabled,
+            int quickEquipPresetIndex) {
+        return build(id, characterKey, nativeSyncEnabled, quickEquipPresetIndex,
                 List.of(new ArtifactSetRule("GoldenTroupe", 4)), List.of(),
                 weights("critRate_", 1.0));
     }
@@ -156,14 +156,14 @@ class ArtifactNativePlanCompilerTest {
             String id,
             String characterKey,
             boolean nativeSyncEnabled,
-            boolean quickEquipSyncEnabled,
+            int quickEquipPresetIndex,
             List<ArtifactSetRule> sets,
             List<List<ArtifactSetRule>> alternatives,
             Map<String, Double> weights) {
         return new ArtifactBuild(
                 id, id, characterKey, sets, alternatives,
                 Map.of("circlet", Set.of("critRate_", "critDMG_")),
-                weights, true, nativeSyncEnabled, quickEquipSyncEnabled, "source");
+                weights, true, nativeSyncEnabled, quickEquipPresetIndex, "source");
     }
 
     private static Map<String, Double> weights(Object... values) {
