@@ -56,8 +56,10 @@ public class ArtifactBuildService {
         Map<String, ArtifactBuild> merged = new LinkedHashMap<>();
         repository.findAll().forEach(build -> merged.put(build.id(), build));
         builds.forEach(build -> merged.put(build.id(), build));
-        validateSelections(merged.values().stream().toList());
-        builds.forEach(repository::save);
+        List<ArtifactBuild> normalized = normalizeNativeLockSelections(
+                merged.values().stream().toList());
+        validateSelections(normalized);
+        normalized.forEach(repository::save);
         return repository.findAll();
     }
 

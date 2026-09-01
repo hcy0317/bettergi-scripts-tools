@@ -142,6 +142,14 @@ public class ArtifactNativePlanCompiler {
                         "lock-enabled build has no representable artifact set"));
                 continue;
             }
+            if (build.mainStatsBySlot().isEmpty()) {
+                issues.add(new ArtifactNativePlanIssue(
+                        "LOCK_BUILD_UNREPRESENTABLE",
+                        build.id(),
+                        List.of(build.id()),
+                        "lock-enabled build has no main-stat slot plans"));
+                continue;
+            }
             for (String setKey : setKeys) {
                 build.mainStatsBySlot().entrySet().stream()
                         .sorted(Map.Entry.comparingByKey())

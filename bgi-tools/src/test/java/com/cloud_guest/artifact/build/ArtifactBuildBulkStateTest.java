@@ -124,6 +124,21 @@ class ArtifactBuildBulkStateTest {
     }
 
     @Test
+    void legacyBackupImportMigratesLockSelectionBeforeValidation() {
+        ArtifactBuildService service = new ArtifactBuildService(new InMemoryArtifactBuildRepository());
+
+        List<ArtifactBuild> imported = service.importAll(List.of(
+                build("a", "legacy", true, true),
+                build("b", "legacy", true, true),
+                build("c", "legacy", true, true),
+                build("d", "legacy", true, true)));
+
+        assertThat(imported).filteredOn(ArtifactBuild::nativeSyncEnabled)
+                .extracting(ArtifactBuild::id)
+                .containsExactly("a", "b", "c");
+    }
+
+    @Test
     void bundledPresetCannotBeDeletedButCustomBuildCan() {
         ArtifactBuildService service = new ArtifactBuildService(new InMemoryArtifactBuildRepository());
         service.importAll(List.of(

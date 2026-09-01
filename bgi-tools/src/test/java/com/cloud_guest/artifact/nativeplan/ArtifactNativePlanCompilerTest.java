@@ -134,6 +134,40 @@ class ArtifactNativePlanCompilerTest {
     }
 
     @Test
+    void lockSelectionWithNoSlotPlansIsRejectedEvenWhenQuickEquipIsValid() {
+        ArtifactBuild invalidLock = new ArtifactBuild(
+                "invalid-lock", "invalid-lock", "Furina",
+                List.of(new ArtifactSetRule("GoldenTroupe", 4)),
+                Map.of(), Map.of("critRate_", 1.0),
+                true, true, 1, "custom");
+
+        ArtifactNativeSyncPlan plan = compiler.compileReplaceAll(
+                List.of(invalidLock), 10);
+
+        assertThat(plan.status()).isEqualTo(ArtifactNativeSyncStatus.NO_GO_EMPTY);
+        assertThat(plan.issues()).extracting(ArtifactNativePlanIssue::code)
+                .contains("LOCK_BUILD_UNREPRESENTABLE");
+    }
+
+    @Test
+    void digestLengthPrefixesBuildIdentityFields() {
+        ArtifactBuild delimitedId = new ArtifactBuild(
+                "a|b", "c", "Furina",
+                List.of(new ArtifactSetRule("GoldenTroupe", 4)),
+                Map.of("circlet", Set.of("critRate_")),
+                Map.of("critDMG_", 1.0), true, false, 1, "custom");
+        ArtifactBuild delimitedName = new ArtifactBuild(
+                "a", "b|c", "Furina",
+                List.of(new ArtifactSetRule("GoldenTroupe", 4)),
+                Map.of("circlet", Set.of("critRate_")),
+                Map.of("critDMG_", 1.0), true, false, 1, "custom");
+
+        assertThat(compiler.compileReplaceAll(List.of(delimitedId), 10).planDigest())
+                .isNotEqualTo(compiler.compileReplaceAll(
+                        List.of(delimitedName), 10).planDigest());
+    }
+
+    @Test
     void digestChangesWhenQuickEquipSelectionChanges() {
         ArtifactBuild selected = build("furina", "Furina", true, 1);
         ArtifactBuild lockOnly = selected.withQuickEquipPresetIndex(0);
