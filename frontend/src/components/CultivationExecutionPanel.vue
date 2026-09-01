@@ -11,7 +11,7 @@ import {
   prepareCultivationOneStop,
   saveCultivationExecutionModule,
   startCultivationOneStop,
-  syncCultivationExecutionModule
+  syncCultivationOneStop
 } from '@api/auto_plan/cultivationPlan.js'
 
 const props = defineProps({
@@ -20,7 +20,7 @@ const props = defineProps({
 
 const loading = ref(false)
 const savingModuleId = ref('')
-const syncingModuleId = ref('')
+const syncing = ref(false)
 const preparing = ref(false)
 const starting = ref(false)
 const preparation = ref(null)
@@ -100,7 +100,6 @@ const displayModules = computed(() => [...modules.value].sort((left, right) => {
   return 0
 }))
 const isGroupSettings = module => module.module.moduleId === GROUP_SETTINGS_MODULE_ID
-const isAutoPlan = module => module.module.moduleId === 'auto-plan-resin'
 
 const load = async (silent = false) => {
   const generation = ++loadGeneration
@@ -131,7 +130,7 @@ const load = async (silent = false) => {
 
 const autoSync = async () => {
   if (document.hidden || loading.value || settingsDialogOpen.value || savingModuleId.value
-      || syncingModuleId.value || preparing.value || starting.value || autoSyncing) return
+      || syncing.value || preparing.value || starting.value || autoSyncing) return
   autoSyncing = true
   try {
     await load(true)
@@ -193,9 +192,6 @@ const moveOrderedValue = (module, field, index, offset) => {
   ;[values[index], values[target]] = [values[target], values[index]]
   module.settings[field.key] = values
 }
-const canSync = module => ['cd-aware-auto-gather', 'fully-auto-and-semi-auto-tools']
-  .includes(module.module.moduleId)
-
 const openModuleSettings = module => {
   editingModule.value = module
   settingsDialogOpen.value = true
@@ -208,32 +204,22 @@ const saveEditingModule = async () => {
   editingModule.value = null
 }
 
-const syncModule = async module => {
+const syncOneStop = async () => {
   const uid = props.uid.trim()
   if (!uid) {
     ElMessage.warning('请先选择 UID')
     return
   }
+  syncing.value = true
   try {
-    await ElMessageBox.confirm(
-      `将当前缺口与${module.module.displayName}设置写入 BetterGI 脚本组？系统会先建立回滚备份。`,
-      '同步脚本设置',
-      {confirmButtonText: '同步', cancelButtonText: '取消', type: 'warning'}
-    )
-  } catch {
-    return
-  }
-  syncingModuleId.value = module.module.moduleId
-  try {
-    await saveCultivationExecutionModule(uid, module.module.moduleId, {
-      enabled: module.enabled,
-      settings: settingsPayload(module)
-    })
-    const result = await syncCultivationExecutionModule(uid, module.module.moduleId)
-    ElMessage.success(`${result.message}，已更新 ${result.updatedTasks} 个任务`)
+    preparation.value = await syncCultivationOneStop(uid)
+    const warningText = preparation.value.warnings?.length
+      ? `；${preparation.value.warnings.join('；')}`
+      : ''
+    ElMessage.success(`已同步 ${preparation.value.scriptGroupName}${warningText}`)
     await load()
   } finally {
-    syncingModuleId.value = ''
+    syncing.value = false
   }
 }
 
@@ -307,6 +293,9 @@ watch(() => props.uid, () => load(), {immediate: true})
         <el-button :icon="MagicStick" :loading="preparing" :disabled="!projection" @click="prepareOneStop">
           生成一条龙配置
         </el-button>
+        <el-button :icon="Connection" :loading="syncing" :disabled="!projection" @click="syncOneStop">
+          同步
+        </el-button>
         <el-button type="primary" :icon="VideoPlay" :loading="starting" :disabled="!projection" @click="startOneStop">
           同步并启动
         </el-button>
@@ -338,7 +327,7 @@ watch(() => props.uid, () => load(), {immediate: true})
           <el-icon><Setting/></el-icon>
           <div>
             <strong>脚本设置代管中心</strong>
-            <p>模块可独立启停、替换和升级，账本只依赖统一适配接口。</p>
+            <p>模块设置可独立维护和升级，执行内容由账本缺口自动裁剪。</p>
           </div>
         </div>
         <div class="module-grid">
@@ -349,7 +338,6 @@ watch(() => props.uid, () => load(), {immediate: true})
                 <span>适配器版本 {{ module.module.adapterVersion }}</span>
               </div>
               <el-tag v-if="isGroupSettings(module)" type="primary" effect="plain">生成时固定启用</el-tag>
-              <el-switch v-else v-model="module.enabled" active-text="启用" inactive-text="暂停"/>
             </header>
             <p>{{ module.module.description }}</p>
             <el-tag :type="module.module.integrationState.includes('等待') ? 'warning' : 'success'" effect="plain">
@@ -360,26 +348,7 @@ watch(() => props.uid, () => load(), {immediate: true})
                 {{ capability }}
               </el-tag>
             </div>
-            <div v-if="isAutoPlan(module)" class="resin-switch-grid">
-              <label><span>天赋书秘境</span><el-switch v-model="module.settings.talentDomainEnabled"/></label>
-              <label><span>武器突破秘境</span><el-switch v-model="module.settings.weaponDomainEnabled"/></label>
-              <label><span>摩拉地脉</span><el-switch v-model="module.settings.moraLeyLineEnabled"/></label>
-              <label><span>大英雄经验地脉</span><el-switch v-model="module.settings.experienceLeyLineEnabled"/></label>
-            </div>
             <el-button :icon="Setting" plain @click="openModuleSettings(module)">完整脚本配置</el-button>
-            <div class="module-actions">
-              <el-button
-                  type="primary"
-                  :loading="savingModuleId === module.module.moduleId"
-                  @click="saveModule(module)"
-              >{{ isGroupSettings(module) ? '保存配置组设置' : (isAutoPlan(module) ? '保存体力开关' : '保存启停') }}</el-button>
-              <el-button
-                  v-if="canSync(module)"
-                  :icon="Connection"
-                  :loading="syncingModuleId === module.module.moduleId"
-                  @click="syncModule(module)"
-              >同步到 BetterGI 脚本组</el-button>
-            </div>
           </article>
         </div>
       </section>
@@ -719,24 +688,6 @@ watch(() => props.uid, () => load(), {immediate: true})
   gap: 6px;
 }
 
-.resin-switch-grid {
-  display: grid;
-  gap: 8px;
-  padding: 10px 0;
-  border-top: 1px solid rgba(92, 105, 117, 0.16);
-  border-bottom: 1px solid rgba(92, 105, 117, 0.16);
-}
-
-.resin-switch-grid label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  font-size: 12px;
-  color: #3f4a55;
-}
-
 .module-field {
   display: grid;
   gap: 7px;
@@ -795,12 +746,6 @@ watch(() => props.uid, () => load(), {immediate: true})
 
 :global(.module-settings-dialog) {
   max-width: calc(100vw - 32px);
-}
-
-.module-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .action-grid {

@@ -63,9 +63,7 @@ class CultivationOneStopServiceTest {
                 new CultivationExecutionProjection.MonsterAction("monster", "无", Map.of(), List.of(), List.of()),
                 List.of(), current.preferences(), current.partyOptions());
 
-        assertThat(CultivationOneStopService.hasPlanDrivenAction(
-                craftOnly,
-                configuration(AutoPlanResinExecutionModule.ID, Map.of()))).isTrue();
+        assertThat(CultivationOneStopService.hasPlanDrivenAction(craftOnly)).isTrue();
     }
 
     @Test
@@ -78,9 +76,7 @@ class CultivationOneStopServiceTest {
                 new CultivationExecutionProjection.MonsterAction("monster", "无", Map.of(), List.of(), List.of()),
                 List.of(), current.preferences(), current.partyOptions());
 
-        assertThat(CultivationOneStopService.hasPlanDrivenAction(
-                reconcileOnly,
-                configuration(AutoPlanResinExecutionModule.ID, Map.of()))).isTrue();
+        assertThat(CultivationOneStopService.hasPlanDrivenAction(reconcileOnly)).isTrue();
     }
 
     @Test
@@ -163,20 +159,16 @@ class CultivationOneStopServiceTest {
         when(catalog.betterGiRoot()).thenReturn(temporaryRoot);
         when(executionService.projection("102550550")).thenReturn(projection());
         when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID)).thenReturn(
-                configuration(AutoPlanResinExecutionModule.ID, Map.of(
+                configuration(AutoPlanResinExecutionModule.ID, false, Map.of(
                         "auto_load", List.of("bgi_tools加载"),
                         "bgi_tools_token", "Authorization= ",
-                        "leyLineCountry", "挪德卡莱",
-                        "talentDomainEnabled", false,
-                        "weaponDomainEnabled", false,
-                        "moraLeyLineEnabled", true,
-                        "experienceLeyLineEnabled", false)));
+                        "leyLineCountry", "挪德卡莱")));
         when(configurationService.find("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(
-                configuration(CdAwareAutoGatherExecutionModule.ID, Map.of()));
+                configuration(CdAwareAutoGatherExecutionModule.ID, false, Map.of()));
         when(configurationService.find("102550550", FullyAutoToolsExecutionModule.ID)).thenReturn(
-                configuration(FullyAutoToolsExecutionModule.ID, Map.of("open_cd", true)));
+                configuration(FullyAutoToolsExecutionModule.ID, false, Map.of("open_cd", true)));
         when(configurationService.find("102550550", WeeklyBossExecutionModule.ID)).thenReturn(
-                configuration(WeeklyBossExecutionModule.ID, Map.of("unfairContractTerms", true)));
+                configuration(WeeklyBossExecutionModule.ID, false, Map.of("unfairContractTerms", true)));
         when(configurationService.find("102550550", ScriptGroupSettingsExecutionModule.ID)).thenReturn(
                 configuration(ScriptGroupSettingsExecutionModule.ID, Map.of(
                         "partyName", "养成队伍",
@@ -204,15 +196,16 @@ class CultivationOneStopServiceTest {
                         "HCY-FullyAutoAndSemiAutoTools", "WeeklyBoss");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("name").asText()).toList())
-                .containsExactly("养成体力：摩拉·世界首领", "养成采集：沙脂蛹",
+                .containsExactly("养成体力：天赋书·武器突破·摩拉等5项", "养成采集：沙脂蛹",
                         "养成怪物：镀金旅团·盗宝团", "周本 - 博士");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
         assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();
-        assertThat(autoPlanSettings.path("talentDomainEnabled").asBoolean()).isFalse();
-        assertThat(autoPlanSettings.path("weaponDomainEnabled").asBoolean()).isFalse();
-        assertThat(autoPlanSettings.path("moraLeyLineEnabled").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.has("talentDomainEnabled")).isFalse();
+        assertThat(autoPlanSettings.has("weaponDomainEnabled")).isFalse();
+        assertThat(autoPlanSettings.has("moraLeyLineEnabled")).isFalse();
+        assertThat(autoPlanSettings.has("experienceLeyLineEnabled")).isFalse();
         assertThat(autoPlanSettings.path("run_config").asText()).isEmpty();
         assertThat(autoPlanSettings.path("auto_check")).isEmpty();
         assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();
@@ -411,8 +404,14 @@ class CultivationOneStopServiceTest {
     }
 
     private static CultivationModuleConfiguration configuration(String id, Map<String, Object> settings) {
+        return configuration(id, true, settings);
+    }
+
+    private static CultivationModuleConfiguration configuration(String id,
+                                                                boolean enabled,
+                                                                Map<String, Object> settings) {
         return new CultivationModuleConfiguration(
                 new CultivationModuleDefinition(id, id, "1.0", "", "", List.of(), List.of()),
-                true, settings);
+                enabled, settings);
     }
 }

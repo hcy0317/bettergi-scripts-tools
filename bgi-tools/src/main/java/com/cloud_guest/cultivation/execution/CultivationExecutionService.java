@@ -101,7 +101,7 @@ public class CultivationExecutionService {
                         entry.materialName(), entry.remaining(), "地脉",
                         "摩拉".equals(entry.materialName()) ? "藏金之花" : "启示之花",
                         "经验与摩拉", preferences.domainParty(),
-                        autoPlanConfiguration.enabled() ? "可生成下一步行动" : "已暂停",
+                        "可生成下一步行动",
                         null, entry.materialName(), List.of()));
                 continue;
             }
@@ -112,7 +112,7 @@ public class CultivationExecutionService {
                 resinActions.add(new CultivationExecutionProjection.ResinAction(
                         entry.materialName(), entry.remaining(), "秘境", match.name(), match.type(),
                         preferences.domainParty(),
-                        autoPlanConfiguration.enabled() ? "可生成下一步行动" : "已暂停",
+                        "可生成下一步行动",
                         match.materialIndex(), match.materialName(), daysForMaterialIndex(match.materialIndex())));
                 continue;
             }
@@ -124,7 +124,7 @@ public class CultivationExecutionService {
                 bossActions.add(new CultivationExecutionProjection.BossAction(
                         entry.materialName(), entry.remaining(), source.bossName(), source.country(),
                         bossParty(autoPlanConfiguration, preferences), bossSettings(autoPlanConfiguration),
-                        autoPlanConfiguration.enabled() ? "待 AutoPlan 首领任务执行" : "已暂停"));
+                        "待 AutoPlan 首领任务执行"));
                 continue;
             }
 
@@ -388,8 +388,6 @@ public class CultivationExecutionService {
         String state;
         if (targets.isEmpty()) {
             state = "当前无地方特产缺口";
-        } else if (!preferences.gatherEnabled()) {
-            state = "已暂停";
         } else {
             state = "待 CD-Aware-AutoGather 执行";
         }
@@ -411,8 +409,6 @@ public class CultivationExecutionService {
         String state;
         if (targets.isEmpty()) {
             state = "当前无怪物材料缺口";
-        } else if (!configuration.enabled()) {
-            state = "已暂停";
         } else {
             state = "待 FullyAutoAndSemiAutoTools 执行";
         }
@@ -448,7 +444,6 @@ public class CultivationExecutionService {
     }
 
     private static String weeklyBossState(CultivationModuleConfiguration configuration) {
-        if (!configuration.enabled()) return "已暂停";
         if (!Boolean.TRUE.equals(configuration.settings().get("unfairContractTerms"))) {
             return "需确认周本脚本风险条款";
         }

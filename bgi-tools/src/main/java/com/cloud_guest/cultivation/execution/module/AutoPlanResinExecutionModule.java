@@ -37,10 +37,6 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
                 new CultivationModuleSettingField("bgi_tools_http_push_all_boss_config", "首领常量接口", "text", false, null),
                 new CultivationModuleSettingField("bgi_tools_token", "工具集授权", "text", true, null),
                 new CultivationModuleSettingField("debug", "开发者模式", "switch", true, null),
-                new CultivationModuleSettingField("talentDomainEnabled", "天赋书秘境", "switch", true, null),
-                new CultivationModuleSettingField("weaponDomainEnabled", "武器突破秘境", "switch", true, null),
-                new CultivationModuleSettingField("moraLeyLineEnabled", "摩拉地脉", "switch", true, null),
-                new CultivationModuleSettingField("experienceLeyLineEnabled", "大英雄经验地脉", "switch", true, null),
                 new CultivationModuleSettingField("resinPriority", "秘境树脂启用项与优先顺序",
                         "ordered-multi-select", true, null,
                         List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂")),
@@ -76,10 +72,6 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
         result.put("bgi_tools_http_push_all_boss_config", "http://127.0.0.1:18081/bgi/auto/plan/boss/json/all");
         result.put("bgi_tools_token", "Authorization= ");
         result.put("debug", false);
-        result.put("talentDomainEnabled", true);
-        result.put("weaponDomainEnabled", true);
-        result.put("moraLeyLineEnabled", true);
-        result.put("experienceLeyLineEnabled", true);
         result.put("resinPriority", List.of("浓缩树脂", "原粹树脂"));
         result.put("craftingCountry", "枫丹");
         result.put("partyName", "");
