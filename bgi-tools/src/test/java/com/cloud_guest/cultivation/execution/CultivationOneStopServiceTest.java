@@ -219,6 +219,7 @@ class CultivationOneStopServiceTest {
                 .contains("targets.materialNamesByGrid")
                 .contains("for (const [gridScreenName, namesValue] of Object.entries(grouped))")
                 .contains("await countInventoryItems(names, gridScreenName)")
+                .contains("iconRecognitionMode: \"Item\"")
                 .contains("const retryNames = names.filter")
                 .contains("首次识别未知，仅对缺失项再复查一次")
                 .contains("未知项将保留上次可信库存")
