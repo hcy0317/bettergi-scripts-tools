@@ -68,6 +68,15 @@ public class CultivationMaterialCraftingCatalog {
                 int quality = parseInteger(values.get(qualityIndex), -1);
                 int id = parseMaterialId(values.get(idIndex));
                 String name = values.get(nameIndex).trim();
+                // New highest-tier rows may omit material_type while retaining contiguous ID and quality.
+                if (type.isBlank() && !tiers.isEmpty()) {
+                    CraftTier previous = tiers.getLast();
+                    if (id == previous.materialId() + 1
+                            && quality == previous.qualityLevel() + 1
+                            && quality <= maxCraftableQuality(previous.materialType())) {
+                        type = previous.materialType();
+                    }
+                }
                 if (!CRAFTABLE_TYPES.contains(type)
                         || quality <= 0
                         || quality > maxCraftableQuality(type)
