@@ -11,6 +11,8 @@ import com.cloud_guest.cultivation.execution.CultivationOneStopService;
 import com.cloud_guest.cultivation.execution.CultivationActionResultRequest;
 import com.cloud_guest.cultivation.execution.CultivationActionResultResponse;
 import com.cloud_guest.cultivation.execution.CultivationNextActionResponse;
+import com.cloud_guest.cultivation.execution.CultivationNextActionRequest;
+import com.cloud_guest.cultivation.execution.CultivationResinSnapshot;
 import com.cloud_guest.cultivation.execution.CultivationPlanDrivenExecutionService;
 import com.cloud_guest.cultivation.execution.CultivationInventoryObservationRequest;
 import com.cloud_guest.cultivation.execution.CultivationInventoryObservationResponse;
@@ -99,11 +101,25 @@ public class CultivationPlanController {
     }
 
     @PostMapping("execution/next-action")
-    @Operation(summary = "领取一个带租约的养成行动；每次只发放一个安全批次")
+    @Operation(summary = "按实时树脂快照领取一个带租约的体力行动或合成批次")
     public Result<CultivationNextActionResponse> nextAction(
             @RequestParam String uid,
-            @RequestParam String executorId) {
-        return ok(planDrivenExecutionService.claim(uid, executorId));
+            @RequestParam String executorId,
+            @RequestParam(required = false) Integer originalResinCount,
+            @RequestParam(required = false) Integer condensedResinCount,
+            @RequestParam(required = false) Integer transientResinCount,
+            @RequestParam(required = false) Integer fragileResinCount) {
+        CultivationNextActionRequest request = originalResinCount == null
+                && condensedResinCount == null
+                && transientResinCount == null
+                && fragileResinCount == null
+                ? null
+                : new CultivationNextActionRequest(new CultivationResinSnapshot(
+                        Math.max(originalResinCount == null ? 0 : originalResinCount, 0),
+                        Math.max(condensedResinCount == null ? 0 : condensedResinCount, 0),
+                        Math.max(transientResinCount == null ? 0 : transientResinCount, 0),
+                        Math.max(fragileResinCount == null ? 0 : fragileResinCount, 0)));
+        return ok(planDrivenExecutionService.claim(uid, executorId, request));
     }
 
     @PostMapping("execution/actions/{actionId}/result")

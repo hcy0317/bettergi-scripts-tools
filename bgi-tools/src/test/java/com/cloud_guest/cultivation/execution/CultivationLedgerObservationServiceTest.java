@@ -81,7 +81,7 @@ class CultivationLedgerObservationServiceTest {
                 new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
 
         assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
-        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(7);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(6);
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(3);
     }
 
@@ -97,7 +97,7 @@ class CultivationLedgerObservationServiceTest {
 
         assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
-        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(4);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
     }
 
     @Test
@@ -152,7 +152,60 @@ class CultivationLedgerObservationServiceTest {
     }
 
     @Test
-    void repeatedCompleteInventoryBatchCannotReplaceANewImportBaseline() throws Exception {
+    void plannedCraftBatchConsumptionDoesNotTriggerTheDecreaseGate() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity before = inventoryBatch(
+                "before-craft-batch", Map.of("「公平」的指引", 6L, "「公平」的哲学", 0L));
+        CultivationCraftingAction batchItem = new CultivationCraftingAction(
+                "「公平」的哲学", 2, "角色天赋素材");
+        CultivationExecutionActionEntity craftBatch = new CultivationExecutionActionEntity();
+        craftBatch.setId("craft-batch");
+        craftBatch.setUid("102550550");
+        craftBatch.setPlanRevision(3);
+        craftBatch.setStatus("COMPLETED");
+        craftBatch.setActionType("CRAFT_BATCH");
+        craftBatch.setMaterialName("__craft_batch__");
+        craftBatch.setPlanJson(objectMapper().writeValueAsString(
+                new CultivationCraftBatchPayload("枫丹", List.of(batchItem))));
+        craftBatch.setRewardsJson("{\"「公平」的哲学\":2}");
+        CultivationExecutionActionEntity after = inventoryBatch(
+                "after-craft-batch", Map.of("「公平」的指引", 0L, "「公平」的哲学", 2L));
+        when(mapper.findCompletedObservations("102550550", 3))
+                .thenReturn(List.of(after, craftBatch, before));
+        var family = new CultivationMaterialCraftingCatalog.CraftFamily(
+                "「公平」",
+                List.of(
+                        new CultivationMaterialCraftingCatalog.CraftTier(
+                                1, "「公平」的指引", "角色天赋素材", 3),
+                        new CultivationMaterialCraftingCatalog.CraftTier(
+                                2, "「公平」的哲学", "角色天赋素材", 4)));
+        when(planner.family("「公平」的哲学")).thenReturn(Optional.of(family));
+        when(planner.plan(anyList())).thenReturn(new CultivationMaterialCraftingPlan(
+                Map.of("「公平」的指引", 0L, "「公平」的哲学", 0L), List.of()));
+        CultivationPlanRevisionResponse imported = new CultivationPlanRevisionResponse(
+                1L, "102550550", 3, "IMPORTED", "name-only-v1", 2L,
+                "sha", "engine", "model",
+                List.of(
+                        new CultivationLedgerEntry(
+                                0, "「公平」的指引", 0, 6, 6L, 0,
+                                RemainingEvidence.OCR, 1.0, false, List.of()),
+                        new CultivationLedgerEntry(
+                                1, "「公平」的哲学", 2, 0, 0L, 2,
+                                RemainingEvidence.OCR, 1.0, false, List.of())),
+                LocalDateTime.of(2026, 8, 23, 20, 0));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner)
+                        .effective(imported);
+
+        assertThat(effective.state()).isEqualTo("COMPLETED");
+        assertThat(effective.requirements())
+                .allSatisfy(entry -> assertThat(entry.remaining()).isZero());
+    }
+
+    @Test
+    void repeatedCompleteInventoryBatchConfirmsConsumptionWithoutReplacingTheImportBaseline() throws Exception {
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity before = inventoryBatch(
                 "before-external-consumption", Map.of("「公平」的哲学", 8L));
@@ -167,8 +220,42 @@ class CultivationLedgerObservationServiceTest {
                 new CultivationLedgerObservationService(mapper, objectMapper())
                         .effective(revision(10, 4, 6));
 
-        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements().getFirst().baselineOwned()).isEqualTo(4);
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
+    }
+
+    @Test
+    void failedCraftDoesNotPermanentlyBlockAConfirmedInventoryDecrease() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity before = inventoryBatch(
+                "before-failed-craft", Map.of("「公平」的哲学", 8L));
+        CultivationExecutionActionEntity failedCraft = new CultivationExecutionActionEntity();
+        failedCraft.setId("failed-craft");
+        failedCraft.setUid("102550550");
+        failedCraft.setPlanRevision(3);
+        failedCraft.setStatus("COMPLETED");
+        failedCraft.setActionType("CRAFT");
+        failedCraft.setMaterialName("「公平」的哲学");
+        failedCraft.setPlanJson("{\"quantity\":3}");
+        failedCraft.setRewardsJson("{}");
+        failedCraft.setTerminationReason("FAILED:未找到材料");
+        CultivationExecutionActionEntity decrease = inventoryBatch(
+                "after-failed-craft", Map.of("「公平」的哲学", 6L));
+        CultivationExecutionActionEntity confirmation = inventoryBatch(
+                "confirmed-after-failed-craft", Map.of("「公平」的哲学", 6L));
+        when(mapper.findCompletedObservations("102550550", 3))
+                .thenReturn(List.of(confirmation, decrease, failedCraft, before));
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper())
+                        .effective(revision(10, 4, 6));
+
+        assertThat(effective.state()).isEqualTo("ACTIVE");
+        assertThat(effective.requirements().getFirst().baselineOwned()).isEqualTo(4);
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(6);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
     }
 
     @Test
@@ -338,6 +425,48 @@ class CultivationLedgerObservationServiceTest {
 
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(8);
         assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
+    }
+
+    @Test
+    void evaluationPublishesConvertedRemainingWithoutDroppingTheCraftBatch() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationMaterialCraftingPlanner planner = mock(CultivationMaterialCraftingPlanner.class);
+        CultivationExecutionActionEntity batch = inventoryBatch("inventory-batch", Map.of(
+                "「公平」的指引", 6L,
+                "「公平」的哲学", 4L));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(batch));
+        when(planner.family("「公平」的哲学")).thenReturn(Optional.of(
+                new CultivationMaterialCraftingCatalog.CraftFamily(
+                        "「公平」",
+                        List.of(
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        1, "「公平」的指引", "角色天赋素材", 3),
+                                new CultivationMaterialCraftingCatalog.CraftTier(
+                                        2, "「公平」的哲学", "角色天赋素材", 4)))));
+        CultivationCraftingAction craft = new CultivationCraftingAction(
+                "「公平」的哲学", 2, "角色天赋素材");
+        when(planner.plan(anyList())).thenAnswer(invocation -> {
+            List<CultivationLedgerEntry> entries = invocation.getArgument(0);
+            assertThat(entries).filteredOn(entry -> "「公平」的指引".equals(entry.materialName()))
+                    .singleElement().satisfies(entry -> {
+                        assertThat(entry.required()).isZero();
+                        assertThat(entry.currentOwned()).isEqualTo(6);
+                    });
+            return new CultivationMaterialCraftingPlan(
+                    Map.of("「公平」的哲学", 0L, "「公平」的指引", 0L),
+                    List.of(craft));
+        });
+        CultivationPlanRevisionResponse imported = revision(10, 4, 6);
+
+        CultivationLedgerEvaluation evaluation =
+                new CultivationLedgerObservationService(mapper, objectMapper(), planner)
+                        .evaluate(imported);
+
+        assertThat(evaluation.ledger().state()).isEqualTo("NEEDS_CRAFT");
+        assertThat(evaluation.ledger().requirements())
+                .filteredOn(entry -> "「公平」的哲学".equals(entry.materialName()))
+                .singleElement().extracting(CultivationLedgerEntry::remaining).isEqualTo(0L);
+        assertThat(evaluation.craftingPlan().actions()).containsExactly(craft);
     }
 
     @Test

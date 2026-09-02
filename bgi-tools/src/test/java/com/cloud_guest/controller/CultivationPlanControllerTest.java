@@ -7,7 +7,9 @@ import com.cloud_guest.cultivation.execution.CultivationInventoryObservationRequ
 import com.cloud_guest.cultivation.execution.CultivationInventoryObservationResponse;
 import com.cloud_guest.cultivation.execution.CultivationExecutionService;
 import com.cloud_guest.cultivation.execution.CultivationOneStopService;
+import com.cloud_guest.cultivation.execution.CultivationNextActionRequest;
 import com.cloud_guest.cultivation.execution.CultivationPlanDrivenExecutionService;
+import com.cloud_guest.cultivation.execution.CultivationResinSnapshot;
 import com.cloud_guest.cultivation.execution.CultivationScriptGroupSyncService;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
@@ -27,6 +29,35 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class CultivationPlanControllerTest {
+
+    @Test
+    void nextActionKeepsLegacyCallsWithoutAResinSnapshotCompatible() {
+        CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
+        CultivationPlanController controller = new CultivationPlanController(
+                mock(CultivationPlanApplicationService.class), mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                mock(CultivationOneStopService.class), planDrivenService);
+
+        controller.nextAction("102550550", "legacy-executor", null, null, null, null);
+
+        verify(planDrivenService).claim("102550550", "legacy-executor", null);
+    }
+
+    @Test
+    void nextActionBuildsTheExactResinSnapshotFromQueryParameters() {
+        CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
+        CultivationPlanController controller = new CultivationPlanController(
+                mock(CultivationPlanApplicationService.class), mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                mock(CultivationOneStopService.class), planDrivenService);
+
+        controller.nextAction("102550550", "snapshot-executor", 10, 2, 1, 0);
+
+        verify(planDrivenService).claim(
+                "102550550",
+                "snapshot-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(10, 2, 1, 0)));
+    }
 
     @Test
     void automaticallyGeneratesTheUidSpecificGroupAfterConfirmingANewLedgerRevision() {

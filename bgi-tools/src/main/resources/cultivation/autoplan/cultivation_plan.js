@@ -1,4 +1,5 @@
 import {taskHandlerMap} from "./load_check_run";
+import {Physical} from "./physical";
 
 function apiHeaders(token) {
     const headers = {"Content-Type": "application/json"};
@@ -55,6 +56,36 @@ async function countInventoryItems(names, gridScreenName, iconRecognitionMode = 
         itemNames: names,
         iconRecognitionMode,
     }));
+}
+
+async function scanResinSnapshot() {
+    try {
+        const snapshot = await Physical.countAllResin();
+        const normalized = {
+            originalResinCount: Math.max(0, Number(snapshot?.originalResinCount) || 0),
+            condensedResinCount: Math.max(0, Number(snapshot?.condensedResinCount) || 0),
+            transientResinCount: Math.max(0, Number(snapshot?.transientResinCount) || 0),
+            fragileResinCount: Math.max(0, Number(snapshot?.fragileResinCount) || 0),
+        };
+        log.info("[计划驱动] 树脂快照：原粹={0}，浓缩={1}，须臾={2}，脆弱={3}",
+            normalized.originalResinCount,
+            normalized.condensedResinCount,
+            normalized.transientResinCount,
+            normalized.fragileResinCount);
+        return normalized;
+    } catch (error) {
+        log.warn("[计划驱动] 树脂快照识别失败，保留 AutoDomain 自身预检：{0}",
+            error?.message ?? String(error));
+        return null;
+    }
+}
+
+function resinSnapshotQuery(snapshot) {
+    if (!snapshot) return "";
+    return `&originalResinCount=${encodeURIComponent(snapshot.originalResinCount)}`
+        + `&condensedResinCount=${encodeURIComponent(snapshot.condensedResinCount)}`
+        + `&transientResinCount=${encodeURIComponent(snapshot.transientResinCount)}`
+        + `&fragileResinCount=${encodeURIComponent(snapshot.fragileResinCount)}`;
 }
 
 async function observeOwnedByGrid(materialNamesByGrid, fallbackNames) {
@@ -196,24 +227,48 @@ async function executeAction(baseUrl, action, executorId, token) {
 
     if (executionError) throw executionError;
     if (Object.keys(rewards).length === 0) {
-        log.warn(`[计划驱动] 行动未产生奖励，停止本轮执行，避免重复发放同一行动`);
-        return false;
+        log.warn(`[计划驱动] 行动未产生奖励，重新领取以选择批量合成或安全停止`);
+        return result.status === "STOPPED_NO_PROGRESS";
     }
     return result.status === "REPLANNING";
 }
 
-async function executeCraftAction(baseUrl, action, executorId, config) {
-    let craftResult = null;
-    let executionError = null;
+async function executeCraftBatchAction(baseUrl, action, executorId, config) {
+    const craftActions = Array.isArray(action.craftActions) ? action.craftActions : [];
+    if (craftActions.length === 0) {
+        log.error("[计划驱动] 批量合成行动没有可执行材料");
+        return {shouldContinue: false, shouldReconcile: false};
+    }
+
+    const rewards = {};
+    const failures = [];
     try {
-        log.info(`[计划驱动] 前往 {0} 合成台，将合成 {1} x{2}`,
-            action.craftCountry, action.materialName, action.batchLimit);
+        log.info("[计划驱动] 前往 {0} 合成台，将连续执行 {1} 个合成步骤",
+            action.craftCountry, craftActions.length);
         await genshin.GoToCraftingBench(action.craftCountry);
-        craftResult = await genshin.CraftMaterial(
-            action.materialName, action.batchLimit, action.craftMaterialType);
-    } catch (error) {
-        executionError = error;
-        log.error(`[计划驱动] 材料合成失败：{0}`, error?.message ?? String(error));
+        for (const craftAction of craftActions) {
+            try {
+                log.info("[计划驱动] 批量合成：{0} x{1}",
+                    craftAction.materialName, craftAction.quantity);
+                const craftResult = await genshin.CraftMaterial(
+                    craftAction.materialName,
+                    craftAction.quantity,
+                    craftAction.materialType);
+                const actualQuantity = Number(
+                    craftResult?.actualQuantity ?? craftResult?.ActualQuantity ?? 0);
+                if (Number.isFinite(actualQuantity) && actualQuantity > 0) {
+                    rewards[craftAction.materialName] =
+                        (rewards[craftAction.materialName] ?? 0) + Math.trunc(actualQuantity);
+                } else {
+                    failures.push(`${craftAction.materialName}:未取得有效合成数量`);
+                }
+            } catch (error) {
+                const message = error?.message ?? String(error);
+                failures.push(`${craftAction.materialName}:${message}`);
+                log.error("[计划驱动] 批量合成单项失败：{0}，{1}",
+                    craftAction.materialName, message);
+            }
+        }
     } finally {
         try {
             await genshin.ReturnMainUi();
@@ -222,25 +277,26 @@ async function executeCraftAction(baseUrl, action, executorId, config) {
         }
     }
 
-    const actualQuantity = Number(craftResult?.actualQuantity ?? craftResult?.ActualQuantity ?? 0);
-    let observedOwned = null;
-    try {
-        observedOwned = await observeOwned(action.materialName, "CharacterDevelopmentItems");
-    } catch (error) {
-        log.error(`[计划驱动] 合成产物库存复核失败：{0}`, error?.message ?? String(error));
-    }
-    const rewards = Number.isFinite(actualQuantity) && actualQuantity > 0
-        ? {[action.materialName]: Math.trunc(actualQuantity)}
-        : {};
+    const completedAny = Object.keys(rewards).length > 0;
+    const terminationReason = completedAny
+        ? failures.length === 0
+            ? "CRAFT_BATCH_COMPLETED"
+            : `CRAFT_BATCH_PARTIAL:${failures.join("|")}`
+        : `NO_PROGRESS:CRAFT_BATCH_FAILED:${failures.join("|")}`;
     const result = await reportResult(
-        baseUrl, action, executorId, observedOwned,
-        executionError == null && Object.keys(rewards).length > 0,
-        executionError == null ? "CRAFT_COMPLETED" : `FAILED:${executionError?.message ?? executionError}`,
+        baseUrl, action, executorId, 0,
+        completedAny,
+        terminationReason,
         rewards, config.bgi_tools.token);
-    log.info(`[计划驱动] 合成回写状态：{0}，{1}`, result.status, result.message);
-    if (executionError) throw executionError;
-    if (Object.keys(rewards).length === 0) return false;
-    return result.status === "REPLANNING";
+    log.info("[计划驱动] 批量合成回写状态：{0}，成功 {1}/{2} 项，{3}",
+        result.status,
+        Object.keys(rewards).length,
+        craftActions.length,
+        result.message);
+    return {
+        shouldContinue: result.status === "REPLANNING",
+        shouldReconcile: true,
+    };
 }
 
 async function runInventoryReconcileOnce(config, state, reason) {
@@ -281,16 +337,18 @@ export async function runPlanDrivenCultivation(config) {
     config.run.exclude_run_exception = false;
     config.run.loop_plan = false;
     const inventoryReconcileState = {attempted: false};
-    log.info(`[计划驱动] 已启用：每次只领取一个行动，权威库存回写后重新规划`);
+    log.info(`[计划驱动] 已启用：合成按完整批次执行，其余任务每次领取一个行动`);
 
     const startRefreshCompleted = await refreshCurrentOwned(config, "计划开始前");
     if (!startRefreshCompleted) {
         log.warn("[计划驱动] 计划开始前库存存在未知项，继续使用上次可信库存；计划器可再请求一次有界复核");
     }
+    let resinSnapshot = await scanResinSnapshot();
     try {
         while (true) {
             const claimUrl = `${baseUrl}/execution/next-action?uid=${encodeURIComponent(uid)}`
-                + `&executorId=${encodeURIComponent(executorId)}`;
+                + `&executorId=${encodeURIComponent(executorId)}`
+                + resinSnapshotQuery(resinSnapshot);
             const action = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
             if (action.status === "NEEDS_RECONCILE") {
                 log.warn(`[计划驱动] 上一行动仅执行背包复核，不再消耗树脂：{0}`, action.materialName);
@@ -311,7 +369,8 @@ export async function runPlanDrivenCultivation(config) {
                 const reconcile = await runInventoryReconcileOnce(
                     config, inventoryReconcileState, `计划请求复核：${action.message}`);
                 if (reconcile.succeeded && reconcile.performed) {
-                    const afterReconcile = await requestJson("POST", claimUrl, {}, config.bgi_tools.token);
+                    const afterReconcile = await requestJson(
+                        "POST", claimUrl, {}, config.bgi_tools.token);
                     if (afterReconcile.status === "ACTION" || afterReconcile.status === "NEEDS_RECONCILE") {
                         action.status = afterReconcile.status;
                         Object.assign(action, afterReconcile);
@@ -331,15 +390,21 @@ export async function runPlanDrivenCultivation(config) {
                 log.info(`[计划驱动] 停止领取：{0}，{1}`, action.status, action.message);
                 return;
             }
-            if (action.actionType === "CRAFT") {
-                const shouldContinue = await executeCraftAction(baseUrl, action, executorId, config);
-                if (!shouldContinue) return;
-                log.warn("[计划驱动] 合成 {0} 后强制完整库存复核", action.materialName);
-                if (!await runCultivationInventoryReconcile(config)) return;
+            if (action.actionType === "CRAFT_BATCH") {
+                const batchResult = await executeCraftBatchAction(
+                    baseUrl, action, executorId, config);
+                if (batchResult.shouldReconcile) {
+                    log.warn("[计划驱动] 批量合成后强制完整库存复核");
+                    if (!await runCultivationInventoryReconcile(config)) return;
+                }
+                if (!batchResult.shouldContinue) return;
                 continue;
             }
             const shouldContinue = await executeAction(
                 baseUrl, action, executorId, config.bgi_tools.token);
+            if (action.actionType === "DOMAIN" || action.actionType === "WORLD_BOSS") {
+                resinSnapshot = await scanResinSnapshot();
+            }
             if (!shouldContinue) return;
         }
     } finally {
