@@ -27,6 +27,18 @@ class CultivationMaterialCraftingPlannerTest {
         assertThat(catalog.family("「笃行」的指引").orElseThrow().tiers())
                 .extracting(CultivationMaterialCraftingCatalog.CraftTier::qualityLevel)
                 .containsExactly(2, 3, 4);
+        assertThat(catalog.family("「慈爱」的哲学").orElseThrow().tiers())
+                .extracting(
+                        CultivationMaterialCraftingCatalog.CraftTier::materialName,
+                        CultivationMaterialCraftingCatalog.CraftTier::materialType,
+                        CultivationMaterialCraftingCatalog.CraftTier::qualityLevel)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("「慈爱」的教导", "角色天赋素材", 2),
+                        org.assertj.core.groups.Tuple.tuple("「慈爱」的指引", "角色天赋素材", 3),
+                        org.assertj.core.groups.Tuple.tuple("「慈爱」的哲学", "角色天赋素材", 4));
+        assertThat(catalog.family("幻造晶鳞石").orElseThrow().tiers())
+                .extracting(CultivationMaterialCraftingCatalog.CraftTier::materialName)
+                .containsExactly("幻造萤屑", "幻造裂晶", "幻造晶鳞石");
         assertThat(catalog.family("智识之冕")).isEmpty();
         assertThat(catalog.family("沙脂蛹")).isEmpty();
     }
@@ -136,9 +148,15 @@ class CultivationMaterialCraftingPlannerTest {
                 material:104336,material:104336,「笃行」的指引,角色天赋素材,,3,,,x
                 material:104337,material:104337,「笃行」的哲学,角色天赋素材,,4,,,x
                 material:104338,material:104338,智识之冕,角色天赋素材,,5,,,x
+                material:104365,material:104365,「慈爱」的教导,角色天赋素材,,2,,,x
+                material:104366,material:104366,「慈爱」的指引,角色天赋素材,,3,,,x
+                material:104367,material:104367,「慈爱」的哲学,,,4,,,x
                 material:112080,material:112080,异海凝珠,角色与武器培养素材,,1,,,x
                 material:112081,material:112081,异海之块,角色与武器培养素材,,2,,,x
                 material:112082,material:112082,异色结晶石,角色与武器培养素材,,3,,,x
+                material:112146,material:112146,幻造萤屑,角色与武器培养素材,,1,,,x
+                material:112147,material:112147,幻造裂晶,角色与武器培养素材,,2,,,x
+                material:112148,material:112148,幻造晶鳞石,,,3,,,x
                 material:101222,material:101222,沙脂蛹,角色突破素材,,0,,,x
                 """);
     }
