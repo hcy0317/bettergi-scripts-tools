@@ -12,7 +12,7 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
 
     @Override public String moduleId() { return ID; }
     @Override public String displayName() { return "自动体力计划"; }
-    @Override public String adapterVersion() { return "1.2"; }
+    @Override public String adapterVersion() { return "1.3"; }
     @Override public String description() { return "秘境、地脉与首领的单轮行动入口"; }
     @Override public String integrationState() { return "已接入行动投影"; }
     @Override public List<String> capabilities() { return List.of("天赋秘境", "武器秘境", "地脉", "世界首领", "执行后重规划"); }
@@ -37,14 +37,18 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
                 new CultivationModuleSettingField("bgi_tools_http_push_all_boss_config", "首领常量接口", "text", false, null),
                 new CultivationModuleSettingField("bgi_tools_token", "工具集授权", "text", true, null),
                 new CultivationModuleSettingField("debug", "开发者模式", "switch", true, null),
+                new CultivationModuleSettingField("talentDomainEnabled", "启用天赋秘境", "switch", true, null),
+                new CultivationModuleSettingField("weaponDomainEnabled", "启用武器秘境", "switch", true, null),
+                new CultivationModuleSettingField("moraLeyLineEnabled", "启用摩拉地脉", "switch", true, null),
+                new CultivationModuleSettingField("experienceLeyLineEnabled", "启用经验地脉", "switch", true, null),
                 new CultivationModuleSettingField("resinPriority", "秘境树脂启用项与优先顺序",
                         "ordered-multi-select", true, null,
                         List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂")),
                 new CultivationModuleSettingField("craftingCountry", "材料合成台地区", "select", true, null,
-                        List.of("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱")),
+                        List.of("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱", "至冬")),
                 new CultivationModuleSettingField("partyName", "秘境与地脉队伍", "party-select", true, "uid-parties"),
                 new CultivationModuleSettingField("leyLineCountry", "地脉地区", "select", true, null,
-                        List.of("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱")),
+                        List.of("蒙德", "璃月", "稻妻", "须弥", "枫丹", "纳塔", "挪德卡莱", "至冬")),
                 new CultivationModuleSettingField("bossPartyName", "首领讨伐队伍", "party-select", true, "uid-parties"),
                 new CultivationModuleSettingField("bossStrategyName", "首领战斗策略", "strategy-select", true,
                         "combat-strategies"),
@@ -72,6 +76,10 @@ public class AutoPlanResinExecutionModule implements CultivationExecutionModule 
         result.put("bgi_tools_http_push_all_boss_config", "http://127.0.0.1:18081/bgi/auto/plan/boss/json/all");
         result.put("bgi_tools_token", "Authorization= ");
         result.put("debug", false);
+        result.put("talentDomainEnabled", true);
+        result.put("weaponDomainEnabled", true);
+        result.put("moraLeyLineEnabled", true);
+        result.put("experienceLeyLineEnabled", true);
         result.put("resinPriority", List.of("浓缩树脂", "原粹树脂"));
         result.put("craftingCountry", "枫丹");
         result.put("partyName", "");

@@ -29,7 +29,7 @@ class CultivationModuleRegistryTest {
                 .contains("partyName", "partyName2nd", "targetCountOfSelected", "manualSetAccountName");
         assertThat(registry.require(AutoPlanResinExecutionModule.ID).settingsSchema())
                 .extracting(CultivationModuleSettingField::key)
-                .doesNotContain(
+                .contains(
                         "talentDomainEnabled",
                         "weaponDomainEnabled",
                         "moraLeyLineEnabled",

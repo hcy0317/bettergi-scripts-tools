@@ -22,9 +22,19 @@ class CultivationMaterialSourceCatalogTest {
                 "User", "JsScript", "AutoHoeingOneDragon", "assets", "monsterInfo.json"));
         Files.createDirectories(asset.getParent());
         Files.writeString(asset, """
-                [{"name":"镀金旅团·机弩兵","item":["织金红绸"],"tags":[]}]
+                [
+                  {"name":"镀金旅团·机弩兵","item":["织金红绸"],"tags":[]},
+                  {"name":"凝冰戍卫","item":["幻造晶鳞石"],"tags":[]},
+                  {"name":"嵌合角熊","item":["并生嵌合胞"],"tags":[]},
+                  {"name":"兽怪捷掠者","item":["沉积增生物"],"tags":[]},
+                  {"name":"幼嫩的分节树","item":["灵生分蘖节"],"tags":[]}
+                ]
                 """);
         Files.createDirectories(temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "镀金旅团")));
+        Files.createDirectories(temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "肌生晶石的妖精")));
+        Files.createDirectories(temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "异种合成魔兽")));
+        Files.createDirectories(temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "兽怪暴徒")));
+        Files.createDirectories(temporaryRoot.resolve(Path.of("User", "AutoPathing", "敌人与魔物", "荒野树妖")));
         Path specialtyRoute = temporaryRoot.resolve(Path.of(
                 "User", "AutoPathing", "地方特产", "挪德卡莱", "月矩力结晶", "路线", "01.json"));
         Files.createDirectories(specialtyRoute.getParent());
@@ -41,7 +51,23 @@ class CultivationMaterialSourceCatalogTest {
         assertThat(catalog.findBoss("谜土的护符")).get()
                 .extracting(CultivationMaterialSourceCatalog.BossSource::bossName)
                 .isEqualTo("灵觉隐修的迷者");
+        assertThat(catalog.findBoss("焰中不灭花枝")).get()
+                .extracting(CultivationMaterialSourceCatalog.BossSource::bossName)
+                .isEqualTo("不灭衍生造物");
         assertThat(catalog.findWeeklyBoss("无光涡眼")).contains("吞星之鲸");
+        assertThat(catalog.findWeeklyBoss("扭曲的枯枝")).contains("世界树博士");
+        assertThat(catalog.findMonster("幻造晶鳞石")).get()
+                .extracting(CultivationMaterialSourceCatalog.MonsterSource::routeFamily)
+                .isEqualTo("肌生晶石的妖精");
+        assertThat(catalog.findMonster("并生嵌合胞")).get()
+                .extracting(CultivationMaterialSourceCatalog.MonsterSource::routeFamily)
+                .isEqualTo("异种合成魔兽");
+        assertThat(catalog.findMonster("沉积增生物")).get()
+                .extracting(CultivationMaterialSourceCatalog.MonsterSource::routeFamily)
+                .isEqualTo("兽怪暴徒");
+        assertThat(catalog.findMonster("灵生分蘖节")).get()
+                .extracting(CultivationMaterialSourceCatalog.MonsterSource::routeFamily)
+                .isEqualTo("荒野树妖");
         assertThat(catalog.findSpecialtyCountry("月矩力结晶")).contains("挪德卡莱");
     }
 

@@ -216,6 +216,16 @@ public class CultivationExecutionService {
         return List.copyOf(selected);
     }
 
+    public CultivationResinActionSwitches resinActionSwitches(String uid) {
+        CultivationModuleConfiguration configuration = configurationService.find(
+                requireUid(uid), AutoPlanResinExecutionModule.ID);
+        return new CultivationResinActionSwitches(
+                enabled(configuration, "talentDomainEnabled"),
+                enabled(configuration, "weaponDomainEnabled"),
+                enabled(configuration, "moraLeyLineEnabled"),
+                enabled(configuration, "experienceLeyLineEnabled"));
+    }
+
     public Map<String, List<String>> inventoryReconcileTargets(String uid) {
         CultivationPlanRevisionResponse ledger = latestLedger(uid);
         if (ledger == null) return Map.of();
@@ -254,6 +264,13 @@ public class CultivationExecutionService {
                 requireUid(uid), AutoPlanResinExecutionModule.ID);
         String country = setting(configuration, "craftingCountry");
         return country.isBlank() ? "枫丹" : country;
+    }
+
+    public String leyLineCountry(String uid) {
+        CultivationModuleConfiguration configuration = configurationService.find(
+                requireUid(uid), AutoPlanResinExecutionModule.ID);
+        String country = setting(configuration, "leyLineCountry");
+        return country.isBlank() ? "挪德卡莱" : country;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -452,6 +469,13 @@ public class CultivationExecutionService {
     private static List<String> stringList(Object value) {
         if (!(value instanceof Collection<?> collection)) return List.of();
         return collection.stream().map(String::valueOf).filter(item -> !item.isBlank()).toList();
+    }
+
+    private static boolean enabled(CultivationModuleConfiguration configuration, String key) {
+        Object value = configuration.settings().get(key);
+        if (value == null) return true;
+        if (value instanceof Boolean selected) return selected;
+        return Boolean.parseBoolean(String.valueOf(value));
     }
 
     private static Map<String, Object> weeklyBossSettings(

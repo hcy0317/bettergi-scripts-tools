@@ -6,6 +6,7 @@ import com.cloud_guest.cultivation.persistence.CultivationExecutionActionEntity;
 import com.cloud_guest.cultivation.persistence.CultivationExecutionActionMapper;
 import com.cloud_guest.entitys.common.auto_plan.AutoBoss;
 import com.cloud_guest.entitys.common.auto_plan.AutoDomain;
+import com.cloud_guest.entitys.common.auto_plan.AutoLeyLineOutcrop;
 import com.cloud_guest.entitys.common.auto_plan.AutoPlan;
 import com.cloud_guest.entitys.common.auto_plan.Physical;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -692,12 +693,16 @@ public class CultivationPlanDrivenExecutionService {
                 ? List.of("浓缩树脂", "原粹树脂")
                 : configuredResinPriority;
         boolean canSpendResin = resinSnapshot == null || resinSnapshot.hasUsableResin(resinPriority);
+        CultivationResinActionSwitches switches = executionService.resinActionSwitches(projection.uid());
+        if (switches == null) switches = CultivationResinActionSwitches.allEnabled();
+        CultivationResinActionSwitches enabledSwitches = switches;
         Candidate domain = canSpendResin ? projection.resinActions().stream()
-                .filter(action -> "秘境".equals(action.actionType()))
+                .filter(action -> "秘境".equals(action.actionType()) || "地脉".equals(action.actionType()))
+                .filter(enabledSwitches::allows)
                 .filter(action -> action.availableDays().isEmpty() || action.availableDays().contains(today))
                 .filter(action -> !"已暂停".equals(action.actionState()))
                 .sorted(Comparator.comparingLong(CultivationExecutionProjection.ResinAction::remaining))
-                .map(action -> domain(action, resinPriority)).findFirst().orElse(null) : null;
+                .map(action -> resinAction(projection.uid(), action, resinPriority)).findFirst().orElse(null) : null;
         if (domain != null) return domain;
 
         Candidate boss = canSpendResin ? projection.bossActions().stream()
@@ -730,6 +735,26 @@ public class CultivationPlanDrivenExecutionService {
                 action.partyName(), 1, physical(resinPriority)));
         return new Candidate("DOMAIN", action.materialName(), action.remaining(), 1, plan, null, null, List.of(),
                 "今天开放该材料秘境；按账本缺口发放一个安全批次，完成后强制清点并重规划");
+    }
+
+    private Candidate resinAction(String uid,
+                                  CultivationExecutionProjection.ResinAction action,
+                                  List<String> resinPriority) {
+        return "地脉".equals(action.actionType())
+                ? leyLine(uid, action, resinPriority)
+                : domain(action, resinPriority);
+    }
+
+    private Candidate leyLine(String uid,
+                              CultivationExecutionProjection.ResinAction action,
+                              List<String> resinPriority) {
+        AutoPlan plan = basePlan(List.of(), "经验与摩拉", "地脉");
+        plan.setAutoLeyLineOutcrop(new AutoLeyLineOutcrop(
+                1, executionService.leyLineCountry(uid), action.sourceName(), true, "",
+                action.partyName(), 120, false,
+                resinPriority.contains("脆弱树脂"), resinPriority.contains("须臾树脂"), false));
+        return new Candidate("DOMAIN", action.materialName(), action.remaining(), 1, plan, null, null, List.of(),
+                "按开关发放一个地脉安全批次，完成后强制清点并重规划");
     }
 
     private Candidate boss(CultivationExecutionProjection.BossAction action) {

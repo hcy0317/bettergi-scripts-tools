@@ -334,6 +334,10 @@ public class CultivationOneStopService {
             settings.put("bgi_tools_http_push_all_country_config", autoPlanBase + "/country/json/all");
             settings.put("bgi_tools_http_push_all_boss_config", autoPlanBase + "/boss/json/all");
             settings.put("cultivation_plan_mode", true);
+            putBooleanDefault(settings, "talentDomainEnabled", true);
+            putBooleanDefault(settings, "weaponDomainEnabled", true);
+            putBooleanDefault(settings, "moraLeyLineEnabled", true);
+            putBooleanDefault(settings, "experienceLeyLineEnabled", true);
             settings.put("run_config", "");
             settings.set("auto_check", objectMapper.createArrayNode());
             settings.put("bgi_tools_token", "");
@@ -1217,6 +1221,10 @@ public class CultivationOneStopService {
     private static boolean booleanSetting(Map<String, Object> settings, String key, boolean fallback) {
         Object value = settings.get(key);
         return value == null ? fallback : Boolean.parseBoolean(String.valueOf(value));
+    }
+
+    private static void putBooleanDefault(ObjectNode settings, String key, boolean fallback) {
+        if (!settings.has(key)) settings.put(key, fallback);
     }
 
     private static List<String> stringList(JsonNode value) {
