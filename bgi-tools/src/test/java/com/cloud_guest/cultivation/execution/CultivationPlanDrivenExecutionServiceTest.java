@@ -727,8 +727,8 @@ class CultivationPlanDrivenExecutionServiceTest {
                 gather, monster, List.of(), new CultivationExecutionPreferences(
                 "102550550", "", "", "", true), List.of(), List.of(), List.of(
                 new CultivationExecutionProjection.MaterialProgress(
-                        "沙脂蛹", 4, 168, 164, "沙脂蛹", 0, 1, 0),
+                        "沙脂蛹", 4, 168, 164, "沙脂蛹", 0, 1, 0, 0),
                 new CultivationExecutionProjection.MaterialProgress(
-                        "织金红绸", 59, 129, 70, "织金红绸", 0, 1, 0)));
+                        "织金红绸", 59, 129, 70, "织金红绸", 0, 1, 0, 0)));
     }
 }

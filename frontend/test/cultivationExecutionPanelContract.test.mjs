@@ -34,6 +34,9 @@ test('cultivation progress distinguishes owned completion from pending crafting'
   assert.match(progressSource, /还需 \$\{formatCount\(gap\)\}（待合成）/)
   assert.match(progressSource, /'is-complete': isOwnedComplete\(item\)/)
   assert.doesNotMatch(progressSource, /'is-complete': item\.remaining <= 0/)
+  assert.match(progressSource, /经验书分级/)
+  assert.match(progressSource, /item\.valuePerItem/)
+  assert.match(progressSource, /折合还需/)
 })
 
 test('effective ledger is refreshed automatically after execution writeback', () => {
@@ -45,13 +48,22 @@ test('effective ledger is refreshed automatically after execution writeback', ()
   assert.match(planViewSource, /window\.clearInterval\(ledgerRefreshTimer\)/)
 })
 
-test('cultivation settings use one top-level sync action without ineffective switches', () => {
+test('cultivation settings keep top-level sync and persist module switches immediately', () => {
   const headerCommands = panelSource.match(/<div class="header-command-row">[\s\S]*?<\/div>/)?.[0] || ''
   assert.match(
     headerCommands,
     /生成一条龙配置[\s\S]*?@click="syncOneStop"[\s\S]*?>\s*同步\s*<\/el-button>[\s\S]*?同步并启动/,
   )
   assert.match(apiSource, /execution\/one-stop\/sync/)
+  assert.match(panelSource, /const toggleModule = async/)
+  assert.match(panelSource, /saveCultivationExecutionModule\(props\.uid\.trim\(\), module\.module\.moduleId/)
+  assert.match(panelSource, /enabled: nextEnabled/)
+  assert.match(panelSource, /settings: null/)
+  assert.match(panelSource, /catch \(error\)[\s\S]*?await load\(\)/)
+  assert.match(panelSource, /await load\(\)/)
+  assert.match(panelSource, /:model-value="module\.enabled"/)
+  assert.match(panelSource, /@change="value => toggleModule\(module, value\)"/)
+  assert.match(panelSource, /savingModuleId === module\.module\.moduleId/)
 
   for (const removedText of [
     '保存启停',

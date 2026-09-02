@@ -49,11 +49,11 @@ async function observeOwned(materialName, reconcileGrid) {
     return Math.trunc(observed);
 }
 
-async function countInventoryItems(names, gridScreenName) {
+async function countInventoryItems(names, gridScreenName, iconRecognitionMode = "GridIcon") {
     return await dispatcher.runTask(new SoloTask("CountInventoryItem", {
         gridScreenName,
         itemNames: names,
-        iconRecognitionMode: "Item",
+        iconRecognitionMode,
     }));
 }
 
@@ -85,7 +85,7 @@ async function observeOwnedByGrid(materialNamesByGrid, fallbackNames) {
                 gridScreenName,
                 retryNames.join("、"));
             try {
-                const retryResult = await countInventoryItems(retryNames, gridScreenName);
+                const retryResult = await countInventoryItems(retryNames, gridScreenName, "Item");
                 for (const name of retryNames) {
                     const count = Number(retryResult?.[name]);
                     if (Number.isFinite(count) && count >= 0) {

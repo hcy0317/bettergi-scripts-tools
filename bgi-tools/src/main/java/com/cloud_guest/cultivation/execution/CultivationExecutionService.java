@@ -221,6 +221,12 @@ public class CultivationExecutionService {
         grouped.put("Materials", new LinkedHashSet<>());
         grouped.put("CharacterDevelopmentItems", new LinkedHashSet<>());
         for (CultivationLedgerEntry entry : ledger.requirements()) {
+            if (entry.remaining() <= 0) continue;
+            if (CultivationExperienceBookFamily.FAMILY_NAME.equals(entry.materialName())) {
+                CultivationExperienceBookFamily.TIERS.forEach(tier ->
+                        grouped.get("CharacterDevelopmentItems").add(tier.materialName()));
+                continue;
+            }
             if (materialSourceCatalog.findSpecialtyCountry(entry.materialName()).isPresent()) {
                 grouped.get("Materials").add(entry.materialName());
             } else {
@@ -313,12 +319,22 @@ public class CultivationExecutionService {
     private List<CultivationExecutionProjection.MaterialProgress> materialProgress(
             List<CultivationLedgerEntry> entries) {
         return entries.stream().map(entry -> {
+            var experienceTier = CultivationExperienceBookFamily.tier(entry.materialName());
+            if (experienceTier.isPresent()) {
+                var tier = experienceTier.get();
+                return new CultivationExecutionProjection.MaterialProgress(
+                        entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
+                        CultivationExperienceBookFamily.FAMILY_NAME,
+                        CultivationExperienceBookFamily.TIERS.indexOf(tier),
+                        CultivationExperienceBookFamily.TIERS.size(),
+                        tier.qualityLevel(), tier.experiencePerItem());
+            }
             Optional<CultivationMaterialCraftingCatalog.CraftFamily> family =
                     observationService.craftingFamily(entry.materialName());
             if (family == null || family.isEmpty()) {
                 return new CultivationExecutionProjection.MaterialProgress(
                         entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
-                        entry.materialName(), 0, 1, 0);
+                        entry.materialName(), 0, 1, 0, 0);
             }
             List<CultivationMaterialCraftingCatalog.CraftTier> tiers = family.get().tiers();
             for (int index = 0; index < tiers.size(); index++) {
@@ -326,12 +342,12 @@ public class CultivationExecutionService {
                 if (tier.materialName().equals(entry.materialName())) {
                     return new CultivationExecutionProjection.MaterialProgress(
                             entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
-                            family.get().familyName(), index, tiers.size(), tier.qualityLevel());
+                            family.get().familyName(), index, tiers.size(), tier.qualityLevel(), 0);
                 }
             }
             return new CultivationExecutionProjection.MaterialProgress(
                     entry.materialName(), entry.currentOwned(), entry.required(), entry.remaining(),
-                    family.get().familyName(), 0, tiers.size(), 0);
+                    family.get().familyName(), 0, tiers.size(), 0, 0);
         }).toList();
     }
 

@@ -104,8 +104,8 @@ class CultivationPlanControllerTest {
 
         controller.saveModule("102550550", "cd-aware-auto-gather", request);
 
-        verify(configurationService).save("102550550", "cd-aware-auto-gather", request);
-        verify(oneStopService).prepare("102550550");
+        verify(oneStopService).saveModuleAndPrepare("102550550", "cd-aware-auto-gather", request);
+        verifyNoInteractions(configurationService);
     }
 
     @Test
@@ -176,5 +176,25 @@ class CultivationPlanControllerTest {
         controller.inventoryObservations("102550550", request);
 
         verifyNoInteractions(oneStopService);
+    }
+
+    @Test
+    void partialFinalInventoryRegeneratesRoutesForRecognizedValues() {
+        CultivationPlanDrivenExecutionService planDrivenService = mock(CultivationPlanDrivenExecutionService.class);
+        CultivationOneStopService oneStopService = mock(CultivationOneStopService.class);
+        CultivationInventoryObservationRequest request = new CultivationInventoryObservationRequest(
+                "inventory-action", "inventory-executor", 3,
+                "inventory-action:result", Map.of("沙脂蛹", 180L, "狮牙斗士的理想", -1L));
+        when(planDrivenService.recordInventoryObservations("102550550", request)).thenReturn(
+                new CultivationInventoryObservationResponse(
+                        "NEEDS_RECONCILE", "已回写识别成功项", "102550550", 3, 1));
+        CultivationPlanController controller = new CultivationPlanController(
+                mock(CultivationPlanApplicationService.class), mock(CultivationExecutionService.class),
+                mock(CultivationModuleConfigurationService.class), mock(CultivationScriptGroupSyncService.class),
+                oneStopService, planDrivenService);
+
+        controller.inventoryObservations("102550550", request);
+
+        verify(oneStopService).prepare("102550550");
     }
 }

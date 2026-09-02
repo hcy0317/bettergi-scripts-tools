@@ -20,6 +20,10 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +35,46 @@ import static org.mockito.Mockito.when;
 class CultivationOneStopServiceTest {
     @TempDir
     Path temporaryRoot;
+
+    @Test
+    void serializesConcurrentRebuildsForTheSameUid() throws Exception {
+        CultivationOneStopService service = new CultivationOneStopService(
+                mock(CultivationExecutionService.class), mock(CultivationModuleConfigurationService.class),
+                mock(CultivationMaterialSourceCatalog.class), mock(AutoPlanService.class), new ObjectMapper());
+        CountDownLatch firstEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondSubmitted = new CountDownLatch(1);
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger maximumActive = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> service.withUidLock("102550550", () -> {
+                maximumActive.accumulateAndGet(active.incrementAndGet(), Math::max);
+                firstEntered.countDown();
+                awaitLatch(releaseFirst);
+                active.decrementAndGet();
+                return "first";
+            }));
+            assertThat(firstEntered.await(2, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> {
+                secondSubmitted.countDown();
+                return service.withUidLock("102550550", () -> {
+                    maximumActive.accumulateAndGet(active.incrementAndGet(), Math::max);
+                    active.decrementAndGet();
+                    return "second";
+                });
+            });
+            assertThat(secondSubmitted.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(second.isDone()).isFalse();
+            releaseFirst.countDown();
+            assertThat(first.get(2, TimeUnit.SECONDS)).isEqualTo("first");
+            assertThat(second.get(2, TimeUnit.SECONDS)).isEqualTo("second");
+            assertThat(maximumActive).hasValue(1);
+        } finally {
+            releaseFirst.countDown();
+            executor.shutdownNow();
+        }
+    }
 
     @Test
     void rejectsPathTraversalUidBeforeResolvingOrWritingTheScriptGroup() throws Exception {
@@ -159,16 +203,16 @@ class CultivationOneStopServiceTest {
         when(catalog.betterGiRoot()).thenReturn(temporaryRoot);
         when(executionService.projection("102550550")).thenReturn(projection());
         when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID)).thenReturn(
-                configuration(AutoPlanResinExecutionModule.ID, false, Map.of(
+                configuration(AutoPlanResinExecutionModule.ID, true, Map.of(
                         "auto_load", List.of("bgi_tools加载"),
                         "bgi_tools_token", "Authorization= ",
                         "leyLineCountry", "挪德卡莱")));
         when(configurationService.find("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(
-                configuration(CdAwareAutoGatherExecutionModule.ID, false, Map.of()));
+                configuration(CdAwareAutoGatherExecutionModule.ID, true, Map.of()));
         when(configurationService.find("102550550", FullyAutoToolsExecutionModule.ID)).thenReturn(
-                configuration(FullyAutoToolsExecutionModule.ID, false, Map.of("open_cd", true)));
+                configuration(FullyAutoToolsExecutionModule.ID, true, Map.of("open_cd", true)));
         when(configurationService.find("102550550", WeeklyBossExecutionModule.ID)).thenReturn(
-                configuration(WeeklyBossExecutionModule.ID, false, Map.of("unfairContractTerms", true)));
+                configuration(WeeklyBossExecutionModule.ID, true, Map.of("unfairContractTerms", true)));
         when(configurationService.find("102550550", ScriptGroupSettingsExecutionModule.ID)).thenReturn(
                 configuration(ScriptGroupSettingsExecutionModule.ID, Map.of(
                         "partyName", "养成队伍",
@@ -219,7 +263,8 @@ class CultivationOneStopServiceTest {
                 .contains("targets.materialNamesByGrid")
                 .contains("for (const [gridScreenName, namesValue] of Object.entries(grouped))")
                 .contains("await countInventoryItems(names, gridScreenName)")
-                .contains("iconRecognitionMode: \"Item\"")
+                .contains("async function countInventoryItems(names, gridScreenName, iconRecognitionMode = \"GridIcon\")")
+                .contains("await countInventoryItems(retryNames, gridScreenName, \"Item\")")
                 .contains("const retryNames = names.filter")
                 .contains("首次识别未知，仅对缺失项再复查一次")
                 .contains("未知项将保留上次可信库存")
@@ -347,6 +392,48 @@ class CultivationOneStopServiceTest {
         assertThat(request.path("uid").asText()).isEqualTo("102550550");
         assertThat(request.path("scriptGroupName").asText()).isEqualTo("养成一条龙-102550550");
         assertThat(Instant.parse(request.path("expiresAtUtc").asText())).isAfter(Instant.now());
+
+        when(executionService.projection("102550550")).thenReturn(projectionWithoutGatherAndMonster());
+        Path rollbackDuplicate = source.getParent().resolve("养成一条龙-102550550-R1-回滚测试.json");
+        Files.copy(Path.of(result.scriptGroupFile()), rollbackDuplicate);
+        byte[] groupBeforeFailedRebuild = Files.readAllBytes(Path.of(result.scriptGroupFile()));
+        byte[] duplicateBeforeFailedRebuild = Files.readAllBytes(rollbackDuplicate);
+        CultivationOneStopService failingService = new CultivationOneStopService(
+                executionService, configurationService, catalog, autoPlanService, new ObjectMapper()) {
+            @Override
+            void deleteManagedDuplicate(Path duplicate) throws java.io.IOException {
+                if (duplicate.equals(rollbackDuplicate)) throw new java.io.IOException("模拟重复组删除失败");
+                super.deleteManagedDuplicate(duplicate);
+            }
+        };
+        assertThatThrownBy(() -> failingService.prepare("102550550"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("无法生成 BetterGI 养成一条龙脚本组");
+        assertThat(Files.readAllBytes(Path.of(result.scriptGroupFile())))
+                .isEqualTo(groupBeforeFailedRebuild);
+        assertThat(Files.readAllBytes(rollbackDuplicate))
+                .isEqualTo(duplicateBeforeFailedRebuild);
+
+        CultivationOneStopResult pruned = service.prepare("102550550");
+        JsonNode prunedGroup = new ObjectMapper().readTree(Path.of(pruned.scriptGroupFile()).toFile());
+        assertThat(StreamSupport.stream(prunedGroup.path("projects").spliterator(), false)
+                .map(project -> project.path("folderName").asText()).toList())
+                .containsExactly("AutoPlan", "WeeklyBoss");
+        assertThat(prunedGroup.toString()).doesNotContain("沙脂蛹", "HCY-FullyAutoAndSemiAutoTools");
+
+        when(executionService.projection("102550550")).thenReturn(projection());
+        when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID)).thenReturn(
+                configuration(AutoPlanResinExecutionModule.ID, false, Map.of()));
+        when(configurationService.find("102550550", CdAwareAutoGatherExecutionModule.ID)).thenReturn(
+                configuration(CdAwareAutoGatherExecutionModule.ID, false, Map.of()));
+        when(configurationService.find("102550550", FullyAutoToolsExecutionModule.ID)).thenReturn(
+                configuration(FullyAutoToolsExecutionModule.ID, false, Map.of()));
+        when(configurationService.find("102550550", WeeklyBossExecutionModule.ID)).thenReturn(
+                configuration(WeeklyBossExecutionModule.ID, false, Map.of("unfairContractTerms", true)));
+        CultivationOneStopResult disabled = service.prepare("102550550");
+        JsonNode disabledGroup = new ObjectMapper().readTree(Path.of(disabled.scriptGroupFile()).toFile());
+        assertThat(disabled.autoPlanActions()).isZero();
+        assertThat(disabledGroup.path("projects")).isEmpty();
     }
 
     private static long regularFileCount(Path root) throws Exception {
@@ -402,6 +489,28 @@ class CultivationOneStopServiceTest {
                 List.of(weekly), gather, monster, List.of(),
                 new CultivationExecutionPreferences("102550550", "速通", "采集", "采集", true),
                 List.of("速通", "采集"));
+    }
+
+    private static void awaitLatch(CountDownLatch latch) {
+        try {
+            if (!latch.await(2, TimeUnit.SECONDS)) throw new IllegalStateException("等待并发测试闩锁超时");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("等待并发测试闩锁被中断", exception);
+        }
+    }
+
+    private static CultivationExecutionProjection projectionWithoutGatherAndMonster() {
+        CultivationExecutionProjection current = projection();
+        return new CultivationExecutionProjection(
+                current.uid(), current.revision(), current.state(), current.executionMode(),
+                current.craftingActions(), current.resinActions(), current.bossActions(), current.weeklyBossActions(),
+                new CultivationExecutionProjection.GatherAction(
+                        "CD-Aware-AutoGather", "当前无地方特产缺口", Map.of(), List.of()),
+                new CultivationExecutionProjection.MonsterAction(
+                        "FullyAutoAndSemiAutoTools", "当前无怪物材料缺口", Map.of(), List.of(), List.of()),
+                current.pendingMaterials(), current.preferences(), current.partyOptions(),
+                current.combatStrategyOptions(), current.materialProgress());
     }
 
     private static CultivationModuleConfiguration configuration(String id, Map<String, Object> settings) {

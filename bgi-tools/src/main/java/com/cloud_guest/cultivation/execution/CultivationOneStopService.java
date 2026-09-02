@@ -5,6 +5,7 @@ import com.cloud_guest.cultivation.CultivationUid;
 import com.cloud_guest.cultivation.execution.module.AutoPlanResinExecutionModule;
 import com.cloud_guest.cultivation.execution.module.CdAwareAutoGatherExecutionModule;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfiguration;
+import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationRequest;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleConfigurationService;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleDefinition;
 import com.cloud_guest.cultivation.execution.module.CultivationModuleSettingField;
@@ -19,8 +20,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,6 +44,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
 @Service
 public class CultivationOneStopService {
@@ -51,6 +57,8 @@ public class CultivationOneStopService {
     private final CultivationMaterialSourceCatalog materialSourceCatalog;
     private final AutoPlanService autoPlanService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
+    private final Map<String, ReentrantLock> uidLocks = new ConcurrentHashMap<>();
 
     @Value("${cultivation.bettergi-api-base-url:http://127.0.0.1:18081/bgi}")
     private String betterGiApiBaseUrl = "http://127.0.0.1:18081/bgi";
@@ -60,11 +68,22 @@ public class CultivationOneStopService {
                                      CultivationMaterialSourceCatalog materialSourceCatalog,
                                      AutoPlanService autoPlanService,
                                      ObjectMapper objectMapper) {
+        this(executionService, configurationService, materialSourceCatalog, autoPlanService, objectMapper, null);
+    }
+
+    @Autowired
+    public CultivationOneStopService(CultivationExecutionService executionService,
+                                     CultivationModuleConfigurationService configurationService,
+                                     CultivationMaterialSourceCatalog materialSourceCatalog,
+                                     AutoPlanService autoPlanService,
+                                     ObjectMapper objectMapper,
+                                     PlatformTransactionManager transactionManager) {
         this.executionService = executionService;
         this.configurationService = configurationService;
         this.materialSourceCatalog = materialSourceCatalog;
         this.autoPlanService = autoPlanService;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = transactionManager == null ? null : new TransactionTemplate(transactionManager);
     }
 
     public List<CultivationModuleConfiguration> effectiveModules(String uid) {
@@ -90,9 +109,106 @@ public class CultivationOneStopService {
         }).toList();
     }
 
-    @Transactional(rollbackFor = Exception.class)
     public CultivationOneStopResult prepare(String uid) {
         String normalizedUid = CultivationUid.normalize(uid);
+        return withUidLock(normalizedUid,
+                () -> executeManagedUpdate(normalizedUid, () -> prepareLocked(normalizedUid)));
+    }
+
+    public CultivationModuleConfiguration saveModuleAndPrepare(
+            String uid,
+            String moduleId,
+            CultivationModuleConfigurationRequest request) {
+        String normalizedUid = CultivationUid.normalize(uid);
+        return withUidLock(normalizedUid, () -> executeManagedUpdate(normalizedUid, () -> {
+                CultivationModuleConfiguration saved = configurationService.save(normalizedUid, moduleId, request);
+                prepareLocked(normalizedUid);
+                return saved;
+            }));
+    }
+
+    <T> T withUidLock(String normalizedUid, Supplier<T> operation) {
+        ReentrantLock lock = uidLocks.computeIfAbsent(normalizedUid, ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            return operation.get();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private <T> T executeManagedUpdate(String normalizedUid, Supplier<T> operation) {
+        Map<Path, ManagedFileSnapshot> snapshots = captureManagedFiles(normalizedUid);
+        try {
+            if (transactionTemplate == null) return operation.get();
+            T result = transactionTemplate.execute(status -> operation.get());
+            if (result == null) throw new IllegalStateException("UID 养成配置事务未返回结果");
+            return result;
+        } catch (RuntimeException | Error failure) {
+            restoreManagedFiles(snapshots, failure);
+            throw failure;
+        }
+    }
+
+    private Map<Path, ManagedFileSnapshot> captureManagedFiles(String uid) {
+        Path root = materialSourceCatalog.betterGiRoot().toAbsolutePath().normalize();
+        Path groupFile = root.resolve(Path.of("User", "ScriptGroup", "养成一条龙-" + uid + ".json"));
+        LinkedHashSet<Path> paths = new LinkedHashSet<>();
+        paths.add(groupFile);
+        paths.addAll(findManagedGroupDuplicates(root, uid, groupFile));
+        paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "main.js")));
+        paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "utils", "cultivation_plan.js")));
+        paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "utils", "load_check_run.js")));
+        paths.add(root.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather", "settings.json")));
+        for (String alias : List.of("HCY-FullyAutoAndSemiAutoTools", "FullyAutoAndSemiAutoTools")) {
+            paths.add(root.resolve(Path.of("User", "JsScript", alias, "settings.json")));
+        }
+
+        LinkedHashMap<Path, ManagedFileSnapshot> snapshots = new LinkedHashMap<>();
+        try {
+            for (Path path : paths) {
+                boolean exists = Files.isRegularFile(path);
+                snapshots.put(path, new ManagedFileSnapshot(exists, exists ? Files.readAllBytes(path) : null));
+            }
+            return snapshots;
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法建立 UID 养成配置文件回滚快照", exception);
+        }
+    }
+
+    private static void restoreManagedFiles(
+            Map<Path, ManagedFileSnapshot> snapshots,
+            Throwable originalFailure) {
+        for (Map.Entry<Path, ManagedFileSnapshot> entry : snapshots.entrySet()) {
+            try {
+                ManagedFileSnapshot snapshot = entry.getValue();
+                if (snapshot.existed()) {
+                    writeBytesAtomically(entry.getKey(), snapshot.content());
+                } else {
+                    Files.deleteIfExists(entry.getKey());
+                }
+            } catch (IOException restoreFailure) {
+                originalFailure.addSuppressed(restoreFailure);
+            }
+        }
+    }
+
+    private static void writeBytesAtomically(Path target, byte[] content) throws IOException {
+        Files.createDirectories(target.getParent());
+        Path temporary = Files.createTempFile(target.getParent(), target.getFileName().toString(), ".rollback.tmp");
+        try {
+            Files.write(temporary, content);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private CultivationOneStopResult prepareLocked(String normalizedUid) {
         CultivationExecutionProjection projection = executionService.projection(normalizedUid);
         if (projection == null) throw new IllegalStateException("该 UID 尚未建立养成账本");
 
@@ -105,6 +221,8 @@ public class CultivationOneStopService {
 
         boolean hasPlanDrivenAction = hasPlanDrivenAction(projection);
         boolean hasInventoryReconcileTargets = hasInventoryReconcileTargets(projection);
+        boolean needsAutoPlanTask = autoPlan.enabled()
+                && (hasPlanDrivenAction || hasInventoryReconcileTargets);
         autoPlanService.remove(Wrappers.lambdaQuery(AutoPlanConfig.class)
                 .eq(AutoPlanConfig::getUid, normalizedUid)
                 .eq(AutoPlanConfig::getCultivate, Boolean.TRUE));
@@ -128,7 +246,7 @@ public class CultivationOneStopService {
             for (Path duplicate : duplicateGroupFiles) {
                 backup(duplicate, backupDirectory.resolve("ScriptGroup").resolve(duplicate.getFileName()));
             }
-            if (hasPlanDrivenAction || hasInventoryReconcileTargets) {
+            if (needsAutoPlanTask) {
                 installPlanDrivenAutoPlanBridge(root, backupDirectory);
             }
             synchronizeScriptSettingsUi(root, normalizedUid, projection, backupDirectory, warnings);
@@ -136,14 +254,15 @@ public class CultivationOneStopService {
                     groupFile,
                     managedGroup,
                     backupDirectory.resolve("ScriptGroup").resolve(groupFile.getFileName()));
-            for (Path duplicate : duplicateGroupFiles) Files.deleteIfExists(duplicate);
+            for (Path duplicate : duplicateGroupFiles) deleteManagedDuplicate(duplicate);
         } catch (IOException exception) {
             throw new IllegalStateException("无法生成 BetterGI 养成一条龙脚本组", exception);
         }
 
         int taskCount = managedGroup.path("projects").size();
         return new CultivationOneStopResult(
-                normalizedUid, projection.revision(), groupName, groupFile.toString(), hasPlanDrivenAction ? 1 : 0, taskCount,
+                normalizedUid, projection.revision(), groupName, groupFile.toString(),
+                autoPlan.enabled() && hasPlanDrivenAction ? 1 : 0, taskCount,
                 backupDirectory.toString(), List.copyOf(warnings),
                 "已生成 UID 专属计划驱动养成一条龙配置");
     }
@@ -202,7 +321,7 @@ public class CultivationOneStopService {
         template.put("name", groupName);
         applyGroupSettings(root, template, groupSettings.settings());
         ArrayNode projects = objectMapper.createArrayNode();
-        boolean planDrivenAction = hasPlanDrivenAction(projection);
+        boolean planDrivenAction = autoPlan.enabled() && hasPlanDrivenAction(projection);
 
         if (planDrivenAction) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
@@ -222,7 +341,7 @@ public class CultivationOneStopService {
             prepareProject(project, projects.size() + 1, settings);
             projects.add(project);
         }
-        if (!projection.gatherAction().csvTargets().isEmpty()) {
+        if (gather.enabled() && !projection.gatherAction().csvTargets().isEmpty()) {
             ObjectNode project = copyProject(documents, Set.of("CD-Aware-AutoGather"));
             if (project == null) throw new IllegalStateException("未找到已安装的 CD-Aware-AutoGather 脚本任务");
             ObjectNode settings = cultivationOnlyGatherSettings(root, projection.gatherAction(), warnings);
@@ -233,7 +352,7 @@ public class CultivationOneStopService {
                 projects.add(project);
             }
         }
-        if (!projection.monsterAction().targets().isEmpty()) {
+        if (monster.enabled() && !projection.monsterAction().targets().isEmpty()) {
             ObjectNode project = copyProject(documents,
                     Set.of("FullyAutoAndSemiAutoTools", "HCY-FullyAutoAndSemiAutoTools"));
             if (project == null) throw new IllegalStateException("未找到已安装的 FullyAutoAndSemiAutoTools 脚本任务");
@@ -247,7 +366,7 @@ public class CultivationOneStopService {
                 projects.add(project);
             }
         }
-        if (!projection.weeklyBossActions().isEmpty()) {
+        if (weekly.enabled() && !projection.weeklyBossActions().isEmpty()) {
             if (!Boolean.TRUE.equals(weekly.settings().get("unfairContractTerms"))) {
                 warnings.add("周本脚本尚未确认风险条款，本次未加入专属脚本组");
             } else {
@@ -259,7 +378,7 @@ public class CultivationOneStopService {
                 }
             }
         }
-        if (hasInventoryReconcileTargets(projection) && !planDrivenAction) {
+        if (autoPlan.enabled() && hasInventoryReconcileTargets(projection) && !planDrivenAction) {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
             ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
@@ -278,7 +397,7 @@ public class CultivationOneStopService {
             prepareProject(project, projects.size() + 1, settings);
             projects.add(project);
         }
-        if (projects.isEmpty()) warnings.add("当前没有可执行缺口，脚本组为空");
+        if (projects.isEmpty()) warnings.add("当前没有已启用且存在缺口的执行模块，脚本组为空");
         template.set("projects", projects);
         return template;
     }
@@ -909,6 +1028,10 @@ public class CultivationOneStopService {
         return objectMapper.valueToTree(values);
     }
 
+    void deleteManagedDuplicate(Path duplicate) throws IOException {
+        Files.deleteIfExists(duplicate);
+    }
+
     private int existingOrNextIndex(Path targetFile, List<GroupDocument> documents) {
         if (Files.isRegularFile(targetFile)) {
             try {
@@ -1076,6 +1199,9 @@ public class CultivationOneStopService {
     private static String stringSetting(Map<String, Object> settings, String key, String fallback) {
         Object value = settings.get(key);
         return value == null ? fallback : String.valueOf(value);
+    }
+
+    private record ManagedFileSnapshot(boolean existed, byte[] content) {
     }
 
     private static int intSetting(Map<String, Object> settings, String key, int fallback) {

@@ -63,7 +63,8 @@ public record CultivationExecutionProjection(
             String familyName,
             int tierIndex,
             int tierCount,
-            int qualityLevel
+            int qualityLevel,
+            long valuePerItem
     ) {
     }
 

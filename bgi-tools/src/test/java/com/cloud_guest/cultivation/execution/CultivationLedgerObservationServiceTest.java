@@ -355,6 +355,57 @@ class CultivationLedgerObservationServiceTest {
         assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(4);
     }
 
+    @Test
+    void appliesKnownValuesFromAnAwaitingPartialInventoryBatch() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity awaiting = new CultivationExecutionActionEntity();
+        awaiting.setStatus("AWAITING_RECONCILE");
+        awaiting.setActionType("INVENTORY_RECONCILE_BATCH");
+        awaiting.setRewardsJson(objectMapper().writeValueAsString(
+                Map.of("「公平」的哲学", 8L, "狮牙斗士的理想", -1L)));
+        when(mapper.findLeased("102550550", 3)).thenReturn(awaiting);
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of());
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper()).effective(revision(10, 4, 6));
+
+        assertThat(effective.state()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(effective.requirements().getFirst().currentOwned()).isEqualTo(8);
+        assertThat(effective.requirements().getFirst().remaining()).isEqualTo(2);
+    }
+
+    @Test
+    void combinesAllThreeExperienceBookTiersByExperienceValue() throws Exception {
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity batch = inventoryBatch("experience-books", Map.of(
+                "流浪者的经验", 20L,
+                "冒险家的经验", 4L,
+                "大英雄的经验", 10L));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(batch));
+        CultivationPlanRevisionResponse imported = new CultivationPlanRevisionResponse(
+                1L, "102550550", 3, "IMPORTED", "name-only-v1", 2L,
+                "sha", "engine", "model", List.of(new CultivationLedgerEntry(
+                null, "大英雄的经验", 12, 0, 12,
+                RemainingEvidence.OCR, 1.0, false, List.of())), LocalDateTime.now());
+
+        CultivationPlanRevisionResponse effective =
+                new CultivationLedgerObservationService(mapper, objectMapper()).effective(imported);
+
+        assertThat(effective.state()).isEqualTo("COMPLETED");
+        assertThat(effective.requirements())
+                .filteredOn(entry -> "大英雄的经验".equals(entry.materialName()))
+                .singleElement().satisfies(entry -> {
+                    assertThat(entry.currentOwned()).isEqualTo(10);
+                    assertThat(entry.remaining()).isZero();
+                });
+        assertThat(effective.requirements())
+                .filteredOn(entry -> "冒险家的经验".equals(entry.materialName()))
+                .singleElement().extracting(CultivationLedgerEntry::currentOwned).isEqualTo(4L);
+        assertThat(effective.requirements())
+                .filteredOn(entry -> "流浪者的经验".equals(entry.materialName()))
+                .singleElement().extracting(CultivationLedgerEntry::currentOwned).isEqualTo(20L);
+    }
+
     private static CultivationExecutionActionEntity observation(String id, long owned) {
         CultivationExecutionActionEntity entity = new CultivationExecutionActionEntity();
         entity.setId(id);
