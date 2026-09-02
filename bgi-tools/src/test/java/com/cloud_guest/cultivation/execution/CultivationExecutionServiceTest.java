@@ -165,7 +165,8 @@ class CultivationExecutionServiceTest {
         when(materialSourceCatalog.availableMonsterRouteFamilies()).thenReturn(List.of("史莱姆"));
 
         CultivationLedgerObservationService observationService = mock(CultivationLedgerObservationService.class);
-        when(observationService.effective(revision)).thenReturn(revision);
+        when(observationService.evaluate(revision)).thenReturn(new CultivationLedgerEvaluation(
+                revision, new CultivationMaterialCraftingPlan(Map.of(), List.of())));
         BetterGiCombatOptionCatalog optionCatalog = mock(BetterGiCombatOptionCatalog.class);
         when(optionCatalog.discover()).thenReturn(new BetterGiCombatOptionCatalog.Options(List.of(), List.of()));
         CultivationExecutionProjection result = new CultivationExecutionService(
@@ -220,11 +221,11 @@ class CultivationExecutionServiceTest {
         CultivationModuleConfiguration enabled = configuration(
                 AutoPlanResinExecutionModule.ID, true, Map.of());
         when(planService.latest("102550550")).thenReturn(revision);
-        when(observationService.effective(revision)).thenReturn(revision);
-        when(observationService.craftingPlan(revision.requirements())).thenReturn(
+        when(observationService.evaluate(revision)).thenReturn(new CultivationLedgerEvaluation(
+                revision,
                 new CultivationMaterialCraftingPlan(
                         Map.of("史莱姆清", 0L),
-                        List.of(new CultivationCraftingAction("史莱姆清", 1, "史莱姆"))));
+                        List.of(new CultivationCraftingAction("史莱姆清", 1, "史莱姆")))));
         when(configurationService.find(anyString(), anyString())).thenReturn(enabled);
         when(configurationService.findAll("102550550")).thenReturn(List.of(enabled));
         when(autoPlanService.findDomainAll()).thenReturn(List.of());
@@ -266,9 +267,9 @@ class CultivationExecutionServiceTest {
         CultivationModuleConfiguration enabled = configuration(
                 AutoPlanResinExecutionModule.ID, true, Map.of());
         when(planService.latest("102550550")).thenReturn(revision);
-        when(observationService.effective(revision)).thenReturn(revision);
-        when(observationService.craftingPlan(revision.requirements())).thenReturn(
-                new CultivationMaterialCraftingPlan(Map.of("未知材料", 3L), List.of()));
+        when(observationService.evaluate(revision)).thenReturn(new CultivationLedgerEvaluation(
+                revision,
+                new CultivationMaterialCraftingPlan(Map.of("未知材料", 3L), List.of())));
         when(configurationService.find(anyString(), anyString())).thenReturn(enabled);
         when(configurationService.findAll("102550550")).thenReturn(List.of(enabled));
         when(autoPlanService.findDomainAll()).thenReturn(List.of());

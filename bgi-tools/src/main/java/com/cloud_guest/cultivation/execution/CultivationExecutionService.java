@@ -31,7 +31,7 @@ import java.util.Set;
 public class CultivationExecutionService {
     private static final List<String> RESIN_SOURCES =
             List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂");
-    private static final String EXECUTION_MODE = "计划驱动：领取一个行动，权威库存回写后重新规划";
+    private static final String EXECUTION_MODE = "计划驱动：树脂任务优先，合成整批执行，权威库存回写后重新规划";
     private static final Map<String, String> MANUAL_MATERIALS = Map.of(
             "智识之冕", "人工来源：活动、版本奖励等限量渠道；系统持续保留缺口，取得后重新导入确认");
 
@@ -58,13 +58,15 @@ public class CultivationExecutionService {
 
     public CultivationExecutionProjection projection(String uid) {
         String normalizedUid = requireUid(uid);
-        CultivationPlanRevisionResponse revision = latestLedger(normalizedUid);
-        if (revision == null) {
+        CultivationLedgerEvaluation evaluation = observationService.evaluate(
+                planService.latest(normalizedUid));
+        if (evaluation == null || evaluation.ledger() == null) {
             return null;
         }
+        CultivationPlanRevisionResponse revision = evaluation.ledger();
 
         CultivationExecutionPreferences preferences = preferences(normalizedUid);
-        CultivationMaterialCraftingPlan plannedCrafting = observationService.craftingPlan(revision.requirements());
+        CultivationMaterialCraftingPlan plannedCrafting = evaluation.craftingPlan();
         CultivationMaterialCraftingPlan craftingPlan = plannedCrafting == null
                 ? new CultivationMaterialCraftingPlan(Map.of(), List.of())
                 : plannedCrafting;

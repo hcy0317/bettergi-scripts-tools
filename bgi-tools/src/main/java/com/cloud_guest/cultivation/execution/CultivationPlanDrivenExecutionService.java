@@ -33,6 +33,8 @@ public class CultivationPlanDrivenExecutionService {
     private static final String AWAITING_RECONCILE = "AWAITING_RECONCILE";
     private static final String RECONCILE_RETRY_LEASED = "RECONCILE_RETRY_LEASED";
     private static final String COMPLETED = "COMPLETED";
+    private static final String CRAFT = "CRAFT";
+    private static final String CRAFT_BATCH = "CRAFT_BATCH";
     private static final String INVENTORY_RECONCILE_BATCH = "INVENTORY_RECONCILE_BATCH";
     private static final Duration LEASE_DURATION = Duration.ofMinutes(45);
     private static final Duration NO_PROGRESS_COOLDOWN = Duration.ofMinutes(30);
@@ -60,6 +62,13 @@ public class CultivationPlanDrivenExecutionService {
     }
 
     public CultivationNextActionResponse claim(String uid, String executorId) {
+        return claim(uid, executorId, null);
+    }
+
+    public CultivationNextActionResponse claim(
+            String uid,
+            String executorId,
+            CultivationNextActionRequest request) {
         String normalizedUid = CultivationUid.normalize(uid);
         String normalizedExecutor = require(executorId, "执行器 ID");
         CultivationExecutionProjection projection = executionService.projection(normalizedUid);
@@ -93,7 +102,9 @@ public class CultivationPlanDrivenExecutionService {
                     normalizedUid, projection.revision());
         }
         if ("NEEDS_CRAFT".equals(projection.state())) {
-            if (projection.craftingActions().isEmpty()) {
+            if (projection.craftingActions().isEmpty()
+                    && projection.resinActions().isEmpty()
+                    && projection.bossActions().isEmpty()) {
                 return status("PLAN_NEEDS_CRAFT", "存在可合成材料但尚未生成安全合成行动",
                         normalizedUid, projection.revision());
             }
@@ -124,17 +135,23 @@ public class CultivationPlanDrivenExecutionService {
                     projection.revision());
         }
 
-        Candidate candidate = choose(projection);
+        CultivationResinSnapshot resinSnapshot = request == null ? null : request.resinSnapshot();
+        Candidate candidate = choose(projection, resinSnapshot);
         if (candidate == null) {
             return status("WAITING", "当前没有满足开放日和 P1 证据要求的体力行动", normalizedUid,
                     projection.revision());
         }
         if (recentlyMadeNoProgress(normalizedUid, projection.revision(), candidate)) {
-            return status(
-                    "WAITING",
-                    "上一相同行动未产生奖励或库存进展，30 分钟内不再重复消耗时间",
-                    normalizedUid,
-                    projection.revision());
+            Candidate craftFallback = isResinAction(candidate) ? craftBatch(projection) : null;
+            if (craftFallback == null
+                    || recentlyMadeNoProgress(normalizedUid, projection.revision(), craftFallback)) {
+                return status(
+                        "WAITING",
+                        "上一相同行动未产生奖励或库存进展，30 分钟内不再重复消耗时间",
+                        normalizedUid,
+                        projection.revision());
+            }
+            candidate = craftFallback;
         }
 
         String actionId = UUID.randomUUID().toString();
@@ -152,9 +169,13 @@ public class CultivationPlanDrivenExecutionService {
         entity.setActionType(candidate.actionType());
         entity.setMaterialName(candidate.materialName());
         entity.setRemainingBefore(candidate.remaining());
-        entity.setPlanJson("CRAFT".equals(candidate.actionType())
-                ? write(new CraftPayload(candidate.craftMaterialType(), candidate.craftCountry(), candidate.batchLimit()))
-                : write(plan));
+        entity.setPlanJson(CRAFT_BATCH.equals(candidate.actionType())
+                ? write(new CultivationCraftBatchPayload(
+                        candidate.craftCountry(), candidate.craftActions()))
+                : CRAFT.equals(candidate.actionType())
+                    ? write(new CraftPayload(
+                            candidate.craftMaterialType(), candidate.craftCountry(), candidate.batchLimit()))
+                    : write(plan));
         try {
             actionMapper.insert(entity);
             return fromEntity(entity, "ACTION", candidate.reason());
@@ -641,15 +662,16 @@ public class CultivationPlanDrivenExecutionService {
     private boolean recentlyMadeNoProgress(String uid, int revision, Candidate candidate) {
         List<CultivationExecutionActionEntity> observations = actionMapper.findCompletedObservations(uid, revision);
         if (observations == null || observations.isEmpty()) return false;
-        CultivationExecutionActionEntity latest = observations.get(0);
+        CultivationExecutionActionEntity latest = observations.stream()
+                .filter(observation -> candidate.actionType().equals(observation.getActionType()))
+                .filter(observation -> candidate.materialName().equals(observation.getMaterialName()))
+                .filter(observation -> observation.getRemainingBefore() != null
+                        && observation.getRemainingBefore() == candidate.remaining())
+                .findFirst()
+                .orElse(null);
+        if (latest == null) return false;
         LocalDateTime updatedAt = latest.getUpdateTime() != null ? latest.getUpdateTime() : latest.getCreateTime();
         if (updatedAt == null || updatedAt.isBefore(LocalDateTime.now(clock).minus(NO_PROGRESS_COOLDOWN))) {
-            return false;
-        }
-        if (!candidate.actionType().equals(latest.getActionType())
-                || !candidate.materialName().equals(latest.getMaterialName())
-                || latest.getRemainingBefore() == null
-                || latest.getRemainingBefore() != candidate.remaining()) {
             return false;
         }
         try {
@@ -661,31 +683,43 @@ public class CultivationPlanDrivenExecutionService {
         }
     }
 
-    private Candidate choose(CultivationExecutionProjection projection) {
-        if (!projection.craftingActions().isEmpty()) {
-            CultivationCraftingAction action = projection.craftingActions().getFirst();
-            return new Candidate(
-                    "CRAFT", action.materialName(), action.quantity(), (int) action.quantity(), null,
-                    action.materialType(), executionService.craftingCountry(projection.uid()),
-                    "低阶库存可按 3:1 合成为当前缺口；合成并复核前不再消耗树脂");
-        }
+    private Candidate choose(
+            CultivationExecutionProjection projection,
+            CultivationResinSnapshot resinSnapshot) {
         int today = LocalDate.now(clock).getDayOfWeek().getValue() % 7;
         List<String> configuredResinPriority = executionService.resinPriority(projection.uid());
         List<String> resinPriority = configuredResinPriority == null
                 ? List.of("浓缩树脂", "原粹树脂")
                 : configuredResinPriority;
-        Candidate domain = projection.resinActions().stream()
+        boolean canSpendResin = resinSnapshot == null || resinSnapshot.hasUsableResin(resinPriority);
+        Candidate domain = canSpendResin ? projection.resinActions().stream()
                 .filter(action -> "秘境".equals(action.actionType()))
                 .filter(action -> action.availableDays().isEmpty() || action.availableDays().contains(today))
                 .filter(action -> !"已暂停".equals(action.actionState()))
                 .sorted(Comparator.comparingLong(CultivationExecutionProjection.ResinAction::remaining))
-                .map(action -> domain(action, resinPriority)).findFirst().orElse(null);
+                .map(action -> domain(action, resinPriority)).findFirst().orElse(null) : null;
         if (domain != null) return domain;
 
-        return projection.bossActions().stream()
+        Candidate boss = canSpendResin ? projection.bossActions().stream()
                 .filter(action -> !"已暂停".equals(action.actionState()))
                 .sorted(Comparator.comparingLong(CultivationExecutionProjection.BossAction::remaining))
-                .map(this::boss).findFirst().orElse(null);
+                .map(this::boss).findFirst().orElse(null) : null;
+        return boss != null ? boss : craftBatch(projection);
+    }
+
+    private Candidate craftBatch(CultivationExecutionProjection projection) {
+        if (projection.craftingActions().isEmpty()) return null;
+        List<CultivationCraftingAction> actions = List.copyOf(projection.craftingActions());
+        long totalQuantity = actions.stream().mapToLong(CultivationCraftingAction::quantity).sum();
+        return new Candidate(
+                CRAFT_BATCH, "__craft_batch__", totalQuantity, actions.size(), null,
+                null, executionService.craftingCountry(projection.uid()), actions,
+                "已按当前完整库存生成全部安全合成步骤；整批完成并复核前不再消耗树脂");
+    }
+
+    private static boolean isResinAction(Candidate candidate) {
+        return "DOMAIN".equals(candidate.actionType())
+               || "WORLD_BOSS".equals(candidate.actionType());
     }
 
     private Candidate domain(CultivationExecutionProjection.ResinAction action,
@@ -694,7 +728,7 @@ public class CultivationPlanDrivenExecutionService {
         plan.setAutoDomain(new AutoDomain(
                 action.sourceName(), action.sourceMaterialIndex(), action.sourceMaterialName(),
                 action.partyName(), 1, physical(resinPriority)));
-        return new Candidate("DOMAIN", action.materialName(), action.remaining(), 1, plan, null, null,
+        return new Candidate("DOMAIN", action.materialName(), action.remaining(), 1, plan, null, null, List.of(),
                 "今天开放该材料秘境；按账本缺口发放一个安全批次，完成后强制清点并重规划");
     }
 
@@ -708,7 +742,7 @@ public class CultivationPlanDrivenExecutionService {
                 bool(settings, "bossReturnToStatueAfterEachRound", false),
                 bool(settings, "bossRewardRecognitionEnabled", true),
                 integer(settings, "bossTimeoutSeconds", 300)));
-        return new Candidate("WORLD_BOSS", action.materialName(), action.remaining(), 1, plan, null, null,
+        return new Candidate("WORLD_BOSS", action.materialName(), action.remaining(), 1, plan, null, null, List.of(),
                 "按突破材料缺口发放一个世界首领安全批次，完成后强制清点并重规划");
     }
 
@@ -716,7 +750,15 @@ public class CultivationPlanDrivenExecutionService {
                                                       String status, String message) {
         AutoPlan plan = null;
         CraftPayload craft = null;
-        if ("CRAFT".equals(entity.getActionType())) {
+        CultivationCraftBatchPayload craftBatch = null;
+        if (CRAFT_BATCH.equals(entity.getActionType())) {
+            try {
+                craftBatch = objectMapper.readValue(
+                        entity.getPlanJson(), CultivationCraftBatchPayload.class);
+            } catch (JsonProcessingException exception) {
+                throw new IllegalStateException("无法恢复材料批量合成行动", exception);
+            }
+        } else if (CRAFT.equals(entity.getActionType())) {
             try {
                 craft = objectMapper.readValue(entity.getPlanJson(), CraftPayload.class);
             } catch (JsonProcessingException exception) {
@@ -733,10 +775,11 @@ public class CultivationPlanDrivenExecutionService {
                 status, message, "PLAN_DRIVEN", entity.getUid(), entity.getPlanRevision(), entity.getId(),
                 entity.getLeaseExpiresAt(), entity.getActionType(), entity.getMaterialName(),
                 entity.getRemainingBefore() == null ? 0 : entity.getRemainingBefore(),
-                craft == null ? 1 : craft.quantity(),
+                craftBatch != null ? craftBatch.actions().size() : craft == null ? 1 : craft.quantity(),
                 "CharacterDevelopmentItems",
                 craft == null ? null : craft.materialType(),
-                craft == null ? null : craft.country(),
+                craftBatch != null ? craftBatch.country() : craft == null ? null : craft.country(),
+                craftBatch == null ? List.of() : craftBatch.actions(),
                 plan);
     }
 
@@ -744,7 +787,7 @@ public class CultivationPlanDrivenExecutionService {
                                                         String uid, int revision) {
         return new CultivationNextActionResponse(
                 status, message, "PLAN_DRIVEN", uid, revision, null, null,
-                null, null, 0, 0, null, null);
+                null, null, 0, 0, null, null, null, List.of(), null);
     }
 
     private static AutoPlan basePlan(List<Integer> days, String selectedType, String runType) {
@@ -810,7 +853,11 @@ public class CultivationPlanDrivenExecutionService {
     }
 
     private record Candidate(String actionType, String materialName, long remaining, int batchLimit,
-                             AutoPlan plan, String craftMaterialType, String craftCountry, String reason) {
+                             AutoPlan plan, String craftMaterialType, String craftCountry,
+                             List<CultivationCraftingAction> craftActions, String reason) {
+        private Candidate {
+            craftActions = craftActions == null ? List.of() : List.copyOf(craftActions);
+        }
     }
 
     private record CraftPayload(String materialType, String country, int quantity) {

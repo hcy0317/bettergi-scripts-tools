@@ -86,7 +86,56 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
-    void leasesTheNextMaterialCraftBeforeSpendingMoreResin() {
+    void leasesAllMaterialCraftsAsOneBatchBeforeSpendingMoreResin() throws Exception {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        List<CultivationCraftingAction> craftingActions = List.of(
+                new CultivationCraftingAction("「笃行」的指引", 3, "角色天赋素材"),
+                new CultivationCraftingAction("「笃行」的哲学", 1, "角色天赋素材"),
+                new CultivationCraftingAction("哀叙冰玉块", 2, "角色突破素材"));
+        CultivationExecutionProjection needsCraft = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                craftingActions,
+                List.of(), List.of(), current.weeklyBossActions(),
+                current.gatherAction(), current.monsterAction(), current.pendingMaterials(),
+                current.preferences(), current.partyOptions());
+        when(projectionService.projection("102550550")).thenReturn(needsCraft);
+        when(projectionService.craftingCountry("102550550")).thenReturn("枫丹");
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学")));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
+                completedInventoryBatch()));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        doAnswer(invocation -> {
+            CultivationExecutionActionEntity entity = invocation.getArgument(0);
+            assertThat(entity.getActionType()).isEqualTo("CRAFT_BATCH");
+            assertThat(entity.getMaterialName()).isEqualTo("__craft_batch__");
+            CultivationCraftBatchPayload payload = new ObjectMapper().findAndRegisterModules()
+                    .readValue(entity.getPlanJson(), CultivationCraftBatchPayload.class);
+            assertThat(payload.country()).isEqualTo("枫丹");
+            assertThat(payload.actions()).containsExactlyElementsOf(craftingActions);
+            return 1;
+        }).when(mapper).insert(any());
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim("102550550", "craft-executor");
+
+        assertThat(response.status()).isEqualTo("ACTION");
+        assertThat(response.actionType()).isEqualTo("CRAFT_BATCH");
+        assertThat(response.materialName()).isEqualTo("__craft_batch__");
+        assertThat(response.batchLimit()).isEqualTo(3);
+        assertThat(response.craftMaterialType()).isNull();
+        assertThat(response.craftCountry()).isEqualTo("枫丹");
+        assertThat(response.craftActions()).containsExactlyElementsOf(craftingActions);
+        assertThat(response.plan()).isNull();
+        verify(mapper).insert(any(CultivationExecutionActionEntity.class));
+    }
+
+    @Test
+    void leasesAnOpenDomainBeforeTheCraftBatchWhenBothAreAvailable() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionProjection current = projection();
@@ -97,6 +146,47 @@ class CultivationPlanDrivenExecutionServiceTest {
                 current.gatherAction(), current.monsterAction(), current.pendingMaterials(),
                 current.preferences(), current.partyOptions());
         when(projectionService.projection("102550550")).thenReturn(needsCraft);
+        when(projectionService.resinPriority("102550550"))
+                .thenReturn(List.of("须臾树脂", "浓缩树脂", "原粹树脂"));
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学")));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
+                completedInventoryBatch()));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        when(mapper.insert(any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim(
+                "102550550", "domain-first-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(10, 0, 1, 0)));
+
+        assertThat(response.actionType()).isEqualTo("DOMAIN");
+        assertThat(response.materialName()).isEqualTo("「公平」的哲学");
+        assertThat(response.plan().getAutoDomain().getPhysical())
+                .first().satisfies(physical -> {
+                    assertThat(physical.getName()).isEqualTo("须臾树脂");
+                    assertThat(physical.isOpen()).isTrue();
+                    assertThat(physical.getCount()).isEqualTo(1L);
+                });
+    }
+
+    @Test
+    void usesTheResinSnapshotToChooseTheCraftBatchWhenSelectedResinIsEmpty() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        CultivationCraftingAction craft = new CultivationCraftingAction(
+                "「笃行」的指引", 3, "角色天赋素材");
+        CultivationExecutionProjection needsCraft = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                List.of(craft), current.resinActions(), current.bossActions(), current.weeklyBossActions(),
+                current.gatherAction(), current.monsterAction(), current.pendingMaterials(),
+                current.preferences(), current.partyOptions());
+        when(projectionService.projection("102550550")).thenReturn(needsCraft);
+        when(projectionService.resinPriority("102550550"))
+                .thenReturn(List.of("须臾树脂", "浓缩树脂", "原粹树脂"));
         when(projectionService.craftingCountry("102550550")).thenReturn("枫丹");
         when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
                 "CharacterDevelopmentItems", List.of(
@@ -108,16 +198,53 @@ class CultivationPlanDrivenExecutionServiceTest {
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
 
-        CultivationNextActionResponse response = service.claim("102550550", "craft-executor");
+        CultivationNextActionResponse response = service.claim(
+                "102550550", "no-resin-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(10, 0, 0, 0)));
 
-        assertThat(response.status()).isEqualTo("ACTION");
-        assertThat(response.actionType()).isEqualTo("CRAFT");
-        assertThat(response.materialName()).isEqualTo("「笃行」的指引");
-        assertThat(response.batchLimit()).isEqualTo(3);
-        assertThat(response.craftMaterialType()).isEqualTo("角色天赋素材");
-        assertThat(response.craftCountry()).isEqualTo("枫丹");
-        assertThat(response.plan()).isNull();
-        verify(mapper).insert(any(CultivationExecutionActionEntity.class));
+        assertThat(response.actionType()).isEqualTo("CRAFT_BATCH");
+        assertThat(response.craftActions()).containsExactly(craft);
+    }
+
+    @Test
+    void fallsBackToTheCraftBatchAfterAResinActionMadeNoProgress() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        CultivationCraftingAction craft = new CultivationCraftingAction(
+                "「笃行」的指引", 3, "角色天赋素材");
+        CultivationExecutionProjection needsCraft = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_CRAFT", current.executionMode(),
+                List.of(craft), current.resinActions(), current.bossActions(), current.weeklyBossActions(),
+                current.gatherAction(), current.monsterAction(), current.pendingMaterials(),
+                current.preferences(), current.partyOptions());
+        CultivationExecutionActionEntity noProgressDomain = leasedAction("no-resin-domain");
+        noProgressDomain.setActionType("DOMAIN");
+        noProgressDomain.setMaterialName("「公平」的哲学");
+        noProgressDomain.setRemainingBefore(5L);
+        noProgressDomain.setStatus("COMPLETED");
+        noProgressDomain.setRewardsJson("{}");
+        noProgressDomain.setTerminationReason("NO_PROGRESS:NO_REWARDS");
+        noProgressDomain.setUpdateTime(LocalDateTime.now(MONDAY));
+        when(projectionService.projection("102550550")).thenReturn(needsCraft);
+        when(projectionService.resinPriority("102550550")).thenReturn(List.of("须臾树脂"));
+        when(projectionService.craftingCountry("102550550")).thenReturn("枫丹");
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of(
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学")));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
+                completedInventoryBatch(), noProgressDomain));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        when(mapper.insert(any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim(
+                "102550550", "craft-fallback-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(10, 0, 1, 0)));
+
+        assertThat(response.actionType()).isEqualTo("CRAFT_BATCH");
+        assertThat(response.craftActions()).containsExactly(craft);
     }
 
     @Test

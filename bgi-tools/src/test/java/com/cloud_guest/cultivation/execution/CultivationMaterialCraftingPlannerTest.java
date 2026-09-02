@@ -27,6 +27,7 @@ class CultivationMaterialCraftingPlannerTest {
         assertThat(catalog.family("「笃行」的指引").orElseThrow().tiers())
                 .extracting(CultivationMaterialCraftingCatalog.CraftTier::qualityLevel)
                 .containsExactly(2, 3, 4);
+        assertThat(catalog.family("智识之冕")).isEmpty();
         assertThat(catalog.family("沙脂蛹")).isEmpty();
     }
 
@@ -97,6 +98,24 @@ class CultivationMaterialCraftingPlannerTest {
         assertThat(result.remainingByMaterial()).containsEntry("哀叙冰玉", 0L);
     }
 
+    @Test
+    void doesNotInflateAHighWaterDeficitAfterInventoryConsumption() throws Exception {
+        CultivationMaterialCraftingPlanner planner = new CultivationMaterialCraftingPlanner(catalog());
+        CultivationLedgerEntry teachings = entry("「笃行」的教导", 0, 0);
+        CultivationLedgerEntry guides = entry("「笃行」的指引", 0, 6);
+        CultivationLedgerEntry philosophies = new CultivationLedgerEntry(
+                null, "「笃行」的哲学", 92, 90, 6L, 2,
+                RemainingEvidence.OCR, 1.0, false, List.of());
+
+        CultivationMaterialCraftingPlan result = planner.plan(
+                List.of(teachings, guides, philosophies));
+
+        assertThat(result.actions())
+                .extracting(CultivationCraftingAction::materialName, CultivationCraftingAction::quantity)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("「笃行」的哲学", 2L));
+        assertThat(result.remainingByMaterial()).containsEntry("「笃行」的哲学", 0L);
+    }
+
     private CultivationMaterialCraftingCatalog catalog() throws Exception {
         writeCatalog(betterGiRoot);
         CultivationMaterialSourceCatalog sourceCatalog = mock(CultivationMaterialSourceCatalog.class);
@@ -116,6 +135,7 @@ class CultivationMaterialCraftingPlannerTest {
                 material:104335,material:104335,「笃行」的教导,角色天赋素材,,2,,,x
                 material:104336,material:104336,「笃行」的指引,角色天赋素材,,3,,,x
                 material:104337,material:104337,「笃行」的哲学,角色天赋素材,,4,,,x
+                material:104338,material:104338,智识之冕,角色天赋素材,,5,,,x
                 material:112080,material:112080,异海凝珠,角色与武器培养素材,,1,,,x
                 material:112081,material:112081,异海之块,角色与武器培养素材,,2,,,x
                 material:112082,material:112082,异色结晶石,角色与武器培养素材,,3,,,x

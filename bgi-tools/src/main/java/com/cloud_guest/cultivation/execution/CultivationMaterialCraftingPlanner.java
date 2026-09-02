@@ -57,8 +57,12 @@ public class CultivationMaterialCraftingPlanner {
         for (int index = 0; index < tiers.size(); index++) {
             CultivationLedgerEntry entry = entryByName.get(tiers.get(index).materialName());
             if (entry == null) continue;
-            required[index] = entry.required();
-            available[index] = Math.max(entry.currentOwned(), 0);
+            long currentOwned = Math.max(entry.currentOwned(), 0);
+            long remainingToOriginalTarget = Math.max(entry.required() - currentOwned, 0);
+            long effectiveTarget = currentOwned
+                    + Math.min(Math.max(entry.remaining(), 0), remainingToOriginalTarget);
+            required[index] = Math.min(Math.max(entry.required(), 0), effectiveTarget);
+            available[index] = currentOwned;
         }
 
         for (int index = 0; index < tiers.size() - 1; index++) {

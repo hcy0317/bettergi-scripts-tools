@@ -68,7 +68,13 @@ public class CultivationMaterialCraftingCatalog {
                 int quality = parseInteger(values.get(qualityIndex), -1);
                 int id = parseMaterialId(values.get(idIndex));
                 String name = values.get(nameIndex).trim();
-                if (!CRAFTABLE_TYPES.contains(type) || quality <= 0 || id < 0 || name.isBlank()) continue;
+                if (!CRAFTABLE_TYPES.contains(type)
+                        || quality <= 0
+                        || quality > maxCraftableQuality(type)
+                        || id < 0
+                        || name.isBlank()) {
+                    continue;
+                }
                 tiers.add(new CraftTier(id, name, type, quality));
             }
             tiers.sort(Comparator.comparingInt(CraftTier::materialId));
@@ -101,6 +107,15 @@ public class CultivationMaterialCraftingCatalog {
     private static int parseMaterialId(String value) {
         int separator = value.lastIndexOf(':');
         return parseInteger(separator >= 0 ? value.substring(separator + 1) : value, -1);
+    }
+
+    private static int maxCraftableQuality(String materialType) {
+        return switch (materialType) {
+            case "角色天赋素材" -> 4;
+            case "角色与武器培养素材" -> 3;
+            case "角色突破素材", "武器突破素材" -> 5;
+            default -> 0;
+        };
     }
 
     private static int parseInteger(String value, int fallback) {
