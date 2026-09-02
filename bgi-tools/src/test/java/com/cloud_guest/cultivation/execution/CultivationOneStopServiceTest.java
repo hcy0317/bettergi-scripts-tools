@@ -152,6 +152,10 @@ class CultivationOneStopServiceTest {
         Files.createDirectories(routeB.getParent());
         Files.writeString(routeA, "{\"positions\":[{\"action\":\"fight\"}]}");
         Files.writeString(routeB, "{\"positions\":[{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"},{\"action\":\"fight\"}]}");
+        Path dynamicRoute = temporaryRoot.resolve(Path.of(
+                "User", "AutoPathing", "敌人与魔物", "新怪族", "新怪族@作者", "新怪族路线.json"));
+        Files.createDirectories(dynamicRoute.getParent());
+        Files.writeString(dynamicRoute, "{\"positions\":[{\"action\":\"fight\"}]}");
         Path directFamilyRoute = temporaryRoot.resolve(Path.of(
                 "User", "AutoPathing", "敌人与魔物", "盗宝团", "璃月路线.json"));
         Files.createDirectories(directFamilyRoute.getParent());
@@ -241,7 +245,7 @@ class CultivationOneStopServiceTest {
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
                 .map(project -> project.path("name").asText()).toList())
                 .containsExactly("养成体力：天赋书·武器突破·摩拉等5项", "养成采集：沙脂蛹",
-                        "养成怪物：镀金旅团·盗宝团", "周本 - 博士");
+                        "养成怪物：镀金旅团·盗宝团·新怪族", "周本 - 博士");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
@@ -323,10 +327,13 @@ class CultivationOneStopServiceTest {
         JsonNode monsterSettings = group.path("projects").get(2).path("jsScriptSettingsObject");
         assertThat(monsterSettings.path("treeLevel_0_0").get(0).asText()).isEqualTo("敌人与魔物");
         assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_1_1").spliterator(), false)
-                .map(JsonNode::asText).toList()).containsExactly("镀金旅团", "盗宝团");
+                .map(JsonNode::asText).toList()).containsExactly("镀金旅团", "盗宝团", "新怪族");
         assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_2_9").spliterator(), false)
                 .map(JsonNode::asText).toList())
                 .containsExactly("镀金旅团路线乙");
+        assertThat(StreamSupport.stream(monsterSettings.path("treeLevel_2_10").spliterator(), false)
+                .map(JsonNode::asText).toList())
+                .containsExactly("新怪族@作者");
         assertThat(monsterSettings.path("http_api").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/cron/next-timestamp/all");
         assertThat(StreamSupport.stream(group.path("projects").spliterator(), false)
@@ -485,15 +492,17 @@ class CultivationOneStopServiceTest {
                 "寻宝鸦印", 36, 0, 0, 36, "盗宝团", List.of("盗宝团·斥候"));
         var mixedRootMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
                 "混合素材", 12, 0, 0, 12, "混合族", List.of("混合怪"));
+        var dynamicMonsterTarget = new CultivationExecutionProjection.MonsterTarget(
+                "新怪素材", 12, 0, 0, 12, "新怪族", List.of("新怪"));
         var monster = new CultivationExecutionProjection.MonsterAction(
                 "FullyAutoAndSemiAutoTools", "待执行",
-                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团", "盗宝团", "混合族"),
+                Map.of("open_cd", true, "routeFamilies", List.of("镀金旅团", "盗宝团", "混合族", "新怪族"),
                         "treeLevel_0_0", List.of("锄地专区", "敌人与魔物"),
                         "treeLevel_1_0", List.of("精英400@汐"),
                         "treeLevel_1_1", List.of("巡陆艇"),
                         "config_white_list", "锄地专区"),
-                List.of(monsterTarget, directRootMonsterTarget, mixedRootMonsterTarget),
-                List.of("镀金旅团", "盗宝团", "混合族"));
+                List.of(monsterTarget, directRootMonsterTarget, mixedRootMonsterTarget, dynamicMonsterTarget),
+                List.of("镀金旅团", "盗宝团", "混合族", "新怪族"));
         return new CultivationExecutionProjection(
                 "102550550", 1, "IMPORTED", "单轮执行", List.of(resin, weapon, mora, experience), List.of(boss),
                 List.of(weekly), gather, monster, List.of(),
