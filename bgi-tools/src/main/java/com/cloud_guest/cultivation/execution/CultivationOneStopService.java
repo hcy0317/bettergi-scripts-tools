@@ -162,6 +162,7 @@ public class CultivationOneStopService {
         paths.add(root.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather", "settings.json")));
         for (String alias : List.of("HCY-FullyAutoAndSemiAutoTools", "FullyAutoAndSemiAutoTools")) {
             paths.add(root.resolve(Path.of("User", "JsScript", alias, "settings.json")));
+            paths.add(root.resolve(Path.of("User", "JsScript", alias, "config", "uidSettings.json")));
         }
 
         LinkedHashMap<Path, ManagedFileSnapshot> snapshots = new LinkedHashMap<>();
@@ -236,12 +237,23 @@ public class CultivationOneStopService {
         }
         List<Path> duplicateGroupFiles = findManagedGroupDuplicates(root, normalizedUid, groupFile);
         List<String> warnings = new ArrayList<>();
+        Path backupDirectory = root.resolve(Path.of("User", "backup", "cultivation-one-stop",
+                BACKUP_TIME.format(LocalDateTime.now())));
+        try {
+            ensureMonsterRouteDefinitions(
+                    root, normalizedUid,
+                    projection.monsterAction().targets().stream()
+                            .map(CultivationExecutionProjection.MonsterTarget::routeFamily)
+                            .distinct()
+                            .toList(),
+                    backupDirectory, warnings);
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法同步 FullyAutoAndSemiAutoTools 新怪物路线字段", exception);
+        }
         ObjectNode managedGroup = buildManagedGroup(
                 root, groupFile, groupName, projection, autoPlan, gather, monster, weekly,
                 groupSettings, warnings);
 
-        Path backupDirectory = root.resolve(Path.of("User", "backup", "cultivation-one-stop",
-                BACKUP_TIME.format(LocalDateTime.now())));
         try {
             for (Path duplicate : duplicateGroupFiles) {
                 backup(duplicate, backupDirectory.resolve("ScriptGroup").resolve(duplicate.getFileName()));
@@ -578,6 +590,71 @@ public class CultivationOneStopService {
             }
         }
         return new MonsterRouteSelection(Map.of(), List.of(), List.copyOf(families));
+    }
+
+    private void ensureMonsterRouteDefinitions(
+            Path root,
+            String uid,
+            Collection<String> families,
+            Path backupDirectory,
+            List<String> warnings) throws IOException {
+        if (families.isEmpty()) return;
+        for (String alias : List.of("HCY-FullyAutoAndSemiAutoTools", "FullyAutoAndSemiAutoTools")) {
+            Path uidSettingsFile = root.resolve(Path.of(
+                    "User", "JsScript", alias, "config", "uidSettings.json"));
+            if (!Files.isRegularFile(uidSettingsFile)) continue;
+            JsonNode parsed = objectMapper.readTree(uidSettingsFile.toFile());
+            if (!(parsed instanceof ArrayNode entries)) continue;
+            for (JsonNode entry : entries) {
+                if (!entry.isArray() || entry.size() < 2 || !uid.equals(entry.get(0).asText())
+                        || !(entry.get(1) instanceof ArrayNode definitions)) continue;
+                LinkedHashSet<String> existingFamilies = new LinkedHashSet<>();
+                LinkedHashSet<String> usedFieldNames = new LinkedHashSet<>();
+                int nextIndex = 0;
+                for (JsonNode field : definitions) {
+                    String name = field.path("name").asText();
+                    usedFieldNames.add(name);
+                    if (name.startsWith("treeLevel_2_")) {
+                        try {
+                            nextIndex = Math.max(nextIndex,
+                                    Integer.parseInt(name.substring("treeLevel_2_".length())) + 1);
+                        } catch (NumberFormatException ignored) {
+                            // Non-numeric extension fields remain reserved but do not affect the next numeric slot.
+                        }
+                    }
+                    String label = field.path("label").asText();
+                    for (String family : families) {
+                        if (label.contains("->[" + family + "]")) existingFamilies.add(family);
+                    }
+                }
+
+                boolean changed = false;
+                for (String family : families) {
+                    if (existingFamilies.contains(family)) continue;
+                    List<String> options = monsterRouteBundleDirectories(root, family);
+                    if (options.isEmpty()) continue;
+                    String fieldName;
+                    do {
+                        fieldName = "treeLevel_2_" + nextIndex++;
+                    } while (usedFieldNames.contains(fieldName));
+                    usedFieldNames.add(fieldName);
+                    definitions.add(selectionField(
+                            fieldName,
+                            "选择要执行的3级路径\n《敌人与魔物》->[" + family + "]",
+                            options));
+                    changed = true;
+                }
+                if (changed) {
+                    writeJsonIfChanged(
+                            uidSettingsFile,
+                            entries,
+                            backupDirectory.resolve(Path.of(
+                                    "ScriptSettings", alias, "config", "uidSettings.json")));
+                }
+                return;
+            }
+        }
+        warnings.add("未找到 FullyAutoAndSemiAutoTools 当前 UID 动态设置表，无法登记新怪物路线");
     }
 
     private List<String> monsterRouteBundleDirectories(Path root, String family) throws IOException {
