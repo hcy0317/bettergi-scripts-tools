@@ -246,10 +246,10 @@ class CultivationOneStopServiceTest {
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
         assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();
-        assertThat(autoPlanSettings.has("talentDomainEnabled")).isFalse();
-        assertThat(autoPlanSettings.has("weaponDomainEnabled")).isFalse();
-        assertThat(autoPlanSettings.has("moraLeyLineEnabled")).isFalse();
-        assertThat(autoPlanSettings.has("experienceLeyLineEnabled")).isFalse();
+        assertThat(autoPlanSettings.path("talentDomainEnabled").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("weaponDomainEnabled").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("moraLeyLineEnabled").asBoolean()).isTrue();
+        assertThat(autoPlanSettings.path("experienceLeyLineEnabled").asBoolean()).isTrue();
         assertThat(autoPlanSettings.path("run_config").asText()).isEmpty();
         assertThat(autoPlanSettings.path("auto_check")).isEmpty();
         assertThat(autoPlanSettings.path("bgi_tools_token").asText()).isEmpty();

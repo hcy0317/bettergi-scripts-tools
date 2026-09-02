@@ -36,17 +36,16 @@ class CultivationModuleConfigurationServiceTest {
                 .isEqualTo(List.of("浓缩树脂", "原粹树脂"));
         assertThat(module.settingsSchema())
                 .extracting(CultivationModuleSettingField::key)
-                .doesNotContain(
+                .contains(
                         "talentDomainEnabled",
                         "weaponDomainEnabled",
                         "moraLeyLineEnabled",
                         "experienceLeyLineEnabled");
         assertThat(module.defaultSettings("102550550"))
-                .doesNotContainKeys(
-                        "talentDomainEnabled",
-                        "weaponDomainEnabled",
-                        "moraLeyLineEnabled",
-                        "experienceLeyLineEnabled");
+                .containsEntry("talentDomainEnabled", true)
+                .containsEntry("weaponDomainEnabled", true)
+                .containsEntry("moraLeyLineEnabled", true)
+                .containsEntry("experienceLeyLineEnabled", true);
     }
 
     @Test

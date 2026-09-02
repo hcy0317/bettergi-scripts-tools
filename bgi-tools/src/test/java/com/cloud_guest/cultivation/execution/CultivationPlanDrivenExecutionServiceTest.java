@@ -173,6 +173,47 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
+    void skipsDisabledTalentDomainsAndBuildsANativeMoraLeyLinePlan() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        var mora = new CultivationExecutionProjection.ResinAction(
+                "摩拉", 500_000, "地脉", "藏金之花", "经验与摩拉", "钟纳久万",
+                "可生成下一步行动", null, "摩拉", List.of());
+        CultivationExecutionProjection withLeyLine = new CultivationExecutionProjection(
+                current.uid(), current.revision(), current.state(), current.executionMode(),
+                List.of(current.resinActions().get(1), mora), current.bossActions(),
+                current.weeklyBossActions(), current.gatherAction(), current.monsterAction(),
+                current.pendingMaterials(), current.preferences(), current.partyOptions());
+        when(projectionService.projection("102550550")).thenReturn(withLeyLine);
+        when(projectionService.resinPriority("102550550")).thenReturn(List.of("须臾树脂", "原粹树脂"));
+        when(projectionService.resinActionSwitches("102550550"))
+                .thenReturn(new CultivationResinActionSwitches(false, true, true, true));
+        when(projectionService.leyLineCountry("102550550")).thenReturn("至冬");
+        when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of("「公平」的哲学")));
+        when(mapper.findCompletedObservations("102550550", 3)).thenReturn(List.of(
+                completedInventoryBatch()));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        when(mapper.insert(any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim(
+                "102550550", "mora-ley-line-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(20, 0, 0, 0)));
+
+        assertThat(response.actionType()).isEqualTo("DOMAIN");
+        assertThat(response.materialName()).isEqualTo("摩拉");
+        assertThat(response.plan().getAutoDomain()).isNull();
+        assertThat(response.plan().getAutoLeyLineOutcrop()).satisfies(leyLine -> {
+            assertThat(leyLine.getCountry()).isEqualTo("至冬");
+            assertThat(leyLine.getLeyLineOutcropType()).isEqualTo("藏金之花");
+            assertThat(leyLine.isUseTransientResin()).isTrue();
+        });
+    }
+
+    @Test
     void usesTheResinSnapshotToChooseTheCraftBatchWhenSelectedResinIsEmpty() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
