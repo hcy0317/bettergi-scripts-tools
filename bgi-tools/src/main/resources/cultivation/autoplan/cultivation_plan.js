@@ -42,6 +42,7 @@ async function observeOwned(materialName, reconcileGrid) {
     const param = new CountInventoryItemParam();
     param.GridScreenName = GridScreenName.CharacterDevelopmentItems;
     param.ItemName = materialName;
+    param.IconRecognitionMode = ItemIconRecognitionMode.Item;
     const value = await dispatcher.RunCountInventoryItemTask(param);
     const observed = Number(value);
     if (!Number.isFinite(observed)) return null;
@@ -52,6 +53,7 @@ async function countInventoryItems(names, gridScreenName) {
     return await dispatcher.runTask(new SoloTask("CountInventoryItem", {
         gridScreenName,
         itemNames: names,
+        iconRecognitionMode: "Item",
     }));
 }
 

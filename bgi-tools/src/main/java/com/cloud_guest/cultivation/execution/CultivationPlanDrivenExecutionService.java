@@ -384,25 +384,25 @@ public class CultivationPlanDrivenExecutionService {
             throw new IllegalStateException("库存观察 revision 已过期");
         }
         LinkedHashSet<String> targets = new LinkedHashSet<>(readInventoryTargets(entity));
-        LinkedHashMap<String, Long> observations = new LinkedHashMap<>();
-        request.observedOwned().forEach((name, value) -> observations.put(require(name, "材料名称"), value));
-        if (!observations.keySet().equals(targets)) {
-            throw new IllegalArgumentException("库存观察必须完整覆盖当前组末复核目标");
+        LinkedHashMap<String, Long> submitted = new LinkedHashMap<>();
+        request.observedOwned().forEach((name, value) -> submitted.put(require(name, "材料名称"), value));
+        if (!targets.containsAll(submitted.keySet())) {
+            throw new IllegalArgumentException("库存观察包含当前组末复核目标之外的材料");
         }
-        if (observations.values().stream().anyMatch(java.util.Objects::isNull)) {
+        if (submitted.values().stream().anyMatch(java.util.Objects::isNull)) {
             throw new IllegalArgumentException("库存未知值必须使用负数显式上报");
         }
-        boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0);
 
         if (entity.getResultIdempotencyKey() != null) {
             if (!idempotencyKey.equals(entity.getResultIdempotencyKey())) {
                 throw new IllegalStateException("库存复核已由另一个幂等结果完成");
             }
             if (COMPLETED.equals(entity.getStatus())) {
-                if (!observations.equals(readInventoryObservations(entity))) {
+                Map<String, Long> stored = readInventoryObservations(entity);
+                if (!isCompatibleInventorySubmission(submitted, stored, targets)) {
                     throw new IllegalStateException("库存复核幂等键已对应不同结果");
                 }
-                return inventoryResult(entity, observations);
+                return inventoryResult(entity, stored);
             }
             if (!AWAITING_RECONCILE.equals(entity.getStatus())
                     && !RECONCILE_RETRY_LEASED.equals(entity.getStatus())) {
@@ -416,12 +416,25 @@ public class CultivationPlanDrivenExecutionService {
         if (entity.getLeaseExpiresAt() == null || !entity.getLeaseExpiresAt().isAfter(now)) {
             throw new IllegalStateException("库存复核租约已过期");
         }
+        Map<String, Long> previousInventory = previousInventory(normalizedUid, entity.getPlanRevision());
+        boolean hadUnknown = targets.stream().anyMatch(name ->
+                !submitted.containsKey(name) || submitted.get(name) < 0);
+        LinkedHashMap<String, Long> observations = new LinkedHashMap<>();
+        targets.forEach(name -> {
+            Long reported = submitted.get(name);
+            observations.put(name, reported != null && reported >= 0
+                    ? reported
+                    : previousInventory.getOrDefault(name, -1L));
+        });
+        boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0);
         String previousStatus = entity.getStatus();
         entity.setResultIdempotencyKey(idempotencyKey);
         entity.setRewardsJson(write(observations));
         entity.setTerminationReason(hasUnknown
                 ? "INVENTORY_RECONCILE_UNKNOWN_PRESERVED"
-                : "INVENTORY_RECONCILE");
+                : hadUnknown
+                    ? "INVENTORY_RECONCILE_PARTIAL_WITH_PREVIOUS"
+                    : "INVENTORY_RECONCILE");
         entity.setStatus(hasUnknown ? AWAITING_RECONCILE : COMPLETED);
         entity.setLeaseKey(hasUnknown ? entity.getUid() + ":" + entity.getPlanRevision() : null);
         var update = Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
@@ -444,6 +457,31 @@ public class CultivationPlanDrivenExecutionService {
             throw new IllegalStateException("库存复核已由另一个幂等结果完成");
         }
         return inventoryResult(entity, observations);
+    }
+
+    private Map<String, Long> previousInventory(String uid, int revision) {
+        CultivationExecutionProjection projection = executionService.projection(uid);
+        if (projection == null || projection.revision() != revision) return Map.of();
+
+        LinkedHashMap<String, Long> previous = new LinkedHashMap<>();
+        projection.materialProgress().forEach(progress ->
+                putTrustedInventory(previous, progress.materialName(), progress.currentOwned()));
+        projection.gatherAction().csvTargets().forEach(target ->
+                putTrustedInventory(previous, target.materialName(), target.currentOwned()));
+        projection.monsterAction().targets().forEach(target ->
+                putTrustedInventory(previous, target.materialName(), target.currentOwned()));
+        return previous;
+    }
+
+    private static void putTrustedInventory(Map<String, Long> inventory, String name, long value) {
+        if (name != null && !name.isBlank() && value >= 0) inventory.putIfAbsent(name, value);
+    }
+
+    private static boolean isCompatibleInventorySubmission(
+            Map<String, Long> submitted, Map<String, Long> stored, java.util.Set<String> targets) {
+        if (!stored.keySet().equals(targets)) return false;
+        return submitted.entrySet().stream().allMatch(entry ->
+                entry.getValue() < 0 || java.util.Objects.equals(stored.get(entry.getKey()), entry.getValue()));
     }
 
     private boolean hasFreshCraftInventoryEvidence(CultivationExecutionProjection projection) {
@@ -556,10 +594,14 @@ public class CultivationPlanDrivenExecutionService {
         int observedCount = (int) observations.values().stream().filter(value -> value >= 0).count();
         boolean completed = COMPLETED.equals(entity.getStatus());
         boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0);
+        boolean usedPrevious = "INVENTORY_RECONCILE_PARTIAL_WITH_PREVIOUS"
+                .equals(entity.getTerminationReason());
         return new CultivationInventoryObservationResponse(
             completed ? "REPLANNING" : "NEEDS_RECONCILE",
                 completed
-                        ? "权威库存已回写，将自动重生成后续路线"
+                        ? usedPrevious
+                            ? "已回写识别成功项，未知项沿用上次可信库存，将自动重生成后续路线"
+                            : "权威库存已回写，将自动重生成后续路线"
                         : hasUnknown
                             ? "合成相关库存仍有未知项，已阻止继续领取行动"
                             : "库存复核尚未完成",

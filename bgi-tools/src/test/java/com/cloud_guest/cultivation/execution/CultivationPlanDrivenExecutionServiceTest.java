@@ -556,7 +556,7 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
-    void keepsUnknownInventoryBatchOpenAndBlocksFurtherActions() throws Exception {
+    void usesPreviousTrustedValueForUnknownInventoryWithoutDroppingRecognizedValues() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
         CultivationExecutionActionEntity leased = inventoryBatch("inventory-unknown");
@@ -566,14 +566,45 @@ class CultivationPlanDrivenExecutionServiceTest {
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
 
+        CultivationInventoryObservationRequest request = new CultivationInventoryObservationRequest(
+                "inventory-unknown", "inventory-executor", 3, "inventory-unknown:result",
+                Map.of("沙脂蛹", -1L, "织金红绸", 73L));
         CultivationInventoryObservationResponse response = service.recordInventoryObservations(
+                "102550550", request);
+        CultivationInventoryObservationResponse repeated = service.recordInventoryObservations(
                 "102550550", new CultivationInventoryObservationRequest(
                         "inventory-unknown", "inventory-executor", 3, "inventory-unknown:result",
                         Map.of("沙脂蛹", -1L, "织金红绸", 73L)));
 
+        assertThat(response.status()).isEqualTo("REPLANNING");
+        assertThat(repeated.status()).isEqualTo("REPLANNING");
+        assertThat(response.observedCount()).isEqualTo(2);
+        assertThat(response.message()).contains("未知项沿用上次可信库存");
+        assertThat(leased.getStatus()).isEqualTo("COMPLETED");
+        assertThat(leased.getLeaseKey()).isNull();
+        assertThat(leased.getTerminationReason()).isEqualTo("INVENTORY_RECONCILE_PARTIAL_WITH_PREVIOUS");
+        assertThat(new ObjectMapper().readTree(leased.getRewardsJson()))
+                .isEqualTo(new ObjectMapper().readTree("{\"沙脂蛹\":4,\"织金红绸\":73}"));
+    }
+
+    @Test
+    void keepsUnknownInventoryOpenWhenNoPreviousTrustedValueExists() throws Exception {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity leased = inventoryBatch("inventory-without-fallback");
+        when(projectionService.projection("102550550")).thenReturn(projection());
+        when(mapper.selectById("inventory-without-fallback")).thenReturn(leased);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationInventoryObservationResponse response = service.recordInventoryObservations(
+                "102550550", new CultivationInventoryObservationRequest(
+                        "inventory-without-fallback", "inventory-executor", 3,
+                        "inventory-without-fallback:result", Map.of("沙脂蛹", -1L, "织金红绸", 73L)));
+
         assertThat(response.status()).isEqualTo("NEEDS_RECONCILE");
         assertThat(response.observedCount()).isEqualTo(1);
-        assertThat(response.message()).contains("已阻止继续领取行动");
         assertThat(leased.getStatus()).isEqualTo("AWAITING_RECONCILE");
         assertThat(leased.getLeaseKey()).isEqualTo("102550550:3");
         assertThat(leased.getTerminationReason()).isEqualTo("INVENTORY_RECONCILE_UNKNOWN_PRESERVED");
@@ -582,19 +613,25 @@ class CultivationPlanDrivenExecutionServiceTest {
     }
 
     @Test
-    void rejectsPartialFinalInventoryInsteadOfSilentlyDroppingUnknownTargets() {
+    void fillsOmittedInventoryTargetFromPreviousTrustedValue() throws Exception {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
-        when(mapper.selectById("inventory-partial")).thenReturn(inventoryBatch("inventory-partial"));
+        CultivationExecutionActionEntity leased = inventoryBatch("inventory-partial");
+        when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+        when(mapper.selectById("inventory-partial")).thenReturn(leased);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
 
-        assertThatThrownBy(() -> service.recordInventoryObservations(
+        CultivationInventoryObservationResponse response = service.recordInventoryObservations(
                 "102550550", new CultivationInventoryObservationRequest(
                         "inventory-partial", "inventory-executor", 3, "inventory-partial:result",
-                        Map.of("沙脂蛹", 48L))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("完整覆盖");
+                        Map.of("沙脂蛹", 48L)));
+
+        assertThat(response.status()).isEqualTo("REPLANNING");
+        assertThat(response.observedCount()).isEqualTo(2);
+        assertThat(new ObjectMapper().readTree(leased.getRewardsJson()))
+                .isEqualTo(new ObjectMapper().readTree("{\"沙脂蛹\":48,\"织金红绸\":59}"));
     }
 
     @Test
@@ -686,8 +723,12 @@ class CultivationPlanDrivenExecutionServiceTest {
         var monster = new CultivationExecutionProjection.MonsterAction(
                 "FullyAutoAndSemiAutoTools", "待执行", Map.of(), List.of(monsterTarget), List.of("镀金旅团"));
         return new CultivationExecutionProjection(
-                "102550550", 3, "ACTIVE", "计划驱动", List.of(), List.of(), List.of(),
+                "102550550", 3, "ACTIVE", "计划驱动", List.of(), List.of(), List.of(), List.of(),
                 gather, monster, List.of(), new CultivationExecutionPreferences(
-                "102550550", "", "", "", true), List.of());
+                "102550550", "", "", "", true), List.of(), List.of(), List.of(
+                new CultivationExecutionProjection.MaterialProgress(
+                        "沙脂蛹", 4, 168, 164, "沙脂蛹", 0, 1, 0),
+                new CultivationExecutionProjection.MaterialProgress(
+                        "织金红绸", 59, 129, 70, "织金红绸", 0, 1, 0)));
     }
 }
