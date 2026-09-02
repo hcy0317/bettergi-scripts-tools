@@ -19,6 +19,7 @@ $taskRegistrationPath = Join-Path $PSScriptRoot 'Register-BetterGIScriptsToolsDe
 $localOpsRegistrationPath = Join-Path $PSScriptRoot 'Register-BetterGIScriptsToolsLocalOps.ps1'
 $artifactHandlerPath = Join-Path $PSScriptRoot 'Invoke-BetterGIArtifactUrl.ps1'
 $artifactRegistrationPath = Join-Path $PSScriptRoot 'Register-BetterGIArtifactUrlProtocol.ps1'
+$autoPlanIntegrationTestPath = Join-Path $PSScriptRoot 'test-bettergi-scripts-tools-autoplan-integration.ps1'
 
 foreach ($requiredPath in @(
     $commonPath,
@@ -26,7 +27,8 @@ foreach ($requiredPath in @(
     $taskRegistrationPath,
     $localOpsRegistrationPath,
     $artifactHandlerPath,
-    $artifactRegistrationPath
+    $artifactRegistrationPath,
+    $autoPlanIntegrationTestPath
 )) {
     Assert-True (Test-Path -LiteralPath $requiredPath -PathType Leaf) "Missing deployment control script: $requiredPath"
 }
@@ -78,6 +80,12 @@ Assert-True ($runnerSource.Contains('deployedArtifactProtocolHandler')) `
     'Task runner must copy the artifact protocol handler into the formal BetterGI deployment'
 Assert-True ($runnerSource.Contains('-HandlerPath $deployedArtifactProtocolHandler')) `
     'Task runner must register the formal deployed artifact protocol handler'
+Assert-True ($runnerSource.Contains('deployedAutoPlanIntegrationTest')) `
+    'Task runner must install the versioned AutoPlan integration gate before deployment'
+
+$autoPlanIntegrationTestSource = Get-Content -LiteralPath $autoPlanIntegrationTestPath -Raw -Encoding UTF8
+Assert-True ($autoPlanIntegrationTestSource.Contains('expectsMonsterProject')) `
+    'AutoPlan integration gate must allow target-complete or disabled monster modules to be absent'
 
 $taskSource = Get-Content -LiteralPath $taskRegistrationPath -Raw -Encoding UTF8
 Assert-True ($taskSource.Contains("BetterGI-ScriptsTools-Deploy")) 'Task registration must use the governed task name'

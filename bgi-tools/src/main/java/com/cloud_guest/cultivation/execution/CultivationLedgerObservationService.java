@@ -44,9 +44,17 @@ public class CultivationLedgerObservationService {
         CultivationExecutionActionEntity active = actionMapper.findLeased(imported.uid(), imported.revision());
         boolean awaitingReconcile = active != null && ("AWAITING_RECONCILE".equals(active.getStatus())
                 || "RECONCILE_RETRY_LEASED".equals(active.getStatus()));
-        List<CultivationExecutionActionEntity> observations = actionMapper.findCompletedObservations(
+        List<CultivationExecutionActionEntity> completedObservations = actionMapper.findCompletedObservations(
                 imported.uid(), imported.revision());
-        if (observations == null || observations.isEmpty()) {
+        List<CultivationExecutionActionEntity> observations = new ArrayList<>();
+        if (awaitingReconcile
+                && "INVENTORY_RECONCILE_BATCH".equals(active.getActionType())
+                && active.getRewardsJson() != null
+                && !active.getRewardsJson().isBlank()) {
+            observations.add(active);
+        }
+        if (completedObservations != null) observations.addAll(completedObservations);
+        if (observations.isEmpty()) {
             return awaitingReconcile ? withState(imported, "NEEDS_RECONCILE", imported.requirements()) : imported;
         }
 
@@ -77,6 +85,7 @@ public class CultivationLedgerObservationService {
                 .toList();
         List<CultivationLedgerEntry> effectiveRequirements = progress.stream()
                 .map(EntryProgress::entry).toList();
+        effectiveRequirements = applyExperienceBookProgress(effectiveRequirements, latestOwned);
         boolean inventoryDecreased = hasUnexplainedInventoryDecrease(imported, observations);
         CultivationMaterialCraftingPlan craftingPlan = craftingPlan(effectiveRequirements);
         effectiveRequirements = effectiveRequirements.stream().map(entry -> new CultivationLedgerEntry(
@@ -94,6 +103,38 @@ public class CultivationLedgerObservationService {
                     : effectiveRequirements.stream().allMatch(item -> item.remaining() <= 0)
                         ? "COMPLETED" : "ACTIVE";
         return withState(imported, state, effectiveRequirements);
+    }
+
+    private static List<CultivationLedgerEntry> applyExperienceBookProgress(
+            List<CultivationLedgerEntry> requirements,
+            Map<String, Long> latestOwned) {
+        CultivationLedgerEntry topTier = requirements.stream()
+                .filter(entry -> CultivationExperienceBookFamily.FAMILY_NAME.equals(entry.materialName()))
+                .findFirst()
+                .orElse(null);
+        if (topTier == null) return requirements;
+
+        LinkedHashMap<String, CultivationLedgerEntry> byName = new LinkedHashMap<>();
+        requirements.forEach(entry -> byName.put(entry.materialName(), entry));
+        for (var tier : CultivationExperienceBookFamily.TIERS) {
+            byName.computeIfAbsent(tier.materialName(), ignored -> new CultivationLedgerEntry(
+                    null, tier.materialName(), 0, 0,
+                    Math.max(latestOwned.getOrDefault(tier.materialName(), 0L), 0L), 0,
+                    com.cloud_guest.cultivation.ocr.RemainingEvidence.OCR,
+                    null, false, List.of()));
+        }
+
+        Map<String, Long> ownedByName = new LinkedHashMap<>();
+        CultivationExperienceBookFamily.TIERS.forEach(tier ->
+                ownedByName.put(tier.materialName(), byName.get(tier.materialName()).currentOwned()));
+        long weightedRemaining = Math.min(
+                topTier.remaining(),
+                CultivationExperienceBookFamily.remainingTopTier(topTier.required(), ownedByName));
+        byName.put(CultivationExperienceBookFamily.FAMILY_NAME, new CultivationLedgerEntry(
+                topTier.sourceIndex(), topTier.materialName(), topTier.required(), topTier.baselineOwned(),
+                topTier.currentOwned(), weightedRemaining, topTier.remainingEvidence(), topTier.ocrConfidence(),
+                topTier.manuallyCorrected(), topTier.sourceBlocks()));
+        return List.copyOf(byName.values());
     }
 
     public CultivationMaterialCraftingPlan craftingPlan(List<CultivationLedgerEntry> entries) {

@@ -133,7 +133,7 @@ public class CultivationPlanController {
             @RequestBody CultivationInventoryObservationRequest request) {
         CultivationInventoryObservationResponse response =
                 planDrivenExecutionService.recordInventoryObservations(uid, request);
-        if ("REPLANNING".equals(response.status())) oneStopService.prepare(response.uid());
+        if (response.observedCount() > 0) oneStopService.prepare(response.uid());
         return ok(response);
     }
 
@@ -164,9 +164,7 @@ public class CultivationPlanController {
             @RequestParam String uid,
             @PathVariable String moduleId,
             @RequestBody CultivationModuleConfigurationRequest request) {
-        CultivationModuleConfiguration saved = moduleConfigurationService.save(uid, moduleId, request);
-        oneStopService.prepare(uid);
-        return ok(saved);
+        return ok(oneStopService.saveModuleAndPrepare(uid, moduleId, request));
     }
 
     @PostMapping("execution/modules/{moduleId}/sync")

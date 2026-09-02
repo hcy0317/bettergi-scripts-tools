@@ -158,6 +158,27 @@ const saveModule = async module => {
   }
 }
 
+const toggleModule = async (module, nextEnabled) => {
+  if (!props.uid.trim() || isGroupSettings(module)) return
+  const previousEnabled = module.enabled
+  savingModuleId.value = module.module.moduleId
+  try {
+    await saveCultivationExecutionModule(props.uid.trim(), module.module.moduleId, {
+      enabled: nextEnabled,
+      settings: null
+    })
+    module.enabled = nextEnabled
+    ElMessage.success(`${module.module.displayName}已${nextEnabled ? '启用' : '停用'}`)
+    await load()
+  } catch (error) {
+    module.enabled = previousEnabled
+    ElMessage.error(error?.message || `${module.module.displayName}启停保存失败`)
+    await load()
+  } finally {
+    savingModuleId.value = ''
+  }
+}
+
 const moduleFields = module => module.module.settingsSchema || []
 const visibleModuleFields = module => moduleFields(module).filter(field => field.control !== 'hidden')
 const settingsPayload = module => Object.fromEntries(
@@ -331,13 +352,29 @@ watch(() => props.uid, () => load(), {immediate: true})
           </div>
         </div>
         <div class="module-grid">
-          <article v-for="module in displayModules" :key="module.module.moduleId" class="module-card">
+          <article
+              v-for="module in displayModules"
+              :key="module.module.moduleId"
+              class="module-card"
+              :class="{'module-card-disabled': !module.enabled && !isGroupSettings(module)}"
+          >
             <header class="module-header">
               <div>
                 <strong>{{ module.module.displayName }}</strong>
                 <span>适配器版本 {{ module.module.adapterVersion }}</span>
               </div>
               <el-tag v-if="isGroupSettings(module)" type="primary" effect="plain">生成时固定启用</el-tag>
+              <div v-else class="module-toggle">
+                <span>{{ module.enabled ? '已启用' : '已停用' }}</span>
+                <el-switch
+                    size="small"
+                    :model-value="module.enabled"
+                    :loading="savingModuleId === module.module.moduleId"
+                    :disabled="Boolean(savingModuleId)"
+                    :aria-label="`${module.module.displayName}启停`"
+                    @change="value => toggleModule(module, value)"
+                />
+              </div>
             </header>
             <p>{{ module.module.description }}</p>
             <el-tag :type="module.module.integrationState.includes('等待') ? 'warning' : 'success'" effect="plain">
@@ -665,6 +702,11 @@ watch(() => props.uid, () => load(), {immediate: true})
   break-inside: avoid;
 }
 
+.module-card-disabled {
+  background: var(--el-fill-color-light);
+  border-style: dashed;
+}
+
 .module-header {
   display: flex;
   justify-content: space-between;
@@ -680,6 +722,13 @@ watch(() => props.uid, () => load(), {immediate: true})
 .module-header span {
   color: #68717c;
   font-size: 11px;
+}
+
+.module-header > .module-toggle {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .capability-row {

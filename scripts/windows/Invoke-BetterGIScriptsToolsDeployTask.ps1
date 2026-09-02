@@ -11,10 +11,19 @@ $deploymentScript = Join-Path $BetterGIRoot 'scripts\bettergi-scheduler\Deploy-B
 $artifactProtocolRegistration = Join-Path $PSScriptRoot 'Register-BetterGIArtifactUrlProtocol.ps1'
 $artifactProtocolHandler = Join-Path $PSScriptRoot 'Invoke-BetterGIArtifactUrl.ps1'
 $deployedArtifactProtocolHandler = Join-Path $BetterGIRoot 'scripts\bettergi-scripts-tools\Invoke-BetterGIArtifactUrl.ps1'
+$autoPlanIntegrationTest = Join-Path $PSScriptRoot 'test-bettergi-scripts-tools-autoplan-integration.ps1'
+$deployedAutoPlanIntegrationTest = Join-Path $BetterGIRoot 'scripts\bettergi-scheduler\test-bettergi-scripts-tools-autoplan-integration.ps1'
 $logRoot = Join-Path $BetterGIRoot 'scripts\bettergi-scripts-tools\logs'
 $toolchains = Join-Path $BetterGIRoot 'toolchains'
 
-foreach ($requiredPath in @($repositoryRoot, $deploymentScript, $artifactProtocolRegistration, $artifactProtocolHandler, $toolchains)) {
+foreach ($requiredPath in @(
+    $repositoryRoot,
+    $deploymentScript,
+    $artifactProtocolRegistration,
+    $artifactProtocolHandler,
+    $autoPlanIntegrationTest,
+    $toolchains
+)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Required deployment path is missing: $requiredPath"
     }
@@ -63,6 +72,8 @@ try {
         throw "Built JAR is missing: $jarPath"
     }
     $jarHash = (Get-FileHash -LiteralPath $jarPath -Algorithm SHA256).Hash
+
+    Copy-Item -LiteralPath $autoPlanIntegrationTest -Destination $deployedAutoPlanIntegrationTest -Force
 
     & $deploymentScript `
         -BetterGIRoot $BetterGIRoot `

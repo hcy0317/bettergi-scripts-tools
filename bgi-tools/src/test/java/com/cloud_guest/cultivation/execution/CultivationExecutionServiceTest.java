@@ -35,7 +35,11 @@ class CultivationExecutionServiceTest {
         CultivationMaterialSourceCatalog materialSourceCatalog = mock(CultivationMaterialSourceCatalog.class);
         CultivationPlanRevisionResponse ledger = new CultivationPlanRevisionResponse(
                 1, "102550550", 4, "NEEDS_CRAFT", "name-only-v1", 2, "hash",
-                "PP-OCRv6", "local", List.of(entry("「笃行」的哲学", 4, 0, 4)),
+                "PP-OCRv6", "local", List.of(
+                        entry("「笃行」的哲学", 4, 0, 4),
+                        entry("沙脂蛹", 168, 180, 0),
+                        entry("异海之块", 96, 130, 0),
+                        entry("大英雄的经验", 20, 12, 8)),
                 LocalDateTime.now());
         when(planService.latest("102550550")).thenReturn(ledger);
         when(observationService.effective(ledger)).thenReturn(ledger);
@@ -52,6 +56,10 @@ class CultivationExecutionServiceTest {
                                         104336, "「笃行」的指引", "角色天赋素材", 3),
                                 new CultivationMaterialCraftingCatalog.CraftTier(
                                         104337, "「笃行」的哲学", "角色天赋素材", 4)))));
+        when(materialSourceCatalog.findSpecialtyCountry("沙脂蛹")).thenReturn(Optional.of("须弥"));
+        when(materialSourceCatalog.findMonster("异海之块")).thenReturn(Optional.of(
+                new CultivationMaterialSourceCatalog.MonsterSource(
+                        "原海异种", List.of("膨膨兽"), List.of("原海异种"))));
         CultivationExecutionService service = new CultivationExecutionService(
                 planService, observationService, mock(AutoPlanService.class),
                 mock(CultivationModuleConfigurationService.class),
@@ -59,8 +67,10 @@ class CultivationExecutionServiceTest {
                 mock(BetterGiCombatOptionCatalog.class));
 
         assertThat(service.inventoryReconcileTargets("102550550"))
+                .containsOnlyKeys("CharacterDevelopmentItems")
                 .containsEntry("CharacterDevelopmentItems", List.of(
-                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学"));
+                        "「笃行」的教导", "「笃行」的指引", "「笃行」的哲学",
+                        "流浪者的经验", "冒险家的经验", "大英雄的经验"));
     }
 
     @Test
