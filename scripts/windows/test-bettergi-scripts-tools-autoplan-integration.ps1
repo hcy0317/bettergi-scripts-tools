@@ -78,6 +78,8 @@ Assert-True (@($settings.auto_check).Count -eq 0) 'UID AutoPlan plan-driven mode
 $autoPlanScriptRoot = Join-Path $betterGiRoot 'User\JsScript\AutoPlan'
 Assert-True (Test-Path -LiteralPath (Join-Path $autoPlanScriptRoot 'utils\cultivation_plan.js') -PathType Leaf) 'Plan-driven AutoPlan bridge is missing'
 $cultivationPlan = Get-Content -Raw -LiteralPath (Join-Path $autoPlanScriptRoot 'utils\cultivation_plan.js') -Encoding UTF8
+$reconcileDeclarationCount = ([regex]::Matches($cultivationPlan, 'async function runInventoryReconcileOnce')).Count
+Assert-True ($reconcileDeclarationCount -eq 1) 'AutoPlan bridge must declare runInventoryReconcileOnce exactly once'
 Assert-True ($cultivationPlan.Contains('GridScreenName.CharacterDevelopmentItems')) 'Cultivation inventory reconciliation must scan the Character Development Items tab'
 Assert-True (-not $cultivationPlan.Contains('param.GridScreenName = GridScreenName.Materials')) 'Cultivation inventory reconciliation must not scan the generic Materials tab for ascension items'
 Assert-True ($cultivationPlan.Contains('NO_PROGRESS:NO_REWARDS')) 'Plan-driven cultivation must report an empty-reward batch as no progress'
