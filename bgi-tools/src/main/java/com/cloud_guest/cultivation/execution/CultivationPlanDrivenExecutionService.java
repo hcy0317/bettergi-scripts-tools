@@ -98,10 +98,7 @@ public class CultivationPlanDrivenExecutionService {
         if ("COMPLETED".equals(projection.state())) {
             return status("COMPLETED", "当前养成计划已由权威库存确认完成", normalizedUid, projection.revision());
         }
-        if ("NEEDS_RECONCILE".equals(projection.state())) {
-            return status("PLAN_NEEDS_RECONCILE", "计划库存状态尚未闭合，请完成一次完整库存复核",
-                    normalizedUid, projection.revision());
-        }
+        boolean planNeedsReconcile = "NEEDS_RECONCILE".equals(projection.state());
         if ("NEEDS_CRAFT".equals(projection.state())) {
             if (projection.craftingActions().isEmpty()
                     && projection.resinActions().isEmpty()
@@ -127,7 +124,8 @@ public class CultivationPlanDrivenExecutionService {
             actionMapper.updateById(existing);
         }
 
-        if (!projection.craftingActions().isEmpty()
+        if (!planNeedsReconcile
+                && !projection.craftingActions().isEmpty()
                 && !hasFreshCraftInventoryEvidence(projection)) {
             return status(
                     "PLAN_NEEDS_RECONCILE",
@@ -139,11 +137,21 @@ public class CultivationPlanDrivenExecutionService {
         CultivationResinSnapshot resinSnapshot = request == null ? null : request.resinSnapshot();
         Candidate candidate = choose(projection, resinSnapshot);
         if (candidate == null) {
+            if (planNeedsReconcile) {
+                return status("PLAN_NEEDS_RECONCILE", "计划库存状态尚未闭合，请完成一次完整库存复核",
+                        normalizedUid, projection.revision());
+            }
             return status("WAITING", "当前没有满足开放日和 P1 证据要求的体力行动", normalizedUid,
                     projection.revision());
         }
+        if (planNeedsReconcile && !isResinAction(candidate)) {
+            return status("PLAN_NEEDS_RECONCILE", "计划库存状态尚未闭合，请完成一次完整库存复核",
+                    normalizedUid, projection.revision());
+        }
         if (recentlyMadeNoProgress(normalizedUid, projection.revision(), candidate)) {
-            Candidate craftFallback = isResinAction(candidate) ? craftBatch(projection) : null;
+            Candidate craftFallback = isResinAction(candidate) && !planNeedsReconcile
+                    ? craftBatch(projection)
+                    : null;
             if (craftFallback == null
                     || recentlyMadeNoProgress(normalizedUid, projection.revision(), craftFallback)) {
                 return status(

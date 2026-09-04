@@ -28,6 +28,46 @@ class CultivationPlanDrivenExecutionServiceTest {
             Instant.parse("2026-08-24T04:00:00Z"), ZoneId.of("Asia/Shanghai"));
 
     @Test
+    void leasesAnAvailableResinActionWhileInventoryStillNeedsReconcile() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        when(projectionService.projection("102550550"))
+                .thenReturn(projectionWithState("NEEDS_RECONCILE"));
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim("102550550", "resin-executor");
+
+        assertThat(response.status()).isEqualTo("ACTION");
+        assertThat(response.actionType()).isEqualTo("DOMAIN");
+        assertThat(response.materialName()).isEqualTo("「公平」的哲学");
+        verify(mapper).insert(any(CultivationExecutionActionEntity.class));
+    }
+
+    @Test
+    void keepsCraftBlockedWhenReconcileStateHasNoSafeResinAction() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionProjection current = projection();
+        CultivationExecutionProjection reconcileOnlyCraft = new CultivationExecutionProjection(
+                current.uid(), current.revision(), "NEEDS_RECONCILE", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的指引", 3, "角色天赋素材")),
+                List.of(), List.of(), current.weeklyBossActions(), current.gatherAction(),
+                current.monsterAction(), current.pendingMaterials(), current.preferences(),
+                current.partyOptions());
+        when(projectionService.projection("102550550")).thenReturn(reconcileOnlyCraft);
+        when(mapper.findLeased("102550550", 3)).thenReturn(null);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse response = service.claim("102550550", "craft-executor");
+
+        assertThat(response.status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
     void explicitlyEmptyResinSelectionKeepsEveryPhysicalSourceDisabled() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
