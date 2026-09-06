@@ -28,6 +28,41 @@ class CultivationPlanDrivenExecutionServiceTest {
             Instant.parse("2026-08-24T04:00:00Z"), ZoneId.of("Asia/Shanghai"));
 
     @Test
+    void nullInventoryRetryLeaseCanBeReclaimedThroughTheRealSqliteMapper() throws Exception {
+        var configuration = new com.baomidou.mybatisplus.core.MybatisConfiguration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        configuration.setEnvironment(new org.apache.ibatis.mapping.Environment("test",
+                new org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory(),
+                new org.apache.ibatis.datasource.unpooled.UnpooledDataSource(
+                        "org.sqlite.JDBC", "jdbc:sqlite::memory:", null, null)));
+        configuration.addMapper(CultivationExecutionActionMapper.class);
+        var factory = new com.baomidou.mybatisplus.core.MybatisSqlSessionFactoryBuilder().build(configuration);
+        try (var sqlSession = factory.openSession(true)) {
+            org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(sqlSession.getConnection(),
+                    new org.springframework.core.io.ClassPathResource("sql/sqlite.sql"));
+            var mapper = sqlSession.getMapper(CultivationExecutionActionMapper.class);
+            var retry = inventoryBatch("null-lease-retry");
+            retry.setStatus("RECONCILE_RETRY_LEASED");
+            retry.setLeaseExpiresAt(null);
+            retry.setRemainingBefore(234L);
+            retry.setResultIdempotencyKey("null-lease-retry:result");
+            mapper.insert(retry);
+            var projectionService = mock(CultivationExecutionService.class);
+            when(projectionService.projection("102550550")).thenReturn(projectionWithReconcileTargets());
+            when(projectionService.inventoryReconcileTargets("102550550")).thenReturn(Map.of(
+                    "Materials", List.of("沙脂蛹"), "CharacterDevelopmentItems", List.of("织金红绸")));
+            var service = new CultivationPlanDrivenExecutionService(projectionService, mapper,
+                    new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+            var response = service.claimInventoryReconcile("102550550", "new-executor");
+
+            assertThat(response.status()).isEqualTo("NEEDS_RECONCILE");
+            assertThat(response.actionId()).isEqualTo("null-lease-retry");
+            assertThat(response.materialNames()).containsExactly("沙脂蛹", "织金红绸");
+        }
+    }
+
+    @Test
     void expiredInventoryRetryMustRecountBeforeLeasingResin() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);

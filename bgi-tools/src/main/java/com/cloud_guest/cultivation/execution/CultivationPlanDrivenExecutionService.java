@@ -346,7 +346,10 @@ public class CultivationPlanDrivenExecutionService {
                         .eq(CultivationExecutionActionEntity::getExecutorId, previousExecutor)
                         .eq(CultivationExecutionActionEntity::getResultIdempotencyKey,
                                 existing.getResultIdempotencyKey())
-                        .le(CultivationExecutionActionEntity::getLeaseExpiresAt, LocalDateTime.now(clock)));
+                        .and(lease -> lease
+                                .isNull(CultivationExecutionActionEntity::getLeaseExpiresAt)
+                                .or()
+                                .le(CultivationExecutionActionEntity::getLeaseExpiresAt, LocalDateTime.now(clock))));
                 if (transferred != 1) {
                     return inventoryStatus(
                             "BUSY", "组末库存重试租约刚被其他执行器接管，请重新领取",
