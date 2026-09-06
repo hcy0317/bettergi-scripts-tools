@@ -1,12 +1,13 @@
 [CmdletBinding()]
 param(
     [string]$BetterGIRoot = 'C:\Users\hcy\Programs\Genshin Tools\BetterGI',
-    [string]$ExpectedBranch = 'master'
+    [string]$ExpectedBranch = 'main'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$deploymentCommonPath = Join-Path $PSScriptRoot 'BetterGIScriptsToolsDeployment.Common.ps1'
 $deploymentScript = Join-Path $BetterGIRoot 'scripts\bettergi-scheduler\Deploy-BetterGIScriptsToolsAutoPlan.ps1'
 $artifactProtocolRegistration = Join-Path $PSScriptRoot 'Register-BetterGIArtifactUrlProtocol.ps1'
 $artifactProtocolHandler = Join-Path $PSScriptRoot 'Invoke-BetterGIArtifactUrl.ps1'
@@ -18,6 +19,7 @@ $toolchains = Join-Path $BetterGIRoot 'toolchains'
 
 foreach ($requiredPath in @(
     $repositoryRoot,
+    $deploymentCommonPath,
     $deploymentScript,
     $artifactProtocolRegistration,
     $artifactProtocolHandler,
@@ -29,6 +31,8 @@ foreach ($requiredPath in @(
     }
 }
 
+. $deploymentCommonPath
+
 $dirty = @(git -C $repositoryRoot status --porcelain)
 if ($LASTEXITCODE -ne 0) {
     throw 'Unable to inspect the bettergi-scripts-tools working tree.'
@@ -38,7 +42,7 @@ if ($dirty.Count -gt 0) {
 }
 
 $branch = (git -C $repositoryRoot rev-parse --abbrev-ref HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $branch -ne $ExpectedBranch) {
+if ($LASTEXITCODE -ne 0 -or -not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch $branch -ExpectedBranch $ExpectedBranch)) {
     throw "Refusing to deploy branch '$branch'; expected '$ExpectedBranch'."
 }
 
