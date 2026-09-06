@@ -41,6 +41,10 @@ Assert-True (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'main' -Exp
     'Legacy deployment callers must accept the canonical main checkout'
 Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'dev' -ExpectedBranch 'main')) `
     'The compatibility alias must not allow a development branch deployment'
+Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'dev' -ExpectedBranch 'dev')) `
+    'An explicit expected branch must not bypass the release alias allowlist'
+Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'codex/test' -ExpectedBranch 'codex/test')) `
+    'Matching arbitrary branch names must not bypass the release alias allowlist'
 Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'Main' -ExpectedBranch 'main')) `
     'Git branch names must be matched case-sensitively'
 

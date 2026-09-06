@@ -6,9 +6,8 @@ function Test-BetterGIScriptsToolsDeploymentBranch {
         [string]$ExpectedBranch
     )
 
-    return ($ActualBranch -ceq $ExpectedBranch) -or (
-        (@('main', 'master') -ccontains $ActualBranch) -and
-        (@('main', 'master') -ccontains $ExpectedBranch))
+    return (@('main', 'master') -ccontains $ActualBranch) -and
+        (@('main', 'master') -ccontains $ExpectedBranch)
 }
 
 function Invoke-BetterGIScriptsToolsNativeCommand {
