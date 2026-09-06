@@ -77,6 +77,26 @@ class CultivationOneStopServiceTest {
     }
 
     @Test
+    void manifestKeyIsReadAfreshAndInvalidMetadataNeverFallsBackToAnOldKey() throws Exception {
+        CultivationOneStopService service = new CultivationOneStopService(
+                mock(CultivationExecutionService.class), mock(CultivationModuleConfigurationService.class),
+                mock(CultivationMaterialSourceCatalog.class), mock(AutoPlanService.class), new ObjectMapper());
+        Path manifest = temporaryRoot.resolve("User/JsScript/AutoPlan/manifest.json");
+        assertThatThrownBy(() -> service.installedAutoPlanKey(temporaryRoot))
+                .isInstanceOf(IllegalStateException.class);
+        Files.createDirectories(manifest.getParent());
+        Files.writeString(manifest, "{\"key\":\" first \"}");
+        assertThat(service.installedAutoPlanKey(temporaryRoot)).isEqualTo("first");
+        Files.writeString(manifest, "{\"key\":\"second\"}");
+        assertThat(service.installedAutoPlanKey(temporaryRoot)).isEqualTo("second");
+        for (String invalid : List.of("{}", "null", "{\"key\":7}", "{\"key\":\" \"}", "broken")) {
+            Files.writeString(manifest, invalid);
+            assertThatThrownBy(() -> service.installedAutoPlanKey(temporaryRoot))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test
     void rejectsPathTraversalUidBeforeResolvingOrWritingTheScriptGroup() throws Exception {
         CultivationExecutionService executionService = mock(CultivationExecutionService.class);
         CultivationOneStopService service = new CultivationOneStopService(
@@ -171,6 +191,7 @@ class CultivationOneStopServiceTest {
         Files.writeString(gatherScript.resolve("settings.json"), "[]");
         Path autoPlanScript = temporaryRoot.resolve(Path.of("User", "JsScript", "AutoPlan"));
         Files.createDirectories(autoPlanScript.resolve("utils"));
+        Files.writeString(autoPlanScript.resolve("manifest.json"), "{\"key\":\"current-installed-key\"}");
         Files.writeString(autoPlanScript.resolve("main.js"), """
                 import {buildInitConfigSettings, config, initConfig, initSettings} from './config/config';
                 async function main() {
@@ -247,6 +268,7 @@ class CultivationOneStopServiceTest {
                 .containsExactly("养成体力：天赋书·武器突破·摩拉等5项", "养成采集：沙脂蛹",
                         "养成怪物：镀金旅团·盗宝团·新怪族", "周本 - 博士");
         JsonNode autoPlanSettings = group.path("projects").get(0).path("jsScriptSettingsObject");
+        assertThat(autoPlanSettings.path("key").asText()).isEqualTo("current-installed-key");
         assertThat(autoPlanSettings.path("bgi_tools_http_pull_json_config").asText())
                 .isEqualTo("http://127.0.0.1:18081/bgi/auto/plan/json");
         assertThat(autoPlanSettings.path("cultivation_plan_mode").asBoolean()).isTrue();

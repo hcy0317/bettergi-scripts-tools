@@ -339,6 +339,7 @@ public class CultivationOneStopService {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
             ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
+            settings.put("key", installedAutoPlanKey(root));
             settings.set("auto_load", mergedArray(settings.get("auto_load"), List.of("bgi_tools加载")));
             String autoPlanBase = betterGiApiUrl("/auto/plan");
             settings.put("bgi_tools_http_pull_json_config", autoPlanBase + "/json");
@@ -398,6 +399,7 @@ public class CultivationOneStopService {
             ObjectNode project = copyProject(documents, Set.of("AutoPlan"));
             if (project == null) throw new IllegalStateException("未找到已安装的 AutoPlan 脚本任务");
             ObjectNode settings = objectMapper.valueToTree(autoPlan.settings());
+            settings.put("key", installedAutoPlanKey(root));
             settings.set("auto_load", mergedArray(settings.get("auto_load"), List.of("bgi_tools加载")));
             String autoPlanBase = betterGiApiUrl("/auto/plan");
             settings.put("bgi_tools_http_pull_json_config", autoPlanBase + "/json");
@@ -416,6 +418,20 @@ public class CultivationOneStopService {
         if (projects.isEmpty()) warnings.add("当前没有已启用且存在缺口的执行模块，脚本组为空");
         template.set("projects", projects);
         return template;
+    }
+
+    String installedAutoPlanKey(Path root) {
+        Path manifest = root.resolve(Path.of("User", "JsScript", "AutoPlan", "manifest.json"));
+        try {
+            JsonNode document = objectMapper.readTree(manifest.toFile());
+            JsonNode key = document == null ? null : document.get("key");
+            if (key == null || !key.isTextual() || key.asText().isBlank()) {
+                throw new IllegalStateException("已安装的 AutoPlan manifest 缺少有效密钥，请先更新脚本");
+            }
+            return key.asText().trim();
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法读取已安装 AutoPlan 的 manifest，停止生成养成脚本组", exception);
+        }
     }
 
     private List<GroupDocument> readGroups(Path root, Path targetFile) {

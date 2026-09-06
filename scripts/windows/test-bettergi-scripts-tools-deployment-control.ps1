@@ -35,6 +35,19 @@ foreach ($requiredPath in @(
 
 . $commonPath
 
+Assert-True (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'master' -ExpectedBranch 'main') `
+    'The legacy master name must remain a main-compatible deployment alias'
+Assert-True (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'main' -ExpectedBranch 'master') `
+    'Legacy deployment callers must accept the canonical main checkout'
+Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'dev' -ExpectedBranch 'main')) `
+    'The compatibility alias must not allow a development branch deployment'
+Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'dev' -ExpectedBranch 'dev')) `
+    'An explicit expected branch must not bypass the release alias allowlist'
+Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'codex/test' -ExpectedBranch 'codex/test')) `
+    'Matching arbitrary branch names must not bypass the release alias allowlist'
+Assert-True (-not (Test-BetterGIScriptsToolsDeploymentBranch -ActualBranch 'Main' -ExpectedBranch 'main')) `
+    'Git branch names must be matched case-sensitively'
+
 $nativeExitCode = Invoke-BetterGIScriptsToolsNativeCommand `
     -FilePath "$env:SystemRoot\System32\cmd.exe" `
     -ArgumentList @('/d', '/c', 'echo build-progress 1>&2 & exit /b 0')
@@ -69,8 +82,18 @@ Assert-True ($failedAttempts -eq 2) 'Retry helper must honor MaxAttempts on perm
 Assert-True ($failure -like '*permanent test*23*') 'Retry failure must identify the operation and exit code'
 
 $runnerSource = Get-Content -LiteralPath $taskRunnerPath -Raw -Encoding UTF8
+$runnerTokens = $null
+$runnerParseErrors = $null
+$runnerAst = [System.Management.Automation.Language.Parser]::ParseFile(
+    $taskRunnerPath, [ref]$runnerTokens, [ref]$runnerParseErrors)
+$expectedBranchParameter = $runnerAst.ParamBlock.Parameters |
+    Where-Object { $_.Name.VariablePath.UserPath -eq 'ExpectedBranch' }
+Assert-True ($expectedBranchParameter.DefaultValue.SafeGetValue() -eq 'main') `
+    'The formal deployment entry must default to the retained main branch'
 Assert-True ($runnerSource.Contains("status --porcelain")) 'Task runner must reject a dirty source checkout'
 Assert-True ($runnerSource.Contains("rev-parse --abbrev-ref HEAD")) 'Task runner must verify the deployment branch'
+Assert-True ($runnerSource.Contains('Test-BetterGIScriptsToolsDeploymentBranch')) `
+    'Task runner must use the tested main/master compatibility policy'
 Assert-True ($runnerSource.Contains("-ExpectedLocalJarHash")) 'Task runner must pass the exact JAR hash to deployment'
 Assert-True ($runnerSource.Contains('Register-BetterGIArtifactUrlProtocol.ps1')) `
     'Task runner must register the BetterGI artifact URL protocol after deployment'

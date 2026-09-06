@@ -1,3 +1,15 @@
+function Test-BetterGIScriptsToolsDeploymentBranch {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ActualBranch,
+        [Parameter(Mandatory)]
+        [string]$ExpectedBranch
+    )
+
+    return (@('main', 'master') -ccontains $ActualBranch) -and
+        (@('main', 'master') -ccontains $ExpectedBranch)
+}
+
 function Invoke-BetterGIScriptsToolsNativeCommand {
     [CmdletBinding()]
     param(
