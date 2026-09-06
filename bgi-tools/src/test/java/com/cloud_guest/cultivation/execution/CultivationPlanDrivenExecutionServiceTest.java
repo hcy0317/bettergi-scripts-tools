@@ -28,6 +28,45 @@ class CultivationPlanDrivenExecutionServiceTest {
             Instant.parse("2026-08-24T04:00:00Z"), ZoneId.of("Asia/Shanghai"));
 
     @Test
+    void expiredInventoryRetryMustRecountBeforeLeasingResin() {
+        CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
+        CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);
+        CultivationExecutionActionEntity retry = inventoryBatch("expired-inventory-retry");
+        retry.setStatus("RECONCILE_RETRY_LEASED");
+        retry.setLeaseExpiresAt(LocalDateTime.now(MONDAY).minusSeconds(1));
+        retry.setResultIdempotencyKey("expired-inventory-retry:result");
+        retry.setRewardsJson("{\"沙脂蛹\":48,\"织金红绸\":-1}");
+        String frozenPlan = retry.getPlanJson();
+        String partialObservations = retry.getRewardsJson();
+        when(projectionService.projection("102550550"))
+                .thenReturn(projectionWithState("NEEDS_RECONCILE"));
+        when(projectionService.inventoryReconcileTargets("102550550"))
+                .thenReturn(Map.of("Materials", List.of("沙脂蛹"),
+                        "CharacterDevelopmentItems", List.of("织金红绸", "新材料")));
+        when(mapper.findLeased("102550550", 3)).thenReturn(retry);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
+                projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
+
+        CultivationNextActionResponse next = service.claim("102550550", "resin-executor");
+
+        assertThat(next.status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+        assertThat(retry.getStatus()).isEqualTo("RECONCILE_RETRY_LEASED");
+        assertThat(retry.getLeaseKey()).isEqualTo("102550550:3");
+        assertThat(retry.getPlanJson()).isEqualTo(frozenPlan);
+        assertThat(retry.getRewardsJson()).isEqualTo(partialObservations);
+        verify(mapper, never()).insert(any(CultivationExecutionActionEntity.class));
+        verify(mapper, never()).updateById(any(CultivationExecutionActionEntity.class));
+
+        CultivationInventoryReconcileTargetsResponse recount =
+                service.claimInventoryReconcile("102550550", "recount-executor");
+        assertThat(recount.status()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(recount.actionId()).isEqualTo("expired-inventory-retry");
+        assertThat(recount.materialNames()).containsExactly("沙脂蛹", "织金红绸");
+        assertThat(retry.getRewardsJson()).isEqualTo(partialObservations);
+    }
+
+    @Test
     void leasesAnAvailableResinActionWhileInventoryStillNeedsReconcile() {
         CultivationExecutionService projectionService = mock(CultivationExecutionService.class);
         CultivationExecutionActionMapper mapper = mock(CultivationExecutionActionMapper.class);

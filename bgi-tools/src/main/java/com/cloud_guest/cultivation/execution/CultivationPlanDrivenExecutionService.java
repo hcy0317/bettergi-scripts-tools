@@ -75,7 +75,12 @@ public class CultivationPlanDrivenExecutionService {
         CultivationExecutionProjection projection = executionService.projection(normalizedUid);
         if (projection == null) return status("NO_PLAN", "该 UID 尚未建立养成账本", normalizedUid, 0);
         CultivationExecutionActionEntity existing = actionMapper.findLeased(normalizedUid, projection.revision());
-        if (existing != null && AWAITING_RECONCILE.equals(existing.getStatus())) {
+        boolean expiredInventoryRetry = existing != null
+                && INVENTORY_RECONCILE_BATCH.equals(existing.getActionType())
+                && RECONCILE_RETRY_LEASED.equals(existing.getStatus())
+                && (existing.getLeaseExpiresAt() == null
+                    || !existing.getLeaseExpiresAt().isAfter(LocalDateTime.now(clock)));
+        if (existing != null && (AWAITING_RECONCILE.equals(existing.getStatus()) || expiredInventoryRetry)) {
             if (INVENTORY_RECONCILE_BATCH.equals(existing.getActionType())) {
                 return status("PLAN_NEEDS_RECONCILE", "组末库存存在未知值，需先重新完整清点",
                         normalizedUid, projection.revision());
