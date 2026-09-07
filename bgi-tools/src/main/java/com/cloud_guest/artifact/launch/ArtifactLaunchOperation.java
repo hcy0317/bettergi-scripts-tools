@@ -4,7 +4,8 @@ public enum ArtifactLaunchOperation {
     ANALYZE("analysis"),
     SCAN_CHARACTER_ROSTER("characters"),
     EXECUTE_LOCK_PLAN("execute"),
-    REBUILD_NATIVE_PLANS("native-sync");
+    REBUILD_NATIVE_PLANS("native-sync"),
+    EXECUTE_EQUIP_PLAN("equipment");
 
     private final String uriHost;
 
