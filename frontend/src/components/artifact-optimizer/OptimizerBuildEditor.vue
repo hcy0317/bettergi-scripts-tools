@@ -1,18 +1,17 @@
 <script setup>
 import {ref} from 'vue'
+import MemberCard from './OptimizerMemberCard.vue'
 import {characterLabel,profileLabel,weaponLabel,statLabel,elementLabels,buildLabel} from '@/features/artifact-optimizer/localization.js'
-const props=defineProps({build:{type:Object,required:true},characters:{type:Array,default:()=>[]},catalog:{type:Object,default:()=>({})},templates:{type:Array,default:()=>[]}})
+const props=defineProps({build:{type:Object,required:true},characters:{type:Array,default:()=>[]},catalog:{type:Object,default:()=>({})},templates:{type:Array,default:()=>[]},selected:{type:Array,default:()=>[]}})
 const cName=key=>profileLabel(props.catalog,props.characters.find(c=>c.key===key)||{key})
-const emit=defineEmits(['remove','save-buff-template'])
+const emit=defineEmits(['remove','save-buff-template','members-change','select-member','use-team'])
 const roundSeconds=ref(20),warmupRounds=ref(1),scoredRounds=ref(2)
-function addMember(key){if(key&&!props.build.members.some(m=>m.character===key))props.build.members.push({character:key,kind:'real_fixed'})}
 function setRounds(){const start=warmupRounds.value*roundSeconds.value;props.build.duration=start+scoredRounds.value*roundSeconds.value;props.build.rounds=Array.from({length:scoredRounds.value},(_,i)=>({id:`round-${i+1}`,startFrame:(start+i*roundSeconds.value)*60,endFrame:(start+(i+1)*roundSeconds.value)*60}))}
 function addConstraint(){props.build.constraints.push({id:crypto.randomUUID(),kind:'min_actions',character:props.build.members[0]?.character||'',action:'burst',threshold:1})}
 function addBuff(){props.build.buffs.push({id:crypto.randomUUID(),kind:'stat',target:props.build.members[0]?.character||'',stat:'atk%',value:0.2,unit:'fraction',durationFrames:-1,anchor:'start',relationship:'pending_review',source:'手动补充'})}
 function useTemplate(id){const template=props.templates.find(b=>b.id===id);if(template)props.build.buffs.push({...JSON.parse(JSON.stringify(template)),id:crypto.randomUUID(),enabled:true})}
 function buffKindChanged(b){delete b.stat;delete b.element;delete b.attackTag;if(['resistance','defense_reduction'].includes(b.kind)){b.target='all_enemies';b.unit='fraction';if(b.kind==='resistance')b.element='pyro'}else{b.target=props.build.members[0]?.character||'';if(b.kind==='stat')b.stat='atk%';else b.attackTag='normal';b.unit='fraction'}}
 function anchorChanged(b){delete b.sourceCharacter;delete b.action;if(b.anchor==='action'){b.sourceCharacter=props.build.members[0]?.character||'';b.action='skill'}}
-function toggleOverride(member,on){if(on){const p=props.characters.find(c=>c.key===member.character);if(p)member.profile=JSON.parse(JSON.stringify(p))}else delete member.profile}
 </script>
 
 <template>
@@ -27,17 +26,9 @@ function toggleOverride(member,on){if(on){const p=props.characters.find(c=>c.key
       <el-form-item label="敌人数"><el-input-number v-model="build.enemyCount" :min="1" :max="10"/></el-form-item>
     </el-form>
     <h3>队员与装备来源</h3><p class="hint">本次勾选计算的队员统一换成候选实物；其他队员须明确为固定实物或纯假设输入。固定队友的装备不会借出。</p>
-    <el-select model-value="" filterable placeholder="添加队员（最多四人）" :disabled="build.members.length>=4" @change="addMember"><el-option v-for="c in characters.filter(c=>!build.members.some(m=>m.character===c.key))" :key="c.key" :value="c.key" :label="profileLabel(catalog,c)"/></el-select>
-    <div v-for="(member,index) in build.members" :key="member.character" class="member">
-      <div class="member-row"><strong>{{ cName(member.character) }}</strong><el-select v-model="member.kind"><el-option label="未参选时使用真实固定装备" value="real_fixed"/><el-option label="未参选时使用假设属性" value="hypothetical"/></el-select><el-button text @click="build.members.splice(index,1)">移除</el-button></div>
-      <el-form-item v-if="member.kind==='hypothetical'" label="假设圣遗物属性（gcsim 单位，如 atk%=0.466 cr=0.311）"><el-input v-model="member.stats" placeholder="必须明确填写，不能把空白当真实面板"/></el-form-item>
-      <el-checkbox :model-value="Boolean(member.profile)" @change="on=>toggleOverride(member,on)">此方案单独设置等级、武器、命座和天赋</el-checkbox>
-      <el-form v-if="member.profile" label-position="top" class="override-grid">
-        <el-form-item label="角色等级"><el-input-number v-model="member.profile.level" :min="1" :max="100"/></el-form-item><el-form-item label="等级上限"><el-input-number v-model="member.profile.maxLevel" :min="20" :max="100"/></el-form-item><el-form-item label="命座"><el-input-number v-model="member.profile.constellation" :min="0" :max="6"/></el-form-item>
-        <el-form-item label="武器"><el-select v-model="member.profile.weapon" filterable><el-option v-for="w in catalog.weapons||[]" :key="w.key" :value="w.key" :label="weaponLabel(catalog,w.key)"/></el-select></el-form-item><el-form-item label="武器等级"><el-input-number v-model="member.profile.weaponLevel" :min="1" :max="90"/></el-form-item><el-form-item label="武器等级上限"><el-input-number v-model="member.profile.weaponMaxLevel" :min="20" :max="90"/></el-form-item><el-form-item label="精炼"><el-input-number v-model="member.profile.refinement" :min="1" :max="5"/></el-form-item>
-        <el-form-item v-for="(name,i) in ['普攻','战技','爆发']" :key="name" :label="`${name}基础等级`"><el-input-number v-model="member.profile.talents[i]" :min="1" :max="10"/></el-form-item>
-      </el-form>
-    </div>
+    <div class="member-controls" id="optimizer-members"><el-select :model-value="build.members.map(m=>m.character)" multiple filterable :multiple-limit="4" placeholder="选择最多四名队员" aria-label="配队队员多选" @update:model-value="keys=>emit('members-change',keys)"><el-option v-for="c in characters" :key="c.key" :value="c.key" :label="profileLabel(catalog,c)"/></el-select><el-button :disabled="!build.members.length" @click="emit('use-team')">将本队加入配装</el-button></div>
+    <p class="hint">本方案已有 {{ build.members.length }} 名队员。本次参算在各卡片中选择，取消参算的队友仍按指定装备计算。</p>
+    <div class="team-grid"><MemberCard v-for="member in build.members" :key="member.character" :member="member" :profile="characters.find(c=>c.key===member.character)||{key:member.character}" :catalog="catalog" :selected="selected.includes(member.character)" @select="value=>emit('select-member',member.character,value)" @remove="emit('members-change',build.members.filter(m=>m.character!==member.character).map(m=>m.character))"/></div>
     <h3>一轮循环与脚本</h3><p class="hint">动作沿用 gcsim 语法，角色名支持中文（例如安柏、雷电将军）；编译时自动转为引擎标识，不改变原文。个人条件在上方编辑，此处不要重复声明 char、add stats 或敌人；模拟脚本不直接变成游戏输入。</p>
     <el-input v-model="build.rotation" type="textarea" :autosize="{minRows:8,maxRows:24}" spellcheck="false" aria-label="gcsim 循环脚本" placeholder="active 安柏;&#10;while 1 {&#10;  安柏 skill;&#10;  安柏 attack:3;&#10;}" class="script-input"/>
     <el-collapse class="details"><el-collapse-item title="持续循环验证与硬约束" name="rounds">
@@ -69,5 +60,7 @@ function toggleOverride(member,on){if(on){const p=props.characters.find(c=>c.key
 </template>
 
 <style scoped>
+.member-controls{display:flex;gap:12px;align-items:center}.member-controls>.el-select{flex:1;min-width:0}.team-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:18px 0 28px;align-items:start}@media(max-width:1050px){.team-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.team-grid{grid-template-columns:1fr}.member-controls{align-items:stretch;flex-direction:column}}
+
 header{display:flex;justify-content:space-between;align-items:center}h2{font-size:21px;margin:0 0 16px}h3{font-size:16px;margin-top:24px}.hint{color:var(--el-text-color-secondary);font-size:13px;line-height:1.7}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 14px}.span2{grid-column:span 2}.el-select{width:100%}.el-input-number{max-width:100%}.member{padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter)}.member-row{display:grid;grid-template-columns:1fr 2fr auto;gap:12px;align-items:center;margin-bottom:10px}.override-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}.details{margin:20px 0}.script-input :deep(textarea){font-family:Consolas,monospace;line-height:1.7}.round-controls,.round-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:12px}.round-controls label,.round-row label{display:grid;gap:6px}.constraint-row{display:flex;gap:8px;margin-top:12px;align-items:center}.buff-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 14px;border-bottom:1px solid var(--el-border-color-lighter);padding-top:14px}.add-buff{margin-top:12px}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.buff-form,.override-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.constraint-row{flex-wrap:wrap}}@media(max-width:640px){.grid,.member-row,.buff-form,.override-grid{grid-template-columns:1fr}.span2{grid-column:auto}}
 </style>

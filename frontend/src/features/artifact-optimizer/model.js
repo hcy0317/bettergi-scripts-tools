@@ -4,6 +4,23 @@ export const statOptions=[['hp','生命值'],['hp_','生命值 %'],['atk','攻�
 export function newCharacter(key,name=key){return {key,name,level:90,maxLevel:90,constellation:0,talents:[6,6,6],weapon:'',weaponLevel:90,weaponMaxLevel:90,refinement:1,tags:[],weight:1,protected:false,builds:[],minimumStats:{},mainStats:{},requiredSets:{},fixedSlots:{}}}
 export function newBuild(id=crypto.randomUUID()){return {id,name:'新的配队方案',weight:1,duration:60,enemyLevel:100,resistance:0.1,enemyCount:1,members:[],rotation:'',rounds:[],constraints:[],buffs:[],allowPartial:false}}
 export function selectedScenarioIds(characters,selected){return [...new Set(characters.filter(c=>selected.includes(c.key)).flatMap(c=>(c.builds||[]).map(b=>b.id)))]}
+function linkBuild(character,id){character.builds ||= [];if(!character.builds.some(b=>b.id===id))character.builds.push({id,weight:1,metric:'damage_per_round',reference:0})}
+export function updateBuildMembers(workspace,id,keys,selected){
+  const build=workspace.builds.find(b=>b.id===id)
+  if(!build)throw new Error('配队方案不存在')
+  if(keys.length>4||new Set(keys).size!==keys.length)throw new Error('每队最多四名不同队员')
+  if(keys.some(key=>!workspace.characters.some(c=>c.key===key)))throw new Error('请先建立所选队员的个人档案')
+  const previous=new Map(build.members.map(m=>[m.character,m]))
+  build.members=keys.map(key=>previous.get(key)||{character:key,kind:'real_fixed'})
+  for(const c of workspace.characters){if(keys.includes(c.key))linkBuild(c,id);else if(previous.has(c.key))c.builds=(c.builds||[]).filter(b=>b.id!==id)}
+  return [...new Set([...selected,...keys.filter(k=>!previous.has(k))])].filter(k=>!previous.has(k)||keys.includes(k)||workspace.characters.find(c=>c.key===k)?.builds?.length)
+}
+export function selectBuildMembers(workspace,id,selected){
+  const build=workspace.builds.find(b=>b.id===id)
+  if(!build)throw new Error('配队方案不存在')
+  for(const member of build.members){const character=workspace.characters.find(c=>c.key===member.character);if(character)linkBuild(character,id)}
+  return [...new Set([...selected,...build.members.map(m=>m.character)])]
+}
 export function mergeEnkaPreview(current,incoming,acceptedKeys){
   const result=JSON.parse(JSON.stringify(current))
   for(const imported of incoming){
