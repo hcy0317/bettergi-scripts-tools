@@ -30,6 +30,7 @@ import java.util.UUID;
 
 @Service
 public class CultivationPlanDrivenExecutionService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CultivationPlanDrivenExecutionService.class);
     private static final String LEASED = "LEASED";
     private static final String AWAITING_RECONCILE = "AWAITING_RECONCILE";
     private static final String RECONCILE_RETRY_LEASED = "RECONCILE_RETRY_LEASED";
@@ -464,11 +465,22 @@ public class CultivationPlanDrivenExecutionService {
                     ? reported
                     : previousInventory.getOrDefault(name, -1L));
         });
-        boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0);
+        var unconfirmedDecreases = executionService.pendingInventoryReconciliationMaterials(
+                        normalizedUid, entity.getPlanRevision()).stream()
+                .filter(targets::contains)
+                .filter(name -> !submitted.containsKey(name) || submitted.get(name) < 0)
+                .sorted().toList();
+        // 旧值可保留库存显示，但不能冒充这次识别，解除库存下降的二次确认保护。
+        boolean hasUnknown = observations.values().stream().anyMatch(value -> value < 0)
+                || !unconfirmedDecreases.isEmpty();
+        if (!unconfirmedDecreases.isEmpty())
+            log.warn("养成库存复核仍缺少新的下降确认值：{}；旧可信库存仅保留，不作为实测确认", unconfirmedDecreases);
         String previousStatus = entity.getStatus();
         entity.setResultIdempotencyKey(idempotencyKey);
         entity.setRewardsJson(write(observations));
-        entity.setTerminationReason(hasUnknown
+        entity.setTerminationReason(!unconfirmedDecreases.isEmpty()
+                ? "INVENTORY_RECONCILE_CONFIRMATION_REQUIRED"
+                : hasUnknown
                 ? "INVENTORY_RECONCILE_UNKNOWN_PRESERVED"
                 : hadUnknown
                     ? "INVENTORY_RECONCILE_PARTIAL_WITH_PREVIOUS"
@@ -640,6 +652,8 @@ public class CultivationPlanDrivenExecutionService {
                         ? usedPrevious
                             ? "已回写识别成功项，未知项沿用上次可信库存，将自动重生成后续路线"
                             : "权威库存已回写，将自动重生成后续路线"
+                        : "INVENTORY_RECONCILE_CONFIRMATION_REQUIRED".equals(entity.getTerminationReason())
+                            ? "库存下降材料仍缺少新实测值；旧库存已保留，但不能解除复核保护"
                         : hasUnknown
                             ? "合成相关库存仍有未知项，已阻止继续领取行动"
                             : "库存复核尚未完成",
