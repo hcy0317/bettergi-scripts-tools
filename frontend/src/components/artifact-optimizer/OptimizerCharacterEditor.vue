@@ -15,6 +15,7 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
     <header class="editor-heading"><div><h2>{{ character.name || character.key }}</h2><p>{{ character.key }} · 个人条件对所有配队 Build 生效，可在 Build 中单独覆盖</p></div><el-button type="danger" plain @click="emit('remove')">移除档案</el-button></header>
     <el-form label-position="top" class="personal-grid">
       <el-form-item label="显示名称"><el-input v-model="character.name"/></el-form-item>
+      <el-form-item label="游戏中装备显示名（改名角色选填）"><el-input v-model="character.inventoryName" placeholder="与扫描中的穿戴者名字一致"/></el-form-item>
       <el-form-item label="角色等级"><el-input-number v-model="character.level" :min="1" :max="100"/></el-form-item>
       <el-form-item label="突破后等级上限"><el-select v-model="character.maxLevel"><el-option v-for="n in [20,40,50,60,70,80,90,100]" :key="n" :value="n" :label="String(n)"/></el-select></el-form-item>
       <el-form-item label="命座"><el-input-number v-model="character.constellation" :min="0" :max="6"/></el-form-item>

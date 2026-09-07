@@ -12,7 +12,9 @@ public class OptimizationCompiler {
     @FunctionalInterface public interface MainStats { double value(int rarity,int level,String key); }
     private final ObjectMapper mapper;
     private final MainStats mainStats;
-    public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats){this.mapper=mapper;this.mainStats=mainStats;}
+    private final JsonNode catalog;
+    public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats){this(mapper,mainStats,null);}
+    public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats,JsonNode catalog){this.mapper=mapper;this.mainStats=mainStats;this.catalog=catalog;}
     public ObjectNode compile(JsonNode workspace,ArtifactSnapshot snapshot,JsonNode selection) {
         // The scan's grid count may include non-equippable enhancement materials.
         // Only submitted, recognized artifact instances enter this task's pool.
@@ -23,6 +25,8 @@ public class OptimizationCompiler {
         var builds=index(workspace.path("builds"),"id");
         var ids=new TreeSet<String>();
         for(String key:selected){var profile=required(profiles,key,"角色");if(!profile.path("builds").isArray()||profile.path("builds").isEmpty())throw new IllegalArgumentException(key+" 尚未选择配队 Build");profile.path("builds").forEach(b->ids.add(b.path("id").asText()));}
+        var activeKeys=new TreeSet<>(selected);for(String id:ids)required(builds,id,"Build").path("members").forEach(m->activeKeys.add(m.path("character").asText()));
+        var owners=catalog==null?null:new OptimizationOwnerResolver(catalog,workspace,activeKeys);
         String mode=selection.path("mode").asText("balanced");
         if(!Set.of("balanced","peak","fallback").contains(mode))throw new IllegalArgumentException("优化档位无效");
         int budget=selection.path("budget").asInt(256);
@@ -33,11 +37,11 @@ public class OptimizationCompiler {
         var current=new HashMap<String,ArrayNode>();
         snapshot.artifacts().forEach(item->{
             var value=items.addObject().put("scanIndex",item.scanIndex()).put("slotKey",item.slotKey()).put("setKey",item.setKey()).put("mainStatKey",item.mainStatKey())
-                    .put("mainStatValue",mainStats.value(item.rarity(),item.level(),item.mainStatKey())).put("location",canonical(item.location())).put("locked",item.locked()).put("fingerprint",item.contentFingerprint());
+                    .put("mainStatValue",mainStats.value(item.rarity(),item.level(),item.mainStatKey())).put("location",owners==null?canonical(item.location()):owners.resolve(item.location())).put("locked",item.locked()).put("fingerprint",item.contentFingerprint());
             value.set("substats",mapper.valueToTree(item.substats()));
-            if(!item.location().isBlank())current.computeIfAbsent(canonical(item.location()),ignored->mapper.createArrayNode()).add(item.scanIndex());
+            if(!item.location().isBlank())current.computeIfAbsent(value.path("location").asText(),ignored->mapper.createArrayNode()).add(item.scanIndex());
         });
-        var protections=request.putArray("protectedCharacters");profiles.forEach((key,p)->{if(p.path("protected").asBoolean())protections.add(key);});
+        var protections=request.putArray("protectedCharacters");profiles.forEach((key,p)->{if(p.path("protected").asBoolean())protections.add(owners==null?key:owners.representative(key));});
         var characters=request.putArray("characters");
         for(String key:selected) {
             var profile=profiles.get(key);
@@ -87,7 +91,7 @@ public class OptimizationCompiler {
             config.append(rotation);
             evaluation.put("config",config.toString()).put("allowPartial",b.path("allowPartial").asBoolean(false));
             for(String field:List.of("rounds","constraints"))if(b.path(field).isArray())evaluation.set(field,b.get(field).deepCopy());
-            var buffs=evaluation.putArray("buffs");for(JsonNode buff:b.path("buffs")){if(!buff.isObject())throw new IllegalArgumentException("Buff 格式无效");if(buff.path("enabled").asBoolean(true)){ObjectNode value=buff.deepCopy();value.remove("enabled");buffs.add(value);}}
+            var buffs=evaluation.putArray("buffs");for(JsonNode buff:b.path("buffs")){if(!buff.isObject())throw new IllegalArgumentException("Buff 格式无效");if(buff.path("enabled").asBoolean(true)){ObjectNode value=buff.deepCopy();if(catalog!=null&&value.path("relationship").asText().equals("additional")&&!value.path("reviewedEngineRevision").asText().equals(catalog.path("engineRevision").asText()))value.put("relationship","pending_review");value.remove(List.of("enabled","reviewedEngineRevision"));buffs.add(value);}}
         }
         var search=request.putArray("searchSeeds");for(long seed:List.of(107L,211L,307L))search.add(seed);
         var validation=request.putArray("validationSeeds");for(long seed:List.of(401L,503L,601L,701L,809L,907L,1009L,1103L))validation.add(seed);
