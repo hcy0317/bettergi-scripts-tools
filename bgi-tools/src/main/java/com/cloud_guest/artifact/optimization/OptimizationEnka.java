@@ -59,7 +59,7 @@ public class OptimizationEnka {
             if(!weaponFound){c.putNull("weapon");warnings.add(name+"武器未知，请手动补充");}
         }
         if(imported.isEmpty())warnings.add("没有可导入的公开展柜角色。Enka 不提供全账号背包。");
-        result.put("note","仅预览个人条件；需逐项确认后导入，不覆盖 TAG、保护、目标和配队 Build。天赋采用基础等级，由 gcsim 应用命座提升。");return result;
+        result.put("note","仅预览个人条件；需逐项确认后导入，不覆盖标签、装备保护、目标和配队方案。天赋采用基础等级，由 gcsim 应用命座提升。");return result;
     }
     private static void copyInt(ObjectNode target,String key,JsonNode source){if(source.isMissingNode()||source.isNull())target.putNull(key);else target.put(key,source.asInt());}
     private static int maxLevel(int asc){return switch(asc){case 0->20;case 1->40;case 2->50;case 3->60;case 4->70;case 5->80;case 6->90;default->0;};}

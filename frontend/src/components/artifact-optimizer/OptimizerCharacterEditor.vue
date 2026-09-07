@@ -1,6 +1,6 @@
 <script setup>
 import {computed} from 'vue'
-import {profileLabel,weaponLabel,setLabel} from '@/features/artifact-optimizer/localization.js'
+import {profileLabel,weaponLabel,setLabel,buildLabel} from '@/features/artifact-optimizer/localization.js'
 import {slotOptions,statOptions} from '@/features/artifact-optimizer/model.js'
 const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]}})
 const emit=defineEmits(['edit-build','remove'])
@@ -13,7 +13,7 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
 
 <template>
   <section class="character-editor">
-    <header class="editor-heading"><div><h2>{{ profileLabel(catalog,character) }}</h2><p>个人条件对所有配队 方案 生效，可在 方案 中单独覆盖</p></div><el-button type="danger" plain @click="emit('remove')">移除档案</el-button></header>
+    <header class="editor-heading"><div><h2>{{ profileLabel(catalog,character) }}</h2><p>个人条件对所有配队方案生效，可在方案中单独覆盖</p></div><el-button type="danger" plain @click="emit('remove')">移除档案</el-button></header>
     <el-form label-position="top" class="personal-grid">
       <el-form-item label="显示名称"><el-input v-model="character.name"/></el-form-item>
       <el-form-item label="游戏中装备显示名（改名角色选填）"><el-input v-model="character.inventoryName" placeholder="与扫描中的穿戴者名字一致"/></el-form-item>
@@ -29,17 +29,17 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
       <el-form-item label="角色目标权重（保尖 / 兜底）"><el-input-number v-model="character.weight" :min="0" :max="1000" :step="0.5"/></el-form-item>
       <el-form-item label="保护当前五件装备"><el-switch v-model="character.protected" active-text="不出借、不替换"/></el-form-item>
     </el-form>
-    <section class="build-bindings"><h3>兼顾的配队 方案</h3><p class="hint">选中多个 方案 后仍只求出一套通用装备。均衡模式的场景权重在 方案 中设置，不随角色引用次数叠加。</p>
-      <el-select :model-value="character.builds.map(b=>b.id)" multiple filterable placeholder="选择一个或多个配队 方案" @update:model-value="setBuilds"><el-option v-for="b in builds" :key="b.id" :value="b.id" :label="b.name"/></el-select>
+    <section class="build-bindings"><h3>兼顾的配队方案</h3><p class="hint">选中多个方案后仍只求出一套通用装备。均衡模式的场景权重在方案中设置，不随角色引用次数叠加。</p>
+      <el-select :model-value="character.builds.map(b=>b.id)" multiple filterable placeholder="选择一个或多个配队方案" @update:model-value="setBuilds"><el-option v-for="b in builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select>
       <div v-for="binding in character.builds" :key="binding.id" class="target-row">
         <el-button link type="primary" @click="emit('edit-build',binding.id)">{{ builds.find(b=>b.id===binding.id)?.name || binding.id }}</el-button>
         <label>目标 <el-select v-model="binding.metric"><el-option label="每轮个人伤害" value="damage_per_round"/><el-option label="每轮有效治疗" value="effective_healing_per_round"/></el-select></label>
-        <label>方案 权重 <el-input-number v-model="binding.weight" :min="0" :max="1000"/></label>
+        <label>方案权重 <el-input-number v-model="binding.weight" :min="0" :max="1000"/></label>
         <label>目标参照 <el-input-number v-model="binding.reference" :min="0" :max="100000000"/></label>
       </div><p class="hint">参照为 0 时从本次预算内合格样本生成并冻结，不是理论最优上界。</p>
     </section>
     <el-collapse><el-collapse-item title="高级硬约束" name="constraints">
-      <p class="hint">这些限制在所有档位都生效。初始属性是帧零面板，不代表战斗内增益覆盖率；持续循环请在 方案 中约束。</p>
+      <p class="hint">这些限制在所有档位都生效。初始属性是帧零面板，不代表战斗内增益覆盖率；持续循环请在方案中约束。</p>
       <div class="constraint-grid"><label v-for="[slot,label] in slotOptions" :key="slot">{{ label }}主词条
         <el-select v-model="character.mainStats[slot]" multiple clearable placeholder="不限"><el-option v-for="[key,text] in statOptions" :key="key" :label="text" :value="key"/></el-select>
       </label></div>
