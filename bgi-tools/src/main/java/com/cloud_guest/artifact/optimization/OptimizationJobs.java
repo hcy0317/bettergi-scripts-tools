@@ -33,23 +33,32 @@ public class OptimizationJobs {
         var scan=scans.findById(selection.path("snapshotId").asText()).orElseThrow(()->new IllegalArgumentException("扫描记录不存在"));
         if(!scan.uid().equals(uid)||scan.snapshot()==null)throw new IllegalArgumentException("扫描记录与账号不匹配");
         var catalog=gateway.catalog();
-        var request=new OptimizationCompiler(mapper,stats).compile(workspace,scan.snapshot(),selection);
+        var request=new OptimizationCompiler(mapper,stats,catalog).compile(workspace,scan.snapshot(),selection);
         int wall=selection.path("wallTimeSeconds").asInt(120);if(wall<5||wall>120)throw new IllegalArgumentException("单次计算时限须为 5 至 120 秒");
         var payload=mapper.createObjectNode();payload.set("optimization",request);payload.putObject("limits").put("wallTimeMs",wall*1000).put("memoryMiB",768).put("outputKiB",16384);
         String id=UUID.randomUUID().toString();var job=mapper.createObjectNode().put("id",id).put("uid",uid).put("state","QUEUED").put("createdAt",Instant.now().toString())
                 .put("workspaceVersion",workspace.path("version").asLong()).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("engineRevision",catalog.path("engineRevision").asText());
         job.set("selection",selection.deepCopy());job.set("request",request);job.set("mainStatSource",stats.provenance().get("revision"));
+        job.put("kind","equipment");
+        return enqueue(uid,job,payload,wall,"--optimize");
+    }
+    synchronized ObjectNode enqueue(String uid,ObjectNode metadata,ObjectNode payload,int wall,String mode){
+        OptimizationWorkspace.requireUid(uid);
+        if(active.size()>=3)throw new IllegalStateException("计算队列已满");
+        if(!Set.of("--optimize","--rotation").contains(mode)||wall<5||wall>120)throw new IllegalArgumentException("无效的计算类型或时限");
+        var job=metadata.deepCopy();String id=UUID.randomUUID().toString();
+        job.put("id",id).put("uid",uid).put("state","QUEUED").put("createdAt",Instant.now().toString());
         persist(uid,id,job);
-        FutureTask<Void> future=new FutureTask<>(()->{execute(uid,id,payload,wall);return null;});active.put(id,future);
+        FutureTask<Void> future=new FutureTask<>(()->{execute(uid,id,payload,wall,mode);return null;});active.put(id,future);
         try {executor.execute(future);}catch(RejectedExecutionException error){active.remove(id);job.put("state","FAILED").put("error","计算队列已关闭");persist(uid,id,job);throw error;}
         return publicView(job);
     }
-    private void execute(String uid,String id,ObjectNode payload,int wall) {
+    private void execute(String uid,String id,ObjectNode payload,int wall,String mode) {
         try {
             synchronized(this){var j=stored(uid,id);if(j.path("state").asText().equals("CANCELLED"))return;j.put("state","RUNNING").put("startedAt",Instant.now().toString());persist(uid,id,j);}
-            JsonNode response=gateway.execute("--optimize",payload,Duration.ofSeconds(wall+5L));
+            JsonNode response=gateway.execute(mode,payload,Duration.ofSeconds(wall+5L));
             if(!response.path("status").asText().equals("completed")||!response.path("result").isObject())throw new IllegalStateException("计算程序返回了不完整的优化结果");
-            synchronized(this){var j=stored(uid,id);if(!j.path("state").asText().equals("CANCELLED")){j.put("state","COMPLETED").put("finishedAt",Instant.now().toString());j.set("result",response.path("result"));persist(uid,id,j);}}
+            synchronized(this){var j=stored(uid,id);if(!j.path("state").asText().equals("CANCELLED")){verifyEngine(j,response.path("result"));j.put("state","COMPLETED").put("finishedAt",Instant.now().toString());j.set("result",response.path("result"));persist(uid,id,j);}}
         } catch(Exception error){
             synchronized(this){var j=stored(uid,id);if(!j.path("state").asText().equals("CANCELLED")){j.put("state",error instanceof InterruptedException?"CANCELLED":"FAILED").put("error",Objects.toString(error.getMessage(),error.getClass().getSimpleName())).put("finishedAt",Instant.now().toString());persist(uid,id,j);}}
             if(error instanceof InterruptedException)Thread.currentThread().interrupt();
@@ -71,9 +80,14 @@ public class OptimizationJobs {
     private void persist(String uid,String id,ObjectNode job){
         store.put(TYPE,uid+":"+id,job);
         var summary=mapper.createObjectNode();
-        for(String field:List.of("id","uid","state","createdAt","startedAt","finishedAt","snapshotId","workspaceVersion","error"))
+        for(String field:List.of("id","uid","kind","buildId","state","createdAt","startedAt","finishedAt","snapshotId","workspaceVersion","error"))
             if(job.has(field))summary.set(field,job.get(field).deepCopy());
         store.put(TYPE+"-summary",uid+":"+id,summary);
+    }
+    synchronized ObjectNode frozen(String uid,String id){return stored(uid,id);}
+    private static void verifyEngine(JsonNode job,JsonNode result){
+        var reports=new ArrayList<JsonNode>();if(result.path("report").isObject())reports.add(result.path("report"));result.path("plan").path("reports").forEach(reports::add);
+        for(JsonNode report:reports)if(!job.path("engineRevision").asText().equals(report.path("engineRevision").asText()))throw new IllegalStateException("排队期间引擎版本发生变化，请重新计算");
     }
     private ObjectNode stored(String uid,String id){OptimizationWorkspace.requireUid(uid);if(!OptimizationWorkspace.key(id))throw new IllegalArgumentException("任务标识无效");return store.get(TYPE,uid+":"+id,ObjectNode.class).map(ObjectNode::deepCopy).orElseThrow(()->new IllegalArgumentException("计算任务不存在"));}
     private static ObjectNode publicView(ObjectNode job){var copy=job.deepCopy();copy.remove("request");return copy;}

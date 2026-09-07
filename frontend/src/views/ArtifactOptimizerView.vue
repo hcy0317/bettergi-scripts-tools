@@ -7,6 +7,7 @@ import UidSelector from '@/components/UidSelector.vue'
 import CharacterEditor from '@/components/artifact-optimizer/OptimizerCharacterEditor.vue'
 import BuildEditor from '@/components/artifact-optimizer/OptimizerBuildEditor.vue'
 import Results from '@/components/artifact-optimizer/OptimizerResults.vue'
+import RotationPanel from '@/components/artifact-optimizer/OptimizerRotationPanel.vue'
 import * as api from '@/api/artifact/artifactOptimizer.js'
 import {newCharacter,newBuild,mergeEnkaPreview,preferenceOptions,selectedScenarioIds} from '@/features/artifact-optimizer/model.js'
 import {artifactCharacterLabels} from '@/features/artifact-analysis/buildCatalog.js'
@@ -33,7 +34,7 @@ async function load(){
   applyWorkspace({version:0,characters:[],builds:[]});saving.value=false;importing.value=false;enkaDialog.value=false
   if(!id){applyWorkspace({version:0,characters:[],builds:[]});return}
   loading.value=true
-  try{const [w,s,h]=await Promise.all([api.loadWorkspace(id),api.loadSnapshots(id),api.listOptimizations(id)]);if(current!==scope)return;applyWorkspace(w);snapshots.value=s;history.value=h;snapshotId.value=s.find(s=>s.complete)?.id||''}
+  try{const [w,s,h]=await Promise.all([api.loadWorkspace(id),api.loadSnapshots(id),api.listOptimizations(id)]);if(current!==scope)return;applyWorkspace(w);snapshots.value=s;history.value=h.filter(j=>j.kind!=='rotation');snapshotId.value=s.find(s=>s.complete)?.id||'';const active=history.value.find(j=>['QUEUED','RUNNING'].includes(j.state));if(active){job.value=active;poll(active.id,id,current)}}
   catch(e){if(current===scope)error.value=e.message||String(e)}finally{if(current===scope)loading.value=false}
 }
 watch(uid,load)
@@ -42,6 +43,7 @@ watch(()=>job.value?.snapshotId,async id=>{const current=scope,account=uid.value
 async function reload(){if(dirty.value){try{await ElMessageBox.confirm('重新载入会放弃尚未保存的编辑，是否继续？','重新载入',{type:'warning'})}catch{return}}await load()}
 async function loadEngine(){engineError.value='';try{catalog.value=await api.loadCatalog()}catch(e){engineError.value=e.message||String(e)}}
 async function save(){
+  if(!dirty.value&&workspace.value.version>0)return true
   const current=scope,id=uid.value,payload=clone(workspace.value),revision=editVersion;saving.value=true;error.value=''
   try{const saved=await api.saveWorkspace(id,payload);if(current!==scope)return false;applying=true;workspace.value.version=saved.version;workspace.value.updatedAt=saved.updatedAt;applying=false;dirty.value=editVersion!==revision;if(dirty.value){error.value='保存期间又有编辑，请再次保存后计算';return false}return true}
   catch(e){if(current===scope)error.value=e.message||String(e);return false}finally{if(current===scope)saving.value=false}
@@ -53,7 +55,7 @@ async function removeCharacter(){try{await ElMessageBox.confirm('移除此角色
 async function removeBuild(){try{await ElMessageBox.confirm('删除此 Build 及所有角色对它的引用？保存后生效。','删除 Build',{type:'warning'})}catch{return}const id=activeBuild.value;workspace.value.builds=workspace.value.builds.filter(b=>b.id!==id);workspace.value.characters.forEach(c=>c.builds=c.builds.filter(b=>b.id!==id));activeBuild.value=workspace.value.builds[0]?.id||''}
 async function previewEnka(){const current=scope,account=uid.value;importing.value=true;error.value='';try{const value=await api.enkaPreview(account);if(current!==scope)return;enka.value=value;enkaKeys.value=[];enkaDialog.value=true}catch(e){if(current===scope)error.value=e.message||String(e)}finally{if(current===scope)importing.value=false}}
 function acceptEnka(){workspace.value.characters=mergeEnkaPreview(workspace.value.characters,clone(enka.value.characters),enkaKeys.value);activeCharacter.value ||= workspace.value.characters[0]?.key||'';enkaDialog.value=false;ElMessage.success('已合并到本地编辑，请检查并保存')}
-async function poll(id,account,current){try{const value=await api.loadOptimization(account,id);if(current!==scope||job.value?.id!==id)return;job.value=value;if(['QUEUED','RUNNING'].includes(value.state))pollTimer=setTimeout(()=>poll(id,account,current),1500);else history.value=await api.listOptimizations(account)}catch(e){if(current===scope)error.value=e.message||String(e)}}
+async function poll(id,account,current){try{const value=await api.loadOptimization(account,id);if(current!==scope||job.value?.id!==id)return;job.value=value;if(['QUEUED','RUNNING'].includes(value.state))pollTimer=setTimeout(()=>poll(id,account,current),1500);else{const values=await api.listOptimizations(account);if(current===scope)history.value=values.filter(j=>j.kind!=='rotation')}}catch(e){if(current===scope)error.value=e.message||String(e)}}
 async function start(){error.value='';if(!selected.value.length||!snapshotId.value)return;if(!(await save()))return;const current=scope,account=uid.value;saving.value=true;try{const value=await api.startOptimization(account,{workspaceVersion:workspace.value.version,snapshotId:snapshotId.value,characters:[...selected.value],mode:mode.value,budget:budget.value,wallTimeSeconds:wallTimeSeconds.value});if(current!==scope)return;job.value=value;tab.value='results';stopPoll();await poll(value.id,account,current)}catch(e){if(current===scope)error.value=e.message||String(e)}finally{if(current===scope)saving.value=false}}
 async function cancel(){const current=scope,account=uid.value,id=job.value?.id;if(!id)return;try{const value=await api.cancelOptimization(account,id);if(current===scope&&job.value?.id===id){job.value=value;stopPoll()}}catch(e){if(current===scope)error.value=e.message||String(e)}}
 async function showHistory(value){if(!value)return;stopPoll();const current=scope,account=uid.value;try{const detail=await api.loadOptimization(account,value.id);if(current!==scope)return;job.value=detail;tab.value='results';if(['QUEUED','RUNNING'].includes(detail.state))await poll(detail.id,account,current)}catch(e){if(current===scope)error.value=e.message||String(e)}}
@@ -71,7 +73,7 @@ onBeforeUnmount(()=>{scope++;stopPoll()})
       <el-skeleton v-if="loading" :rows="10" animated/>
       <el-empty v-else-if="!uid" description="先选择账号，复用圣遗物分析中已扫描的真实背包。"/>
       <template v-else>
-        <el-tabs v-model="tab"><el-tab-pane label="角色档案" name="characters"/><el-tab-pane label="配队 Build" name="builds"/><el-tab-pane label="分配结果" name="results"/><el-tab-pane label="引擎与数据" name="engine"/></el-tabs>
+        <el-tabs v-model="tab"><el-tab-pane label="角色档案" name="characters"/><el-tab-pane label="配队 Build" name="builds"/><el-tab-pane label="分配结果" name="results"/><el-tab-pane label="战斗循环" name="rotations"/><el-tab-pane label="引擎与数据" name="engine"/></el-tabs>
         <section v-if="tab==='characters'" class="workbench">
           <aside class="roster"><el-input v-model="search" clearable placeholder="搜索角色或 TAG" aria-label="搜索角色"/><el-button :icon="Plus" @click="addDialog=true">添加角色</el-button><div v-if="!workspace.characters.length" class="hint">添加个人档案，或从公开 Enka 展柜导入。</div>
             <div v-for="c in filteredCharacters" :key="c.key" :class="['role-row',{active:c.key===activeCharacter}]">
@@ -83,6 +85,7 @@ onBeforeUnmount(()=>{scope++;stopPoll()})
         </section>
         <section v-else-if="tab==='builds'"><div class="build-toolbar"><el-select v-model="activeBuild" filterable placeholder="选择配队 Build"><el-option v-for="b in workspace.builds" :key="b.id" :value="b.id" :label="b.name"/></el-select><el-button :icon="Plus" @click="addBuild">新建 Build</el-button></div><BuildEditor v-if="build" :build="build" :characters="workspace.characters" :catalog="catalog" :templates="workspace.buffTemplates" @save-buff-template="template=>workspace.buffTemplates.push(template)" @remove="removeBuild"/><el-empty v-else description="新建 Build，选择队员并编写一轮循环。"/></section>
         <section v-else-if="tab==='results'"><el-select v-if="history.length" :model-value="job?.id" placeholder="查看历史计算" class="history" @change="id=>showHistory(history.find(j=>j.id===id))"><el-option v-for="j in history" :key="j.id" :value="j.id" :label="`${j.createdAt} · ${j.state}`"/></el-select><Results :job="job" :items="resultSnapshot?.artifacts||[]" :characters="workspace.characters"/></section>
+        <RotationPanel v-else-if="tab==='rotations'" :uid="uid" :workspace="workspace" :selected="selected" :snapshot-id="snapshotId" :equipment-job="job" :before-run="save"/>
         <section v-else class="engine-details"><h2>gcsim 是唯一动态伤害与反应计算核心</h2><p>网页从同一版本引擎读取角色、武器、套装和技能信息。社区维护的主词条等级表只补充扫描数据，不替代 gcsim 的动态机制。</p><el-descriptions :column="1" border><el-descriptions-item label="引擎版本">{{ catalog.engineRevision||'未连接' }}</el-descriptions-item><el-descriptions-item label="已知条目">{{ catalog.characters?.length||0 }} 角色 / {{ catalog.weapons?.length||0 }} 武器 / {{ catalog.sets?.length||0 }} 套装</el-descriptions-item><el-descriptions-item label="上游标记不完整">{{ catalog.capabilities?.upstreamMarkedIncomplete?.join(', ')||'请先连接引擎' }}</el-descriptions-item><el-descriptions-item label="数据关系">技能数值和机制随 gcsim；个人条件、Build 与通用 Buff 独立保存。</el-descriptions-item></el-descriptions><p class="hint">当前计算、网页构建与受控测试不等于实机验收。计算不会启动游戏，也不会自动更换装备。</p><el-button @click="loadEngine">重读引擎目录</el-button></section>
         <section class="compute-bar" aria-label="计算设置">
           <div class="compute-inputs"><label>真实背包快照 <el-select v-model="snapshotId" placeholder="选择完整扫描记录"><el-option v-for="s in snapshots" :key="s.id" :value="s.id" :disabled="!s.complete" :label="`${s.count} 件 · ${s.createdAt}${s.complete?'':' · 扫描不完整'}`"/></el-select></label><label>优化档位 <el-select v-model="mode"><el-option v-for="m in preferenceOptions" :key="m.value" :value="m.value" :label="m.label"/></el-select></label><label>评估预算 <el-input-number v-model="budget" :min="16" :max="4096" :step="64"/></label><label>最长秒数 <el-input-number v-model="wallTimeSeconds" :min="5" :max="120" :step="10"/></label></div>
