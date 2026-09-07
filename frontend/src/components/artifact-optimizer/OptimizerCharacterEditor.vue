@@ -1,5 +1,6 @@
 <script setup>
 import {computed} from 'vue'
+import {profileLabel,weaponLabel,setLabel} from '@/features/artifact-optimizer/localization.js'
 import {slotOptions,statOptions} from '@/features/artifact-optimizer/model.js'
 const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]}})
 const emit=defineEmits(['edit-build','remove'])
@@ -12,39 +13,39 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
 
 <template>
   <section class="character-editor">
-    <header class="editor-heading"><div><h2>{{ character.name || character.key }}</h2><p>{{ character.key }} · 个人条件对所有配队 Build 生效，可在 Build 中单独覆盖</p></div><el-button type="danger" plain @click="emit('remove')">移除档案</el-button></header>
+    <header class="editor-heading"><div><h2>{{ profileLabel(catalog,character) }}</h2><p>个人条件对所有配队 方案 生效，可在 方案 中单独覆盖</p></div><el-button type="danger" plain @click="emit('remove')">移除档案</el-button></header>
     <el-form label-position="top" class="personal-grid">
       <el-form-item label="显示名称"><el-input v-model="character.name"/></el-form-item>
       <el-form-item label="游戏中装备显示名（改名角色选填）"><el-input v-model="character.inventoryName" placeholder="与扫描中的穿戴者名字一致"/></el-form-item>
       <el-form-item label="角色等级"><el-input-number v-model="character.level" :min="1" :max="100"/></el-form-item>
       <el-form-item label="突破后等级上限"><el-select v-model="character.maxLevel"><el-option v-for="n in [20,40,50,60,70,80,90,100]" :key="n" :value="n" :label="String(n)"/></el-select></el-form-item>
       <el-form-item label="命座"><el-input-number v-model="character.constellation" :min="0" :max="6"/></el-form-item>
-      <el-form-item label="武器" class="wide"><el-select v-model="character.weapon" filterable placeholder="选择 gcsim 武器"><el-option v-for="w in weapons" :key="w.key" :value="w.key" :label="w.key"/></el-select></el-form-item>
+      <el-form-item label="武器" class="wide"><el-select v-model="character.weapon" filterable placeholder="选择 gcsim 武器"><el-option v-for="w in weapons" :key="w.key" :value="w.key" :label="weaponLabel(catalog,w.key)"/></el-select></el-form-item>
       <el-form-item label="武器等级"><el-input-number v-model="character.weaponLevel" :min="1" :max="90"/></el-form-item>
       <el-form-item label="武器等级上限"><el-select v-model="character.weaponMaxLevel"><el-option v-for="n in [20,40,50,60,70,80,90]" :key="n" :value="n" :label="String(n)"/></el-select></el-form-item>
       <el-form-item label="精炼"><el-input-number v-model="character.refinement" :min="1" :max="5"/></el-form-item>
       <el-form-item v-for="(name,index) in ['普通攻击基础等级','元素战技基础等级','元素爆发基础等级']" :key="name" :label="name"><el-input-number v-model="character.talents[index]" :min="1" :max="10"/></el-form-item>
-      <el-form-item label="TAG" class="wide"><el-select v-model="character.tags" multiple filterable allow-create default-first-option placeholder="输入标签后按回车"/></el-form-item>
+      <el-form-item label="标签" class="wide"><el-select v-model="character.tags" multiple filterable allow-create default-first-option placeholder="输入标签后按回车"/></el-form-item>
       <el-form-item label="角色目标权重（保尖 / 兜底）"><el-input-number v-model="character.weight" :min="0" :max="1000" :step="0.5"/></el-form-item>
       <el-form-item label="保护当前五件装备"><el-switch v-model="character.protected" active-text="不出借、不替换"/></el-form-item>
     </el-form>
-    <section class="build-bindings"><h3>兼顾的配队 Build</h3><p class="hint">选中多个 Build 后仍只求出一套通用装备。均衡模式的场景权重在 Build 中设置，不随角色引用次数叠加。</p>
-      <el-select :model-value="character.builds.map(b=>b.id)" multiple filterable placeholder="选择一个或多个配队 Build" @update:model-value="setBuilds"><el-option v-for="b in builds" :key="b.id" :value="b.id" :label="b.name"/></el-select>
+    <section class="build-bindings"><h3>兼顾的配队 方案</h3><p class="hint">选中多个 方案 后仍只求出一套通用装备。均衡模式的场景权重在 方案 中设置，不随角色引用次数叠加。</p>
+      <el-select :model-value="character.builds.map(b=>b.id)" multiple filterable placeholder="选择一个或多个配队 方案" @update:model-value="setBuilds"><el-option v-for="b in builds" :key="b.id" :value="b.id" :label="b.name"/></el-select>
       <div v-for="binding in character.builds" :key="binding.id" class="target-row">
         <el-button link type="primary" @click="emit('edit-build',binding.id)">{{ builds.find(b=>b.id===binding.id)?.name || binding.id }}</el-button>
         <label>目标 <el-select v-model="binding.metric"><el-option label="每轮个人伤害" value="damage_per_round"/><el-option label="每轮有效治疗" value="effective_healing_per_round"/></el-select></label>
-        <label>Build 权重 <el-input-number v-model="binding.weight" :min="0" :max="1000"/></label>
+        <label>方案 权重 <el-input-number v-model="binding.weight" :min="0" :max="1000"/></label>
         <label>目标参照 <el-input-number v-model="binding.reference" :min="0" :max="100000000"/></label>
       </div><p class="hint">参照为 0 时从本次预算内合格样本生成并冻结，不是理论最优上界。</p>
     </section>
     <el-collapse><el-collapse-item title="高级硬约束" name="constraints">
-      <p class="hint">这些限制在所有档位都生效。初始属性是帧零面板，不代表战斗内增益覆盖率；持续循环请在 Build 中约束。</p>
+      <p class="hint">这些限制在所有档位都生效。初始属性是帧零面板，不代表战斗内增益覆盖率；持续循环请在 方案 中约束。</p>
       <div class="constraint-grid"><label v-for="[slot,label] in slotOptions" :key="slot">{{ label }}主词条
         <el-select v-model="character.mainStats[slot]" multiple clearable placeholder="不限"><el-option v-for="[key,text] in statOptions" :key="key" :label="text" :value="key"/></el-select>
       </label></div>
-      <div v-for="[slot,label] in slotOptions" :key="slot" class="fixed-row"><span>固定{{ label }}</span><el-select v-model="character.fixedSlots[slot]" clearable @clear="delete character.fixedSlots[slot]" placeholder="不固定"><el-option v-for="item in items.filter(i=>i.slotKey===slot)" :key="item.scanIndex" :value="item.scanIndex" :label="`#${item.scanIndex} ${item.setKey} +${item.level} ${item.mainStatKey}`"/></el-select></div>
-      <div class="fixed-row"><span>必需套装</span><el-select multiple :model-value="Object.keys(character.requiredSets)" @update:model-value="keys=>character.requiredSets=Object.fromEntries(keys.map(k=>[k,character.requiredSets[k]||2]))" filterable><el-option v-for="s in catalog.sets||[]" :key="s.key" :value="s.key" :label="s.key"/></el-select></div>
-      <label v-for="key in Object.keys(character.requiredSets)" :key="key" class="fixed-row">{{ key }}件数 <el-input-number v-model="character.requiredSets[key]" :min="1" :max="5"/></label>
+      <div v-for="[slot,label] in slotOptions" :key="slot" class="fixed-row"><span>固定{{ label }}</span><el-select v-model="character.fixedSlots[slot]" clearable @clear="delete character.fixedSlots[slot]" placeholder="不固定"><el-option v-for="item in items.filter(i=>i.slotKey===slot)" :key="item.scanIndex" :value="item.scanIndex" :label="`#${item.scanIndex} ${setLabel(catalog,item.setKey)} +${item.level} ${statOptions.find(s=>s[0]===item.mainStatKey)?.[1]||'未知属性'}`"/></el-select></div>
+      <div class="fixed-row"><span>必需套装</span><el-select multiple :model-value="Object.keys(character.requiredSets)" @update:model-value="keys=>character.requiredSets=Object.fromEntries(keys.map(k=>[k,character.requiredSets[k]||2]))" filterable><el-option v-for="s in catalog.sets||[]" :key="s.key" :value="s.key" :label="setLabel(catalog,s.key)"/></el-select></div>
+      <label v-for="key in Object.keys(character.requiredSets)" :key="key" class="fixed-row">{{ setLabel(catalog,key) }}件数 <el-input-number v-model="character.requiredSets[key]" :min="1" :max="5"/></label>
       <el-select model-value="" placeholder="添加属性下限" @change="addMinimum"><el-option v-for="[key,label] in statOptions" :key="key" :value="key" :label="label"/></el-select>
       <div v-for="key in minKeys" :key="key" class="fixed-row"><span>{{ statOptions.find(s=>s[0]===key)?.[1]||key }}</span><el-input-number v-model="character.minimumStats[key]" :min="0"/><el-button text @click="delete character.minimumStats[key]">删除</el-button></div>
     </el-collapse-item></el-collapse>

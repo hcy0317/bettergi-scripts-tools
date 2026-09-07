@@ -12,11 +12,16 @@ public class OptimizationRotationCompiler {
     public ObjectNode parse(String source,Map<String,String> aliases){
         if(source==null||source.length()>100_000)throw new IllegalArgumentException("战斗策略为空或超过大小限制");
         var result=mapper.createObjectNode();var actions=result.putArray("actions");var issues=result.putArray("issues");
-        String character="";int lineNumber=0;
+        String character="";int lineNumber=0;boolean segment=false,segmentSeen=false;
         for(String original:source.split("\\R")){
             lineNumber++;String line=original.trim().replace('（','(').replace('）',')').replace('，',',');
             if(line.isBlank()||line.startsWith("#")||line.startsWith("//"))continue;
-            int comment=line.indexOf("#");if(comment>=0)line=line.substring(0,comment).trim();
+            int comment=line.indexOf("#"),slash=line.indexOf("//");if(slash>=0&&(comment<0||slash<comment))comment=slash;if(comment>=0)line=line.substring(0,comment).trim();
+            if(line.matches("segment\\([^,()]+,\\s*define\\)\\s*\\{")){
+                if(segmentSeen||!actions.isEmpty())issues.add("第 "+lineNumber+" 行包含多个片段或混合主轴，请单独选择一段检查");segment=true;segmentSeen=true;continue;
+            }
+            if(segment&&line.equals("}")){segment=false;continue;}
+            if(segmentSeen&&!segment)issues.add("第 "+lineNumber+" 行在片段外包含其他逻辑，请单独选择一段检查");
             int space=line.indexOf(' ');
             if(space>0&&aliases.containsKey(line.substring(0,space))){character=aliases.get(line.substring(0,space));line=line.substring(space+1).trim();}
             if(character.isBlank()){issues.add("第 "+lineNumber+" 行缺少可映射的角色名");continue;}
@@ -43,6 +48,7 @@ public class OptimizationRotationCompiler {
                 if(timed)action.put("seconds",seconds);
             }
         }
+        if(segment)issues.add("片段缺少结束括号");
         if(actions.isEmpty()||actions.size()>80)issues.add("受支持动作数必须为 1 至 80");
         result.put("supported",issues.isEmpty()).put("note","仅转换列明的有限动作；原有等待预算由你选定的执行预设替换。时长普攻会在模拟中完成最后一次攻击，可能越过边界少量帧，不等同实机逐帧对齐。");return result;
     }

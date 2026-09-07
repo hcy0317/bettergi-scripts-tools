@@ -25,7 +25,8 @@ public class OptimizationRotationService {
         var compiled=new OptimizationCompiler(mapper,stats,catalog).compile(workspace,scan.snapshot(),selection);
         JsonNode scenario=null;for(JsonNode s:compiled.path("scenarios"))if(s.path("id").asText().equals(buildId))scenario=s;
         if(scenario==null)throw new IllegalArgumentException("本次选择没有引用该配队 Build");
-        ObjectNode base=scenario.path("evaluation").deepCopy();String config=base.path("config").asText(),rotation=build.path("rotation").asText();
+        var memberKeys=new LinkedHashSet<String>();build.path("members").forEach(m->memberKeys.add(m.path("character").asText()));
+        ObjectNode base=scenario.path("evaluation").deepCopy();String config=base.path("config").asText(),rotation=OptimizationLocalization.translateRotation(build.path("rotation").asText(),catalog,memberKeys);
         if(!config.endsWith(rotation))throw new IllegalStateException("循环模板身份不一致");
         base.put("config",config.substring(0,config.length()-rotation.length())+"__BETTERGI_ROTATION__");base.set("inventory",compiled.path("inventory"));
         JsonNode outfit=null;String priorId=input.path("equipmentJobId").asText("");
@@ -45,7 +46,7 @@ public class OptimizationRotationService {
         var meta=mapper.createObjectNode().put("kind","rotation").put("buildId",buildId).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("workspaceVersion",workspace.path("version").asLong()).put("engineRevision",catalog.path("engineRevision").asText());meta.set("request",request);meta.set("selection",input.deepCopy());return jobs.enqueue(uid,meta,payload,wall,"--rotation");
     }
     public ObjectNode importNative(String uid,String buildId,String name)throws Exception{return strategies.read(name,mapping(uid,buildId));}
-    public ObjectNode parseNative(String uid,String buildId,String source)throws Exception{return new OptimizationRotationCompiler(mapper).parse(source,mapping(uid,buildId).aliases());}
+    public ObjectNode parseNative(String uid,String buildId,String source)throws Exception{return strategies.parseSource(source,mapping(uid,buildId));}
     public ObjectNode nativePreview(String uid,String id,String preset)throws Exception{
         var job=jobs.frozen(uid,id);var report=job.path("result").path("report");
         if(!job.path("state").asText().equals("COMPLETED")||!report.path("validation").path("state").asText().equals("passed")||!report.path("validation").path("complete").asBoolean())throw new IllegalStateException("只有最终独立验证通过的循环才能生成执行候选");

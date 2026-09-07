@@ -1,7 +1,8 @@
 <script setup>
 import {computed,onBeforeUnmount,ref,watch} from 'vue'
+import {characterLabel} from '@/features/artifact-optimizer/localization.js'
 import * as api from '@/api/artifact/artifactOptimizer.js'
-const props=defineProps({uid:{type:String,required:true},job:{type:Object,required:true}})
+const props=defineProps({catalog:{type:Object,default:()=>({})},uid:{type:String,required:true},job:{type:Object,required:true}})
 const plan=ref(null),busy=ref(false),error=ref(''),accepted=ref(false),dialog=ref(false),snapshots=ref([]),recoverySnapshot=ref('')
 let generation=0,timer=null
 const states={PREVIEW:'待确认',CONFIRMED:'等待已运行宿主接手',RUNNING:'正在穿戴并逐步核验',COMPLETED:'目标穿戴已核验',NEEDS_OBSERVATION:'已停止，需要重新观察',CANCELLED:'已取消',LAUNCH_UNCERTAIN:'交接状态不确定，请查看宿主'}
@@ -23,7 +24,7 @@ onBeforeUnmount(clear)
     <el-alert v-if="error" :title="error" type="error" :closable="false"/>
     <el-button type="primary" plain :loading="busy" @click="preview">预览穿戴计划</el-button>
     <template v-if="plan"><h4>{{ states[plan.state]||plan.state }}</h4><p v-if="plan.state==='CONFIRMED'">已生成一次性宿主请求。请在已配置 BetterGI 中查看任务；网页不会自动启动游戏。</p><el-button v-if="['CONFIRMED','RUNNING'].includes(plan.state)" type="danger" plain @click="cancel">请求安全停止</el-button><el-button @click="poll(plan.id,generation,uid)">读取执行状态</el-button>
-      <el-alert v-if="plan.execution?.message" :title="plan.execution.message" type="warning" :closable="false"/><el-table v-if="plan.execution?.steps" :data="plan.execution.steps"><el-table-column prop="character" label="目标角色"/><el-table-column prop="artifactId" label="计划实物 ID"/><el-table-column label="执行状态"><template #default="{row}">{{ {completed:'已确认完成',not_executed:'未执行',unknown:'结果未知，禁止盲重试'}[row.state]||row.state }}</template></el-table-column><el-table-column prop="message" label="说明" min-width="180"/></el-table>
+      <el-alert v-if="plan.execution?.message" :title="plan.execution.message" type="warning" :closable="false"/><el-table v-if="plan.execution?.steps" :data="plan.execution.steps"><el-table-column label="目标角色"><template #default="{row}">{{ characterLabel(catalog,row.character) }}</template></el-table-column><el-table-column prop="artifactId" label="计划实物 ID"/><el-table-column label="执行状态"><template #default="{row}">{{ {completed:'已确认完成',not_executed:'未执行',unknown:'结果未知，禁止盲重试'}[row.state]||row.state }}</template></el-table-column><el-table-column prop="message" label="说明" min-width="180"/></el-table>
       <section v-if="['NEEDS_OBSERVATION','LAUNCH_UNCERTAIN','CANCELLED'].includes(plan.state)" class="recovery"><h4>重新观察后恢复</h4><p>先在圣遗物分析页重新扫描，再选择新记录生成恢复预览。旧步骤不会自动重放，恢复仍需再次确认。</p><el-button @click="refreshSnapshots">读取新的扫描记录</el-button><el-select v-model="recoverySnapshot" placeholder="选择执行后的新观察"><el-option v-for="s in snapshots" :key="s.id" :value="s.id" :label="`${s.count} 件 ${s.createdAt}`"/></el-select><el-button :disabled="!recoverySnapshot" :loading="busy" @click="recover">生成恢复预览</el-button></section>
     </template>
     <el-dialog v-model="dialog" title="确认具体穿戴方案及完整影响范围" width="min(820px,94vw)">

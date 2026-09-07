@@ -34,12 +34,13 @@ class OptimizationIntegrationTest {
         var catalog=gateway.catalog();assertTrue(catalog.path("characters").size()>12);
         var workspace=mapper.readTree("""
                 {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"weight":1,"builds":[{"id":"team","weight":1}]}],
-                "builds":[{"id":"team","weight":1,"duration":6,"enemyLevel":90,"resistance":0.1,"enemyCount":1,"members":[{"character":"amber","kind":"real_fixed"}],"rotation":"active amber; while 1 { amber attack; }"}]}
+                "builds":[{"id":"team","weight":1,"duration":6,"enemyLevel":90,"resistance":0.1,"enemyCount":1,"members":[{"character":"amber","kind":"real_fixed"}],"rotation":"active 安柏; while 1 { 安柏 attack; }"}]}
                 """);
         String[] slots={"flower","plume","sands","goblet","circlet"},keys={"hp","atk","atk_","pyro_dmg_","critRate_"};
         var items=new ArrayList<ArtifactItem>();for(int i=0;i<5;i++)items.add(new ArtifactItem(i,"EmblemOfSeveredFate",slots[i],20,5,keys[i],List.of(),"Amber",false));
         var snapshot=ArtifactSnapshot.create("100000001","test-scan","default","test-catalog",items);
-        var request=new OptimizationCompiler(mapper,new OptimizationMainStats(mapper)).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"],\"budget\":16}"));
+        assertEquals("安柏",catalog.path("localization").path("character_names").path("amber").asText());
+        var request=new OptimizationCompiler(mapper,new OptimizationMainStats(mapper),catalog).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"],\"budget\":16}"));
         var job=mapper.createObjectNode();job.set("optimization",request);job.putObject("limits").put("wallTimeMs",15000);
         var response=gateway.execute("--optimize",job,Duration.ofSeconds(20));
         assertEquals("completed",response.path("status").asText(),response.toPrettyString());

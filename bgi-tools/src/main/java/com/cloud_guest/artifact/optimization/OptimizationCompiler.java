@@ -88,7 +88,7 @@ public class OptimizationCompiler {
             String rotation=b.path("rotation").asText("");
             if(rotation.isBlank()||rotation.length()>100_000)throw new IllegalArgumentException("循环内容不能为空或超过大小限制");
             if(rotation.matches("(?s).*\\b(options|target|char|add)\\b.*"))throw new IllegalArgumentException("循环区只填写动作；角色、属性、敌人与套装请在对应表单编辑");
-            config.append(rotation);
+            config.append(OptimizationLocalization.translateRotation(rotation,catalog,memberNames));
             evaluation.put("config",config.toString()).put("allowPartial",b.path("allowPartial").asBoolean(false));
             for(String field:List.of("rounds","constraints"))if(b.path(field).isArray())evaluation.set(field,b.get(field).deepCopy());
             var buffs=evaluation.putArray("buffs");for(JsonNode buff:b.path("buffs")){if(!buff.isObject())throw new IllegalArgumentException("Buff 格式无效");if(buff.path("enabled").asBoolean(true)){ObjectNode value=buff.deepCopy();if(catalog!=null&&value.path("relationship").asText().equals("additional")&&!value.path("reviewedEngineRevision").asText().equals(catalog.path("engineRevision").asText()))value.put("relationship","pending_review");value.remove(List.of("enabled","reviewedEngineRevision"));buffs.add(value);}}

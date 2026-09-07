@@ -12,6 +12,7 @@ export const loadOptimization=(uid,id)=>data(service.get(`${root}/jobs/${encodeU
 export const listOptimizations=uid=>data(service.get(`${root}/jobs`,{params:{uid}}))
 export const cancelOptimization=(uid,id)=>data(service.post(`${root}/jobs/${encodeURIComponent(id)}/cancel`,null,{params:{uid}}))
 export const listCombatStrategies=()=>data(service.get(`${root}/rotations/strategies`))
+export const readCombatStrategy=name=>data(service.get(`${root}/rotations/strategies/source`,{params:{name}}))
 export const importCombatStrategy=(uid,input)=>data(service.post(`${root}/rotations/import`,input,{params:{uid}}))
 export const startRotation=(uid,input)=>data(service.post(`${root}/rotations/jobs`,input,{params:{uid}}))
 export const previewRotation=(uid,id,preset)=>data(service.post(`${root}/rotations/jobs/${encodeURIComponent(id)}/preview`,null,{params:{uid,preset}}))
