@@ -28,7 +28,7 @@ public class OptimizationRotationService {
         var memberKeys=new LinkedHashSet<String>();build.path("members").forEach(m->memberKeys.add(m.path("character").asText()));
         ObjectNode base=scenario.path("evaluation").deepCopy();String config=base.path("config").asText(),rotation=OptimizationLocalization.translateRotation(build.path("rotation").asText(),catalog,memberKeys);
         if(!config.endsWith(rotation))throw new IllegalStateException("循环模板身份不一致");
-        base.put("config",config.substring(0,config.length()-rotation.length())+"__BETTERGI_ROTATION__");base.set("inventory",compiled.path("inventory"));
+        base.put("config",config.substring(0,config.length()-rotation.length())+"__BETTERGI_ROTATION__");base.put("mainLoopIndex",0);base.set("inventory",compiled.path("inventory"));
         JsonNode outfit=null;String priorId=input.path("equipmentJobId").asText("");
         if(!priorId.isBlank()){
             var prior=jobs.frozen(uid,priorId);

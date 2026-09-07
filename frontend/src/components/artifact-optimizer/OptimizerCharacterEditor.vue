@@ -1,7 +1,7 @@
 <script setup>
 import {computed} from 'vue'
 import {profileLabel,weaponLabel,setLabel,buildLabel} from '@/features/artifact-optimizer/localization.js'
-import {slotOptions,statOptions} from '@/features/artifact-optimizer/model.js'
+import {slotOptions,statOptions,levelCapOptions,ascensionDescription} from '@/features/artifact-optimizer/model.js'
 const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]}})
 const emit=defineEmits(['edit-build','remove'])
 const metadata=computed(()=>props.catalog.characters?.find(c=>c.key===props.character.key))
@@ -17,19 +17,19 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
     <el-form label-position="top" class="personal-grid">
       <el-form-item label="显示名称"><el-input v-model="character.name"/></el-form-item>
       <el-form-item label="游戏中装备显示名（改名角色选填）"><el-input v-model="character.inventoryName" placeholder="与扫描中的穿戴者名字一致"/></el-form-item>
-      <el-form-item label="角色等级"><el-input-number v-model="character.level" :min="1" :max="100"/></el-form-item>
-      <el-form-item label="突破后等级上限"><el-select v-model="character.maxLevel"><el-option v-for="n in [20,40,50,60,70,80,90,100]" :key="n" :value="n" :label="String(n)"/></el-select></el-form-item>
-      <el-form-item label="命座"><el-input-number v-model="character.constellation" :min="0" :max="6"/></el-form-item>
-      <el-form-item label="武器" class="wide"><el-select v-model="character.weapon" filterable placeholder="选择 gcsim 武器"><el-option v-for="w in weapons" :key="w.key" :value="w.key" :label="weaponLabel(catalog,w.key)"/></el-select></el-form-item>
-      <el-form-item label="武器等级"><el-input-number v-model="character.weaponLevel" :min="1" :max="90"/></el-form-item>
-      <el-form-item label="武器等级上限"><el-select v-model="character.weaponMaxLevel"><el-option v-for="n in [20,40,50,60,70,80,90]" :key="n" :value="n" :label="String(n)"/></el-select></el-form-item>
-      <el-form-item label="精炼"><el-input-number v-model="character.refinement" :min="1" :max="5"/></el-form-item>
+      <el-form-item data-field="level" label="角色等级"><el-input-number v-model="character.level" :min="1" :max="100"/></el-form-item>
+      <el-form-item data-field="maxLevel" label="突破后等级上限"><el-select v-model="character.maxLevel"><el-option v-for="n in levelCapOptions" :key="n" :value="n" :label="String(n)"/></el-select><small>{{ ascensionDescription(catalog,character.key,character.maxLevel) }}</small></el-form-item>
+      <el-form-item data-field="constellation" label="命座"><el-input-number v-model="character.constellation" :min="0" :max="6"/></el-form-item>
+      <el-form-item data-field="weapon" label="武器" class="wide"><el-select v-model="character.weapon" filterable placeholder="选择 gcsim 武器"><el-option v-for="w in weapons" :key="w.key" :value="w.key" :label="weaponLabel(catalog,w.key)"/></el-select></el-form-item>
+      <el-form-item data-field="weaponLevel" label="武器等级"><el-input-number v-model="character.weaponLevel" :min="1" :max="90"/></el-form-item>
+      <el-form-item data-field="weaponMaxLevel" label="武器等级上限"><el-select v-model="character.weaponMaxLevel"><el-option v-for="n in levelCapOptions" :key="n" :value="n" :label="String(n)"/></el-select><small>{{ ascensionDescription(catalog,character.weapon,character.weaponMaxLevel,true) }}</small></el-form-item>
+      <el-form-item data-field="refinement" label="精炼"><el-input-number v-model="character.refinement" :min="1" :max="5"/></el-form-item>
       <el-form-item v-for="(name,index) in ['普通攻击基础等级','元素战技基础等级','元素爆发基础等级']" :key="name" :label="name"><el-input-number v-model="character.talents[index]" :min="1" :max="10"/></el-form-item>
       <el-form-item label="标签" class="wide"><el-select v-model="character.tags" multiple filterable allow-create default-first-option placeholder="输入标签后按回车"/></el-form-item>
       <el-form-item label="角色目标权重（保尖 / 兜底）"><el-input-number v-model="character.weight" :min="0" :max="1000" :step="0.5"/></el-form-item>
       <el-form-item label="保护当前五件装备"><el-switch v-model="character.protected" active-text="不出借、不替换"/></el-form-item>
     </el-form>
-    <section class="build-bindings"><h3>兼顾的配队方案</h3><p class="hint">选中多个方案后仍只求出一套通用装备。均衡模式的场景权重在方案中设置，不随角色引用次数叠加。</p>
+    <section class="build-bindings" id="optimizer-builds"><h3>兼顾的配队方案</h3><p class="hint">选中多个方案后仍只求出一套通用装备。均衡模式的场景权重在方案中设置，不随角色引用次数叠加。</p>
       <el-select :model-value="character.builds.map(b=>b.id)" multiple filterable placeholder="选择一个或多个配队方案" @update:model-value="setBuilds"><el-option v-for="b in builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select>
       <div v-for="binding in character.builds" :key="binding.id" class="target-row">
         <el-button link type="primary" @click="emit('edit-build',binding.id)">{{ builds.find(b=>b.id===binding.id)?.name || binding.id }}</el-button>

@@ -16,6 +16,8 @@ public class OptimizationCompiler {
     public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats){this(mapper,mainStats,null);}
     public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats,JsonNode catalog){this.mapper=mapper;this.mainStats=mainStats;this.catalog=catalog;}
     public ObjectNode compile(JsonNode workspace,ArtifactSnapshot snapshot,JsonNode selection) {
+        var validationIssues=OptimizationInputValidation.validate(mapper,workspace,selection,catalog,snapshot);
+        if(!validationIssues.isEmpty())throw new OptimizationValidationException(validationIssues);
         // The scan's grid count may include non-equippable enhancement materials.
         // Only submitted, recognized artifact instances enter this task's pool.
         if(snapshot.artifacts().isEmpty())throw new IllegalArgumentException("扫描记录中没有可配装的圣遗物");
@@ -62,11 +64,7 @@ public class OptimizationCompiler {
             var evaluation=s.putObject("evaluation");
             var fixed=s.putObject("fixedEquipment");var participants=s.putArray("participants");
             if(!b.path("members").isArray()||b.path("members").isEmpty()||b.path("members").size()>4)throw new IllegalArgumentException("每个配队 Build 需要 1 至 4 名队员");
-            int duration=integer(b,"duration",1,600),enemies=integer(b,"enemyCount",1,10),enemyLevel=integer(b,"enemyLevel",1,200);
-            double resistance=b.path("resistance").asDouble(Double.NaN);
-            if(!Double.isFinite(resistance)||resistance< -1||resistance>10)throw new IllegalArgumentException("敌人抗性无效");
-            var config=new StringBuilder("options duration="+duration+";\n");
-            for(int n=0;n<enemies;n++)config.append("target lvl=").append(enemyLevel).append(" resist=").append(resistance).append(";\n");
+            var config=new StringBuilder(OptimizationSceneSettings.compile(mapper,b));
             var memberNames=new HashSet<String>();
             for(JsonNode member:b.path("members")) {
                 String key=member.path("character").asText();
@@ -87,14 +85,28 @@ public class OptimizationCompiler {
             for(String key:selected)if(profiles.get(key).path("builds").findValuesAsText("id").contains(id)&&!memberNames.contains(key))throw new IllegalArgumentException("所选 Build 中缺少角色 "+key);
             String rotation=b.path("rotation").asText("");
             if(rotation.isBlank()||rotation.length()>100_000)throw new IllegalArgumentException("循环内容不能为空或超过大小限制");
-            if(rotation.matches("(?s).*\\b(options|target|char|add)\\b.*"))throw new IllegalArgumentException("循环区只填写动作；角色、属性、敌人与套装请在对应表单编辑");
-            config.append(OptimizationLocalization.translateRotation(rotation,catalog,memberNames));
+            String translated=OptimizationLocalization.translateRotation(rotation,catalog,memberNames);
+            OptimizationScriptParts.requireExecutableOnly(translated,id,"rotation");
+            String prelude=b.path("scriptPrelude").asText("");
+            if(!prelude.isBlank()&&b.path("scriptPreludeEnabled").asBoolean(true)){
+                prelude=OptimizationLocalization.translateRotation(prelude,catalog,memberNames);
+                OptimizationScriptParts.requireExecutableOnly(prelude,id,"scriptPrelude");config.append(prelude).append('\n');
+            }else if(!prelude.isBlank())evaluation.putArray("assumptions").add("auxiliary_logic_disabled");
+            boolean autoRounds=b.path("roundPolicy").path("mode").asText().equals("auto");
+            if(autoRounds)evaluation.put("autoRounds",true)
+                .put("rotationLineOffset",(int)config.toString().chars().filter(c->c=='\n').count())
+                .put("mainLoopIndex",OptimizationSceneSettings.integer(b.path("roundPolicy"),"loopIndex",0,64,0,id,"rounds"))
+                .put("roundWarmup",OptimizationSceneSettings.integer(b.path("roundPolicy"),"warmup",0,63,0,id,"rounds"));
+            config.append(translated);
             evaluation.put("config",config.toString()).put("allowPartial",b.path("allowPartial").asBoolean(false));
-            for(String field:List.of("rounds","constraints"))if(b.path(field).isArray())evaluation.set(field,b.get(field).deepCopy());
+            for(String field:List.of("rounds","constraints"))if(b.path(field).isArray()&&(!field.equals("rounds")||!autoRounds))evaluation.set(field,b.get(field).deepCopy());
             var buffs=evaluation.putArray("buffs");for(JsonNode buff:b.path("buffs")){if(!buff.isObject())throw new IllegalArgumentException("Buff 格式无效");if(buff.path("enabled").asBoolean(true)){ObjectNode value=buff.deepCopy();if(catalog!=null&&value.path("relationship").asText().equals("additional")&&!value.path("reviewedEngineRevision").asText().equals(catalog.path("engineRevision").asText()))value.put("relationship","pending_review");value.remove(List.of("enabled","reviewedEngineRevision"));buffs.add(value);}}
         }
-        var search=request.putArray("searchSeeds");for(long seed:List.of(107L,211L,307L))search.add(seed);
-        var validation=request.putArray("validationSeeds");for(long seed:List.of(401L,503L,601L,701L,809L,907L,1009L,1103L))validation.add(seed);
+        int searchCount=OptimizationSceneSettings.integer(selection,"searchSamples",1,32,3,"","sampling");
+        int validationCount=OptimizationSceneSettings.integer(selection,"validationSamples",2,1000,8,"","sampling");
+        long[] oldSearch={107,211,307},oldValidation={401,503,601,701,809,907,1009,1103};
+        var search=request.putArray("searchSeeds");for(int i=0;i<searchCount;i++)search.add(i<oldSearch.length?oldSearch[i]:1000000L+i);
+        var validation=request.putArray("validationSeeds");for(int i=0;i<validationCount;i++)validation.add(i<oldValidation.length?oldValidation[i]:2000000L+i);
         return request;
     }
     private static String personalConfig(String key,JsonNode p) {

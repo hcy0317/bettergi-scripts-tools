@@ -7,6 +7,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptimizationCompilerTest {
+    @Test void sceneSettingsPreserveHpModeParticlesAndIndependentSampling()throws Exception {
+        var mapper=new ObjectMapper();
+        var workspace=mapper.readTree("""
+          {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"builds":[{"id":"team"}]}],
+           "builds":[{"id":"team","duration":60,"stopMode":"target_or_script","targets":[{"level":100,"resistance":0.1,"radius":2,"x":0,"y":2.4,"hp":999999999}],"swapDelay":12,"energy":{"enabled":true,"mode":"every","start":480,"end":720,"amount":1},"roundPolicy":{"mode":"auto","warmup":0},"members":[{"character":"amber"}],"scriptPrelude":"let prior = execute_action; fn execute_action(char_id number, action_id number, p map) { return prior(char_id, action_id, p); }","rotation":"active amber; for let i=0;i<4;i=i+1 {amber attack;}"}]}
+          """);
+        var snapshot=ArtifactSnapshot.create("100000001","scan","default","v1",List.of(new ArtifactItem(0,"EmblemOfSeveredFate","flower",20,5,"hp",List.of(),"",false)));
+        var result=new OptimizationCompiler(mapper,(a,b,c)->4780).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"],\"searchSamples\":3,\"validationSamples\":100}"));
+        var evaluation=result.path("scenarios").get(0).path("evaluation");String config=evaluation.path("config").asText();
+        assertTrue(config.contains("hp=999999999"),config);assertFalse(config.contains("duration="),config);
+        assertTrue(config.contains("energy every interval=480,720 amount=1;"));assertTrue(config.contains("swap_delay=12"));assertTrue(config.contains("fn execute_action"));assertTrue(evaluation.path("autoRounds").asBoolean());
+        assertEquals(100,result.path("validationSeeds").size());assertEquals(3,result.path("searchSeeds").size());
+    }
     @Test void chineseRoleNamesCompileWithoutChangingCommentsOrStrings() throws Exception {
         var mapper=new ObjectMapper();
         var workspace=mapper.readTree("""
