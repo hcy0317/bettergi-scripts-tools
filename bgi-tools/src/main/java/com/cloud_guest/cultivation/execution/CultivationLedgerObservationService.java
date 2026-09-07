@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class CultivationLedgerObservationService {
@@ -104,7 +105,7 @@ public class CultivationLedgerObservationService {
                 .map(EntryProgress::entry).toList();
         effectiveRequirements = applyExperienceBookProgress(effectiveRequirements, latestOwned);
         effectiveRequirements = expandCraftingTiers(effectiveRequirements, latestOwned);
-        boolean inventoryDecreased = hasUnexplainedInventoryDecrease(imported, observations);
+        Set<String> pendingDecreases = unexplainedInventoryDecreases(imported, observations);
         CultivationMaterialCraftingPlan craftingPlan = craftingPlan(effectiveRequirements);
         effectiveRequirements = effectiveRequirements.stream().map(entry -> new CultivationLedgerEntry(
                 entry.sourceIndex(), entry.materialName(), entry.required(), entry.baselineOwned(),
@@ -114,7 +115,7 @@ public class CultivationLedgerObservationService {
         )).toList();
         boolean needsCraft = (craftingPlanner == null && progress.stream().anyMatch(EntryProgress::needsCraft))
                 || craftingPlan.needsCraft();
-        String state = awaitingReconcile || inventoryDecreased
+        String state = awaitingReconcile || !pendingDecreases.isEmpty()
                 ? "NEEDS_RECONCILE"
                 : needsCraft
                     ? "NEEDS_CRAFT"
@@ -122,7 +123,7 @@ public class CultivationLedgerObservationService {
                         ? "COMPLETED" : "ACTIVE";
         return new CultivationLedgerEvaluation(
                 withState(imported, state, effectiveRequirements),
-                craftingPlan);
+                craftingPlan, pendingDecreases);
     }
 
     private List<CultivationLedgerEntry> expandCraftingTiers(
@@ -200,7 +201,7 @@ public class CultivationLedgerObservationService {
         return craftingPlanner == null ? Optional.empty() : craftingPlanner.family(materialName);
     }
 
-    private boolean hasUnexplainedInventoryDecrease(
+    private Set<String> unexplainedInventoryDecreases(
             CultivationPlanRevisionResponse imported,
             List<CultivationExecutionActionEntity> observations) {
         Map<String, Long> previousOwned = new LinkedHashMap<>();
@@ -233,12 +234,13 @@ public class CultivationLedgerObservationService {
                 if (previous != null && currentOwned < previous
                         && previous - currentOwned > allowed) {
                     pendingUnexplainedDecrease.add(materialName);
-                } else if (inventoryBatch && previous != null && currentOwned >= previous) {
+                } else if (inventoryBatch && "COMPLETED".equals(observation.getStatus())
+                        && previous != null && currentOwned >= previous) {
                     pendingUnexplainedDecrease.remove(materialName);
                 }
             }
         }
-        return !pendingUnexplainedDecrease.isEmpty();
+        return Set.copyOf(pendingUnexplainedDecrease);
     }
 
     private void recordCraftConsumption(

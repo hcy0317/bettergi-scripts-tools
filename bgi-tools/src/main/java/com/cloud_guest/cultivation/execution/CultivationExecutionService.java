@@ -17,6 +17,8 @@ import com.cloud_guest.entitys.common.auto_plan.AutoPlan;
 import com.cloud_guest.service.AutoPlanService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,6 +31,7 @@ import java.util.Set;
 
 @Service
 public class CultivationExecutionService {
+    private static final Logger log = LoggerFactory.getLogger(CultivationExecutionService.class);
     private static final List<String> RESIN_SOURCES =
             List.of("浓缩树脂", "原粹树脂", "须臾树脂", "脆弱树脂");
     private static final String EXECUTION_MODE = "计划驱动：树脂任务优先，合成整批执行，权威库存回写后重新规划";
@@ -226,28 +229,45 @@ public class CultivationExecutionService {
                 enabled(configuration, "experienceLeyLineEnabled"));
     }
 
+    public Set<String> pendingInventoryReconciliationMaterials(String uid, int revision) {
+        var evaluation = observationService.evaluate(planService.latest(requireUid(uid)));
+        if (evaluation == null || evaluation.ledger() == null || evaluation.ledger().revision() != revision)
+            return Set.of();
+        return evaluation.reconciliationMaterials();
+    }
+
     public Map<String, List<String>> inventoryReconcileTargets(String uid) {
-        CultivationPlanRevisionResponse ledger = latestLedger(uid);
-        if (ledger == null) return Map.of();
+        var evaluation = observationService.evaluate(planService.latest(requireUid(uid)));
+        if (evaluation == null || evaluation.ledger() == null) return Map.of();
+        CultivationPlanRevisionResponse ledger = evaluation.ledger();
+        Set<String> materialNames = new LinkedHashSet<>();
+        ledger.requirements().stream().filter(entry -> entry.remaining() > 0)
+                .map(CultivationLedgerEntry::materialName).forEach(materialNames::add);
+        evaluation.reconciliationMaterials().stream().sorted().forEach(materialNames::add);
+        if (!evaluation.reconciliationMaterials().isEmpty()) {
+            log.info("养成库存复核：保留库存下降待确认材料（包括零缺口项）：{}",
+                    evaluation.reconciliationMaterials());
+        }
         Map<String, LinkedHashSet<String>> grouped = new LinkedHashMap<>();
         grouped.put("Materials", new LinkedHashSet<>());
         grouped.put("CharacterDevelopmentItems", new LinkedHashSet<>());
-        for (CultivationLedgerEntry entry : ledger.requirements()) {
-            if (entry.remaining() <= 0) continue;
-            if (CultivationExperienceBookFamily.FAMILY_NAME.equals(entry.materialName())) {
+        for (String materialName : materialNames) {
+            if (CultivationExperienceBookFamily.FAMILY_NAME.equals(materialName)) {
                 CultivationExperienceBookFamily.TIERS.forEach(tier ->
                         grouped.get("CharacterDevelopmentItems").add(tier.materialName()));
                 continue;
             }
-            if (materialSourceCatalog.findSpecialtyCountry(entry.materialName()).isPresent()) {
-                grouped.get("Materials").add(entry.materialName());
+            if (materialSourceCatalog.findSpecialtyCountry(materialName).isPresent()) {
+                grouped.get("Materials").add(materialName);
             } else {
-                var family = observationService.craftingFamily(entry.materialName());
+                var family = observationService.craftingFamily(materialName);
                 if (family.isPresent()) {
                     family.get().tiers().forEach(tier ->
                             grouped.get("CharacterDevelopmentItems").add(tier.materialName()));
-                } else if (materialSourceCatalog.findMonster(entry.materialName()).isPresent()) {
-                    grouped.get("CharacterDevelopmentItems").add(entry.materialName());
+                } else if (materialSourceCatalog.findMonster(materialName).isPresent()) {
+                    grouped.get("CharacterDevelopmentItems").add(materialName);
+                } else if (evaluation.reconciliationMaterials().contains(materialName)) {
+                    log.warn("养成库存复核：待确认材料 {} 尚无受支持的库存页；保留复核保护，不以空目标清除", materialName);
                 }
             }
         }

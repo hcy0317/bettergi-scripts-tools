@@ -42,7 +42,7 @@ class CultivationExecutionServiceTest {
                         entry("大英雄的经验", 20, 12, 8)),
                 LocalDateTime.now());
         when(planService.latest("102550550")).thenReturn(ledger);
-        when(observationService.effective(ledger)).thenReturn(ledger);
+        when(observationService.evaluate(ledger)).thenReturn(new CultivationLedgerEvaluation(ledger, null));
         when(materialSourceCatalog.findMonster("「笃行」的哲学")).thenReturn(Optional.of(
                 new CultivationMaterialSourceCatalog.MonsterSource(
                         "丘丘人", List.of("丘丘人"), List.of("丘丘人"))));
