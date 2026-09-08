@@ -35,9 +35,7 @@ public class OptimizationEquipmentPlans {
             if(e.getValue().size()!=5)throw new IllegalStateException("每个参选角色必须有五件实物");
             var target=targets.addObject().put("character",e.getKey()).put("nativeName",nativeName).put("inventoryName",inventoryName);target.set("artifacts",e.getValue().deepCopy());
         });
-        for(JsonNode p:workspace.path("characters"))if(p.path("protected").asBoolean()){
-            JsonNode c=find(catalog.path("characters"),"key",p.path("key").asText());String name=p.path("inventoryName").asText("");if(name.isBlank())name=c.path("nativeName").asText("");if(name.isBlank())throw new IllegalStateException("保护角色的实际名称不可判定");((ArrayNode)plan.path("protectedOwners")).add(name);
-        }
+        addProtectedOwners(plan,workspace,catalog);
         plan.set("impacts",job.path("result").path("impacts").deepCopy());var assumptions=plan.putArray("assumptions");var seen=new HashSet<String>();job.path("result").path("plan").path("reports").forEach(r->r.path("assumptions").forEach(a->{if(seen.add(a.asText()))assumptions.add(a.asText());}));
         return seal(plan);
     }
@@ -45,6 +43,20 @@ public class OptimizationEquipmentPlans {
         var plan=mapper.createObjectNode().put("id",UUID.randomUUID().toString()).put("uid",uid).put("sourceJobId",jobId).put("state","PREVIEW").put("confirmed",false).put("createdAt",Instant.now().toString()).put("workspaceVersion",workspace.path("version").asLong()).put("inventoryCount",snapshot.artifactCount());
         plan.set("snapshot",mapper.valueToTree(snapshot.artifacts()));plan.putArray("protectedOwners");
         plan.put("notice","确认范围包含目标角色、全部出借角色、被卸下的旧装和等价副本数量。游戏若自动互换，出借角色可能收到被替换装备。不会改变锁定状态；不保证跨界面原子完成，失败后必须重新观察。");return plan;
+    }
+    private void addProtectedOwners(ObjectNode plan,JsonNode workspace,JsonNode catalog){
+        var resolver=new OptimizationOwnerResolver(catalog,workspace,Set.of());
+        var protectedKeys=resolver.protectedKeys(workspace);
+        if(protectedKeys.isEmpty())return;
+        var names=new LinkedHashSet<String>();
+        for(String key:protectedKeys)names.add(resolver.inventoryName(key));
+        // Include the exact observed aliases as well as the current game name.
+        // The host consumes those observed names; aliases must not bypass protection.
+        for(JsonNode item:plan.path("snapshot")){
+            String owner=item.path("location").asText();
+            if(!owner.isBlank()&&protectedKeys.contains(resolver.resolve(owner)))names.add(owner);
+        }
+        names.forEach(name->((ArrayNode)plan.path("protectedOwners")).add(name));
     }
     private ObjectNode seal(ObjectNode plan){
         var protectedNames=new HashSet<String>();plan.path("protectedOwners").forEach(n->protectedNames.add(n.asText()));
@@ -91,15 +103,13 @@ public class OptimizationEquipmentPlans {
             String owner=oldTarget.path("inventoryName").asText();var oldIds=original.path("originalEquipment").path(owner);
             if(oldIds.size()!=5)throw new IllegalStateException("角色 "+owner+" 原来存在空槽位，请先手动还原这些空槽位并重新扫描；不会伪造自动恢复完成");
         }
-        for(var owners=original.path("originalEquipment").fields();owners.hasNext();){var entry=owners.next();String character=resolver.resolve(entry.getKey());String nativeName=find(catalog.path("characters"),"key",character).path("nativeName").asText();if(nativeName.isBlank())throw new IllegalStateException("恢复缺少角色身份映射");var target=targets.addObject().put("character",character).put("nativeName",nativeName).put("inventoryName",entry.getKey());var ids=target.putArray("artifacts");
+        for(var owners=original.path("originalEquipment").fields();owners.hasNext();){var entry=owners.next();String character=resolver.resolve(entry.getKey());String nativeName=resolver.nativeName(character);var target=targets.addObject().put("character",character).put("nativeName",nativeName).put("inventoryName",entry.getKey());var ids=target.putArray("artifacts");
             for(JsonNode idNode:entry.getValue()){
                 ArtifactItem old=mapper.treeToValue(find(original.path("snapshot"),"scanIndex",idNode.asText()),ArtifactItem.class);
                 var matches=available.stream().filter(a->physical(a).equals(physical(old))&&a.locked()==old.locked()).toList();if(matches.isEmpty())throw new IllegalStateException("原装内容、锁定或副本数量已变化，无法完整恢复");var chosen=matches.get(0);available.remove(chosen);ids.add(chosen.scanIndex());
             }
         }
-        for(JsonNode profile:workspace.path("characters"))if(profile.path("protected").asBoolean()){
-            String owner=profile.path("inventoryName").asText("");if(owner.isBlank())owner=find(catalog.path("characters"),"key",profile.path("key").asText()).path("nativeName").asText();if(owner.isBlank())throw new IllegalStateException("当前保护角色无法识别");((ArrayNode)plan.path("protectedOwners")).add(owner);
-        }
+        addProtectedOwners(plan,workspace,catalog);
         return seal(plan);
     }
     private static String physical(ArtifactItem i){return new ArtifactItem(i.scanIndex(),i.setKey(),i.slotKey(),i.level(),i.rarity(),i.mainStatKey(),i.substats(),"",i.locked()).contentFingerprint();}

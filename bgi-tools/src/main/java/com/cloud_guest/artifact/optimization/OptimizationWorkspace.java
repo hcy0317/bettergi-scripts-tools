@@ -27,6 +27,11 @@ public class OptimizationWorkspace {
                 || incoming.path("characters").size()>200 || incoming.path("builds").size()>300
                 || incoming.toString().length()>2_000_000) throw new IllegalArgumentException("配装档案格式或大小无效");
         var keys=new java.util.HashSet<String>();
+        var protections=incoming.path("protectedInventoryOwners");
+        if(!protections.isMissingNode()&&(!protections.isArray()||protections.size()>200))
+            throw new IllegalArgumentException("库存角色保护列表格式或大小无效");
+        for(var owner:protections)if(!owner.isTextual()||!key(owner.asText()))
+            throw new IllegalArgumentException("库存保护角色标识无效");
         incoming.path("characters").forEach(c->{if(!key(c.path("key").asText()) || !keys.add(c.path("key").asText())) throw new IllegalArgumentException("角色键无效或重复");});
         keys.clear();
         incoming.path("builds").forEach(b->{if(!key(b.path("id").asText()) || !keys.add(b.path("id").asText())) throw new IllegalArgumentException("Build 标识无效或重复");});

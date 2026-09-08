@@ -2,8 +2,8 @@
 import {computed} from 'vue'
 import {profileLabel,weaponLabel,setLabel,buildLabel} from '@/features/artifact-optimizer/localization.js'
 import {slotOptions,statOptions,levelCapOptions,ascensionDescription} from '@/features/artifact-optimizer/model.js'
-const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]}})
-const emit=defineEmits(['edit-build','remove'])
+const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]},inventoryProtected:{type:Boolean,default:false}})
+const emit=defineEmits(['edit-build','remove','protection-change'])
 const metadata=computed(()=>props.catalog.characters?.find(c=>c.key===props.character.key))
 const weapons=computed(()=>props.catalog.weapons?.filter(w=>!metadata.value||w.weapon_class===metadata.value.weapon_class)||[])
 function setBuilds(ids){props.character.builds=ids.map(id=>props.character.builds.find(b=>b.id===id)||{id,weight:1,metric:'damage_per_round',reference:0})}
@@ -27,7 +27,7 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
       <el-form-item v-for="(name,index) in ['普通攻击基础等级','元素战技基础等级','元素爆发基础等级']" :key="name" :label="name"><el-input-number v-model="character.talents[index]" :min="1" :max="10"/></el-form-item>
       <el-form-item label="标签" class="wide"><el-select v-model="character.tags" multiple filterable :reserve-keyword="false" allow-create default-first-option placeholder="输入标签后按回车"/></el-form-item>
       <el-form-item label="角色目标权重（保尖 / 兜底）"><el-input-number v-model="character.weight" :min="0" :max="1000" :step="0.5"/></el-form-item>
-      <el-form-item label="保护当前五件装备"><el-switch v-model="character.protected" active-text="不出借、不替换"/></el-form-item>
+      <el-form-item label="保护当前五件装备"><el-switch :model-value="character.protected||inventoryProtected" @update:model-value="value=>emit('protection-change',value)" active-text="不出借、不替换"/></el-form-item>
     </el-form>
     <section class="build-bindings" id="optimizer-builds"><h3>兼顾的配队方案</h3><p class="hint">选中多个方案后仍只求出一套通用装备。均衡模式的场景权重在方案中设置，不随角色引用次数叠加。</p>
       <el-select :model-value="character.builds.map(b=>b.id)" multiple filterable :reserve-keyword="false" placeholder="选择一个或多个配队方案" @update:model-value="setBuilds"><el-option v-for="b in builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select>

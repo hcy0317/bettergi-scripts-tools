@@ -5,6 +5,25 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptimizationOwnerResolverTest {
+    @Test void protectionForAnUnknownLegacyProfileCannotDisappear()throws Exception{
+        var mapper=new ObjectMapper();
+        var workspace=mapper.readTree("{\"characters\":[{\"key\":\"unverified\",\"protected\":true}]}");
+        var resolver=new OptimizationOwnerResolver(mapper.readTree("{\"characters\":[],\"inventoryCharacters\":[]}"),workspace,Set.of());
+        assertThrows(IllegalArgumentException.class,()->resolver.protectedKeys(workspace));
+    }
+
+    @Test void knownInventoryOwnerDoesNotNeedASimulationImplementation() throws Exception {
+        var mapper=new ObjectMapper();
+        var catalog=mapper.readTree("""
+            {"characters":[{"id":10000021,"key":"amber","inventoryAliases":["安柏"]}],
+             "inventoryCharacters":[{"id":10000133,"key":"inventory10000133","nativeName":"桑多涅","inventoryAliases":["桑多涅","Sandrone"]}]}
+            """);
+        var resolver=new OptimizationOwnerResolver(catalog,mapper.readTree("{\"characters\":[]}"),Set.of("amber"));
+        assertEquals("inventory10000133",resolver.resolve("桑多涅"));
+        assertEquals("inventory10000133",resolver.resolve("Sandrone"));
+        assertThrows(IllegalArgumentException.class,()->resolver.resolve("未核实穿戴者"));
+    }
+
     @Test void chineseOcrOwnersAndRenamedCharactersResolveWithoutUsingDisplayNames() throws Exception {
         var m=new ObjectMapper();
         var catalog=m.readTree("{\"characters\":[{\"id\":21,\"key\":\"amber\",\"inventoryAliases\":[\"安柏\"]},{\"id\":75,\"key\":\"wanderer\",\"inventoryAliases\":[\"流浪者\"]}]}");

@@ -12,6 +12,18 @@ public final class OptimizationInputValidation {
         var selected=new LinkedHashSet<String>();selection.path("characters").forEach(v->selected.add(v.asText()));var scenarios=new LinkedHashSet<String>();
         if(selected.isEmpty()||selected.size()>16)issues.add(new Issue("selection","","","selection","请选择1至16名参与本次配装的角色，可将当前方案队员加入配装"));
         if(snapshot==null||snapshot.artifacts().isEmpty())issues.add(new Issue("selection","","","snapshot","请选择有效的圣遗物扫描记录"));
+        if(catalog!=null)try{
+            var owners=new OptimizationOwnerResolver(catalog,workspace,Set.of());
+            try{owners.protectedKeys(workspace);}
+            catch(IllegalArgumentException error){issues.add(new Issue("selection","","","protections",error.getMessage()));}
+            if(snapshot!=null){
+                var checkedOwners=new HashSet<String>();
+                for(var item:snapshot.artifacts())if(checkedOwners.add(item.location())){
+                    try{owners.resolve(item.location());}
+                    catch(IllegalArgumentException error){issues.add(new Issue("selection","","","inventoryOwners",error.getMessage()+"；请重新扫描，或修正改名角色的游戏中装备显示名"));}
+                }
+            }
+        }catch(IllegalArgumentException error){issues.add(new Issue("selection","","","inventoryOwners",error.getMessage()));}
         for(String key:selected){JsonNode profile=profiles.get(key);if(profile==null){issues.add(new Issue("character",key,"","profile","所选角色档案不存在"));continue;}personal(profile,key,"",catalog,issues);
             if(!profile.path("builds").isArray()||profile.path("builds").isEmpty())issues.add(new Issue("character",key,"","builds",name(catalog,key)+"尚未关联配队方案"));
             for(JsonNode ref:profile.path("builds")){String id=ref.path("id").asText();scenarios.add(id);if(!builds.containsKey(id))issues.add(new Issue("character",key,"","builds","角色关联的配队方案已不存在"));}
@@ -41,6 +53,10 @@ public final class OptimizationInputValidation {
         String[] fields={"level","maxLevel","constellation","weaponLevel","weaponMaxLevel","refinement"},labels={"角色等级","突破上限","命座","武器等级","武器突破上限","精炼"};int[] min={1,Math.max(1,p.path("level").asInt()),0,1,Math.max(1,p.path("weaponLevel").asInt()),1},max={100,100,6,90,90,5};
         for(int i=0;i<fields.length;i++){var v=p.path(fields[i]);if(!v.isIntegralNumber()||!v.canConvertToInt()||v.asInt()<min[i]||v.asInt()>max[i])issues.add(new Issue(scope,key,build,fields[i],name+"："+labels[i]+"未填写或超出范围"));}
         String weapon=p.path("weapon").asText();boolean known=!weapon.isBlank();if(catalog!=null&&catalog.path("weapons").isArray()&&!catalog.path("weapons").isEmpty()){known=false;for(JsonNode w:catalog.path("weapons"))if(w.path("key").asText().equals(weapon))known=true;}
+        if(catalog!=null&&catalog.path("characters").isArray()){
+            boolean known=false;for(JsonNode character:catalog.path("characters"))if(character.path("key").asText().equals(key))known=true;
+            if(!known)issues.add(new Issue(scope,key,build,"profile",name+"：当前引擎没有此角色的模拟实现；库存身份可用不等于可以参战计算"));
+        }
         for(String field:List.of("maxLevel","weaponMaxLevel")){var cap=p.path(field);if(!cap.isIntegralNumber()||cap.asInt()<10||cap.asInt()>90||cap.asInt()%10!=0)issues.add(new Issue(scope,key,build,field,name+"：等级上限须选择10至90之间的整十档位"));}
         if(!known)issues.add(new Issue(scope,key,build,"weapon",name+"：请选择有效武器"));
         var talents=p.path("talents");boolean valid=talents.isArray()&&talents.size()==3;for(JsonNode v:talents)if(!v.isIntegralNumber()||v.asInt()<1||v.asInt()>15)valid=false;if(!valid)issues.add(new Issue(scope,key,build,"talents",name+"：请补全三个基础天赋等级"));

@@ -3,7 +3,7 @@ const canonical=key=>String(key??'').toLowerCase().replace(/[_ -]/g,'')
 const fallbackCharacters=Object.fromEntries(Object.entries(artifactCharacterLabels).map(([key,name])=>[canonical(key),name]))
 const fallbackSets=Object.fromEntries(Object.entries(artifactSetLabels).map(([key,name])=>[canonical(key),name]))
 const isChinese=value=>/[\u3400-\u9fff]/.test(value||'')
-export function characterLabel(catalog,key){return catalog?.localization?.character_names?.[canonical(key)]||catalog?.characters?.find(c=>c.key===key)?.nativeName||fallbackCharacters[canonical(key)]||(isChinese(key)?key:'角色资料待补充')}
+export function characterLabel(catalog,key){return catalog?.localization?.character_names?.[canonical(key)]||catalog?.characters?.find(c=>c.key===key)?.nativeName||catalog?.inventoryCharacters?.find(c=>c.key===key)?.nativeName||fallbackCharacters[canonical(key)]||(isChinese(key)?key:'角色资料待补充')}
 export function weaponLabel(catalog,key){return catalog?.localization?.weapon_names?.[canonical(key)]||(isChinese(key)?key:'武器资料待补充')}
 export function setLabel(catalog,key){return catalog?.localization?.artifact_names?.[canonical(key)]||fallbackSets[canonical(key)]||(isChinese(key)?key:'套装资料待补充')}
 export function profileLabel(catalog,profile){return profile?.name&&profile.name!==profile.key?profile.name:characterLabel(catalog,profile?.key)}

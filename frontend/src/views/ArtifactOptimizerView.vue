@@ -13,6 +13,7 @@ import EnginePanel from '@/components/artifact-optimizer/OptimizerEnginePanel.vu
 import * as api from '@/api/artifact/artifactOptimizer.js'
 import {newCharacter,newBuild,normalizeBuild,mergeEnkaPreview,preferenceOptions,selectedScenarioIds,updateBuildMembers,selectBuildMembers} from '@/features/artifact-optimizer/model.js'
 import {validateOptimization} from '@/features/artifact-optimizer/validation.js'
+import {protectedInventoryKeys,setInventoryProtections,toggleCharacterProtection,isCharacterProtected} from '@/features/artifact-optimizer/inventory.js'
 import {characterLabel,weaponLabel,profileLabel,jobLabels,buildLabel} from '@/features/artifact-optimizer/localization.js'
 
 const uid=ref(''),workspace=ref({version:0,characters:[],builds:[]}),catalog=ref({characters:[],weapons:[],sets:[]})
@@ -23,14 +24,18 @@ const serverIssues=ref([])
 const inputIssues=computed(()=>validateOptimization(workspace.value,selected.value,snapshot.value,catalog.value,workspace.value.computeSettings||{}))
 const allIssues=computed(()=>[...inputIssues.value,...serverIssues.value])
 const addDialog=ref(false),addKey=ref(''),enkaDialog=ref(false),enka=ref(null),enkaKeys=ref([]),importing=ref(false)
-let scope=0,pollTimer=null,applying=false,editVersion=0
 const changingUid=ref(false),uidSelectorKey=ref(0)
+let scope=0,pollTimer=null,applying=false,editVersion=0
 const character=computed(()=>workspace.value.characters.find(c=>c.key===activeCharacter.value))
 const build=computed(()=>workspace.value.builds.find(b=>b.id===activeBuild.value))
 const running=computed(()=>['QUEUED','RUNNING'].includes(job.value?.state))
 const filteredCharacters=computed(()=>workspace.value.characters.filter(c=>[profileLabel(catalog.value,c),c.key,...(c.tags||[])].join(' ').toLowerCase().includes(search.value.toLowerCase())))
 const scenarios=computed(()=>selectedScenarioIds(workspace.value.characters,selected.value).map(id=>workspace.value.builds.find(b=>b.id===id)).filter(Boolean))
 const itemList=computed(()=>snapshot.value?.artifacts||[])
+const inventoryPeople=computed(()=>catalog.value.inventoryCharacters||[])
+const inventoryProtections=computed(()=>protectedInventoryKeys(workspace.value,catalog.value))
+function changeInventoryProtections(keys){try{setInventoryProtections(workspace.value,catalog.value,keys)}catch(e){error.value=e.message}}
+function changeCharacterProtection(value){try{toggleCharacterProtection(workspace.value,catalog.value,activeCharacter.value,value)}catch(e){error.value=e.message}}
 const clone=value=>JSON.parse(JSON.stringify(value))
 watch(workspace,()=>{if(!applying){dirty.value=true;editVersion++;serverIssues.value=[]}},{deep:true,flush:'sync'})
 function applyWorkspace(value){applying=true;value.buffTemplates ||= [];value.builds.forEach(normalizeBuild);value.computeSettings ||= {searchSamples:3,validationSamples:8};workspace.value=value;applying=false;dirty.value=false;serverIssues.value=[];activeCharacter.value=value.characters[0]?.key||'';activeBuild.value=value.builds[0]?.id||''}
@@ -44,11 +49,6 @@ async function load(){
   catch(e){if(current===scope)error.value=e.message||String(e)}finally{if(current===scope)loading.value=false}
 }
 watch(uid,load)
-watch(selected,()=>serverIssues.value=[])
-watch(snapshotId,async id=>{const current=scope,account=uid.value;snapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&id===snapshotId.value)snapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
-watch(()=>job.value?.snapshotId,async id=>{const current=scope,account=uid.value;resultSnapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&job.value?.snapshotId===id)resultSnapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
-async function reload(){if(dirty.value){try{await ElMessageBox.confirm('重新载入会放弃尚未保存的编辑，是否继续？','重新载入',{type:'warning'})}catch{return}}await load()}
-async function loadEngine(){engineError.value='';try{catalog.value=await api.loadCatalog()}catch(e){engineError.value=e.message||String(e)}}
 async function confirmDiscard(message){
   if(!dirty.value)return true
   try{await ElMessageBox.confirm(message,'有未保存编辑',{type:'warning',confirmButtonText:'放弃编辑并继续',cancelButtonText:'继续编辑'});return true}catch{return false}
@@ -64,6 +64,11 @@ async function changeUid(next){
 onBeforeRouteLeave(()=>confirmDiscard('离开配装页面会放弃尚未保存的编辑，是否继续？'))
 function beforeUnload(event){if(dirty.value){event.preventDefault();event.returnValue=''}}
 function openAddDialog(){addKey.value='';addDialog.value=true}
+watch(selected,()=>serverIssues.value=[])
+watch(snapshotId,async id=>{const current=scope,account=uid.value;snapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&id===snapshotId.value)snapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
+watch(()=>job.value?.snapshotId,async id=>{const current=scope,account=uid.value;resultSnapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&job.value?.snapshotId===id)resultSnapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
+async function reload(){if(dirty.value){try{await ElMessageBox.confirm('重新载入会放弃尚未保存的编辑，是否继续？','重新载入',{type:'warning'})}catch{return}}await load()}
+async function loadEngine(){engineError.value='';try{catalog.value=await api.loadCatalog()}catch(e){engineError.value=e.message||String(e)}}
 async function save(){
   if(!dirty.value&&workspace.value.version>0)return true
   const current=scope,id=uid.value,payload=clone(workspace.value),revision=editVersion;saving.value=true;error.value=''
@@ -77,7 +82,7 @@ function changeMembers(keys){try{selected.value=updateBuildMembers(workspace.val
 function useTeam(){selected.value=selectBuildMembers(workspace.value,activeBuild.value,selected.value)}
 function selectMember(key,value){if(value){selectBuildMembers(workspace.value,activeBuild.value,[]);selected.value=[...new Set([...selected.value,key])]}else selected.value=selected.value.filter(k=>k!==key)}
 async function locateIssue(issue){
-  if(issue.buildId){activeBuild.value=issue.buildId;tab.value='builds'}else if(issue.character){activeCharacter.value=issue.character;tab.value='characters'}else if(issue.field==='selection'){tab.value='builds'}
+  if(issue.buildId){activeBuild.value=issue.buildId;tab.value='builds'}else if(issue.character){activeCharacter.value=issue.character;tab.value='characters'}else if(issue.field==='selection'){tab.value='builds'}else if(['protections','inventoryOwners'].includes(issue.field)){tab.value='characters'}
   await nextTick();
   const scopeElement=issue.buildId&&issue.character?document.querySelector(`[data-optimizer-member="${CSS.escape(issue.character)}"]`):document.querySelector(issue.scope==='character'?'.character-editor':'.build-editor');
   const target=scopeElement?.querySelector(`[data-field="${CSS.escape(issue.field)}"]`)||document.getElementById(`optimizer-${issue.field}`)||scopeElement||document.querySelector('.compute-bar');
@@ -116,6 +121,18 @@ onBeforeUnmount(()=>{scope++;stopPoll();window.removeEventListener('beforeunload
       <el-empty v-else-if="!uid" description="先选择账号，复用圣遗物分析中已扫描的真实背包。"/>
       <template v-else>
         <el-tabs v-model="tab"><el-tab-pane label="角色档案" name="characters"/><el-tab-pane label="配队方案" name="builds"/><el-tab-pane label="分配结果" name="results"/><el-tab-pane label="战斗循环" name="rotations"/><el-tab-pane label="引擎与数据" name="engine"/></el-tabs>
+        <details v-if="tab==='characters'" class="inventory-protection">
+          <summary>库存装备保护 <span>已保护 {{ inventoryProtections.length }} 位角色</span></summary>
+          <div id="optimizer-protections">
+            <span id="optimizer-inventoryOwners"></span>
+            <p class="hint">没有模拟实现或未建立档案的角色，也可保护其现有装备。这里与个人档案的保护开关同步，不会让这些角色自动参加计算。</p>
+            <el-alert v-if="catalog.nativeAliasWarning" :title="catalog.nativeAliasWarning" type="warning" :closable="false"/>
+            <el-select :model-value="inventoryProtections" @update:model-value="changeInventoryProtections" multiple filterable :reserve-keyword="false" :disabled="!inventoryPeople.length" placeholder="选择不出借、不替换装备的角色" aria-label="库存角色装备保护">
+              <el-option v-for="person in inventoryPeople" :key="person.key" :value="person.key" :label="person.nativeName"/>
+              <el-option v-for="key in inventoryProtections.filter(k=>!inventoryPeople.some(p=>p.key===k))" :key="key" :value="key" label="待核实角色（原保护保留）"/>
+            </el-select>
+          </div>
+        </details>
         <section v-if="tab==='characters'" class="workbench">
           <aside class="roster"><el-input v-model="search" clearable placeholder="搜索角色或标签" aria-label="搜索角色"/><el-button :icon="Plus" @click="openAddDialog">添加角色</el-button><div v-if="!workspace.characters.length" class="hint">添加个人档案，或从公开 Enka 展柜导入。</div><p v-else-if="!filteredCharacters.length" class="hint">没有匹配的角色或标签，请调整或清空搜索。</p>
             <div v-for="c in filteredCharacters" :key="c.key" :class="['role-row',{active:c.key===activeCharacter}]">
@@ -123,7 +140,7 @@ onBeforeUnmount(()=>{scope++;stopPoll();window.removeEventListener('beforeunload
               <button type="button" class="role-select" @click="activeCharacter=c.key"><img v-if="catalog.characters?.find(m=>m.key===c.key)?.icon_name" :src="`https://enka.network/ui/${catalog.characters.find(m=>m.key===c.key).icon_name}.png`" alt="" loading="lazy"/><span><strong>{{ profileLabel(catalog,c) }}</strong><small>{{ c.builds?.length||0 }} 个方案{{ c.protected?' · 装备保护':'' }}</small><small v-if="c.tags?.length">{{ c.tags.join(' / ') }}</small></span></button>
             </div>
           </aside>
-          <CharacterEditor v-if="character" :character="character" :catalog="catalog" :builds="workspace.builds" :items="itemList" @edit-build="editBuild" @remove="removeCharacter"/><el-empty v-else description="从左侧添加或选择角色后，编辑个人条件和通用配装目标。"/>
+          <CharacterEditor v-if="character" :character="character" :inventory-protected="isCharacterProtected(workspace,catalog,character.key)" @protection-change="changeCharacterProtection" :catalog="catalog" :builds="workspace.builds" :items="itemList" @edit-build="editBuild" @remove="removeCharacter"/><el-empty v-else description="从左侧添加或选择角色后，编辑个人条件和通用配装目标。"/>
         </section>
         <section v-else-if="tab==='builds'"><div class="build-toolbar"><el-select v-model="activeBuild" filterable placeholder="选择配队方案"><el-option v-for="b in workspace.builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select><el-button :icon="Plus" @click="addBuild">新建方案</el-button></div><BuildEditor v-if="build" :uid="uid" @sampling="value=>workspace.computeSettings.validationSamples=value" :selected="selected" @members-change="changeMembers" @select-member="selectMember" @use-team="useTeam" :build="build" :characters="workspace.characters" :catalog="catalog" :templates="workspace.buffTemplates" @save-buff-template="template=>workspace.buffTemplates.push(template)" @remove="removeBuild"/><el-empty v-else description="新建方案，选择队员并编写一轮循环。"/></section>
         <section v-else-if="tab==='results'"><el-select v-if="history.length" :model-value="job?.id" placeholder="查看历史计算" class="history" @change="id=>showHistory(history.find(j=>j.id===id))"><el-option v-for="j in history" :key="j.id" :value="j.id" :label="`${j.createdAt} · ${jobLabels[j.state]||'未知状态'}`"/></el-select><Results :catalog="catalog" :job="job" :items="resultSnapshot?.artifacts||[]" :characters="workspace.characters"/></section>
@@ -143,6 +160,7 @@ onBeforeUnmount(()=>{scope++;stopPoll();window.removeEventListener('beforeunload
 </template>
 
 <style scoped>
+.inventory-protection{background:var(--el-bg-color);border:1px solid var(--el-border-color-lighter);border-radius:12px;margin-bottom:18px;padding:14px 20px}.inventory-protection summary{cursor:pointer;font-weight:600}.inventory-protection summary span{font-weight:400;color:var(--el-text-color-secondary);margin-left:12px;font-size:12px}.inventory-protection .el-select{width:100%}
 .input-problems{margin:12px 0;padding:16px;border:1px solid var(--el-color-warning-light-5);border-radius:8px;background:var(--el-color-warning-light-9)}.input-problems h2{font-size:16px;margin:0 0 8px}.input-problems p{font-size:13px}.input-problems ul{max-height:230px;overflow:auto;padding-left:20px}.input-problems li{margin:6px 0}.input-problems .el-button{white-space:normal;text-align:left;height:auto}.sampling-controls{display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;align-items:end}.sampling-controls label{display:grid;gap:7px;font-size:12px}.sampling-controls p{flex:1;min-width:200px;font-size:12px;line-height:1.6;color:var(--el-text-color-secondary)}
 
 .optimizer-page{min-height:100dvh;padding:24px;color:var(--el-text-color-primary)}.optimizer-shell{width:min(1500px,100%);box-sizing:border-box;margin:auto;padding:24px;background:var(--el-bg-color);border:1px solid var(--el-border-color-lighter);border-radius:12px}.page-header{display:flex;gap:22px;align-items:center;border-bottom:1px solid var(--el-border-color-lighter);padding-bottom:18px}.nav{display:flex;gap:8px}.page-header h1{font-size:25px;margin:0 0 7px}.page-header p{font-size:14px;color:var(--el-text-color-secondary);margin:0}.toolbar{display:flex;gap:12px;align-items:center;margin:18px 0;flex-wrap:wrap}.toolbar>:first-child{width:260px}.notice{margin-bottom:12px}.workbench{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px}.roster{min-width:0}.roster>.el-button{width:100%;margin:12px 0}.role-row{display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;margin:4px 0}.role-row.active{background:var(--el-color-primary-light-9)}.role-select{border:0;background:none;padding:0;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;width:100%;min-width:0;color:inherit}.role-select:focus-visible{outline:2px solid var(--el-color-primary);outline-offset:4px}.role-select img{width:40px;height:40px;object-fit:cover;border-radius:6px;background:var(--el-fill-color)}.role-select strong{display:block;font-size:14px}.role-select small{display:block;font-size:11px;color:var(--el-text-color-secondary);margin-top:4px;overflow-wrap:anywhere}.hint{font-size:12px;line-height:1.7;color:var(--el-text-color-secondary)}.build-toolbar{display:flex;gap:12px;max-width:650px;margin-bottom:18px}.build-toolbar>.el-select{flex:1}.compute-bar{margin-top:28px;padding:20px;background:var(--el-fill-color-light);border:1px solid var(--el-border-color-lighter);border-radius:10px}.compute-inputs{display:grid;grid-template-columns:minmax(220px,2fr) minmax(130px,1fr) 170px 170px;gap:16px}.compute-inputs label{display:grid;gap:7px;font-size:12px}.compute-inputs .el-select{width:100%}.compute-bottom{display:flex;gap:16px;align-items:center;margin-top:10px}.compute-bottom p{flex:1;display:grid;gap:5px;font-size:14px}.compute-bottom span,.compute-bottom small{font-size:12px;color:var(--el-text-color-secondary)}.engine-details h2{font-size:19px}.engine-details p{line-height:1.7;max-width:850px}.history{max-width:550px;width:100%;margin:12px 0}.enka-row{display:flex;align-items:center;gap:14px;padding:12px 0;font-size:13px;flex-wrap:wrap}@media(max-width:1100px){.workbench{grid-template-columns:210px minmax(0,1fr);gap:18px}.compute-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:768px){.optimizer-page{padding:0}.optimizer-shell{padding:16px;border-radius:0}.page-header{flex-wrap:wrap;gap:12px}.page-header h1{font-size:22px}.workbench{grid-template-columns:1fr}.roster{max-height:300px;overflow:auto}.compute-bottom{flex-wrap:wrap}.compute-bottom p{flex-basis:100%}.compute-inputs{grid-template-columns:1fr}.toolbar>:first-child{width:100%}}

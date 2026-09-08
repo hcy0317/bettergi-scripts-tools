@@ -45,16 +45,9 @@ public class GcsimGateway {
                 Path nativeFile=sources.betterGiRoot().resolve(Path.of("GameTask","AutoFight","Assets","combat_avatar.json"));
                 if(Files.isRegularFile(nativeFile)&&Files.size(nativeFile)<=2_000_000){
                     JsonNode nativeData=mapper.readTree(nativeFile.toFile());
-                    for(JsonNode character:value.path("characters")){
-                        var aliases=((com.fasterxml.jackson.databind.node.ObjectNode)character).putArray("inventoryAliases");
-                        for(JsonNode entry:nativeData)if(entry.path("id").asLong(-1)==character.path("id").asLong(-2)){
-                            ((com.fasterxml.jackson.databind.node.ObjectNode)character).put("nativeName",entry.path("name").asText());
-                            aliases.add(entry.path("name").asText());aliases.add(entry.path("nameEn").asText());
-                            for(JsonNode alias:entry.path("alias"))aliases.add(alias.asText());
-                        }
-                    }
-                }
-            }catch(Exception error){((com.fasterxml.jackson.databind.node.ObjectNode)value).put("nativeAliasWarning","BetterGI 角色别名目录暂不可用；未能识别的穿戴者会阻止计算，不会绕过保护");}
+                    value=OptimizationInventoryCatalog.attach(value,nativeData);
+                }else throw new IllegalStateException("角色身份目录不存在或超过大小限制");
+            }catch(Exception error){((com.fasterxml.jackson.databind.node.ObjectNode)value).put("nativeAliasWarning","BetterGI 完整角色身份目录暂不可用；无法核实的穿戴者仍需修正，不会绕过装备保护");}
         }
         catalog=value;return value.deepCopy();
     }

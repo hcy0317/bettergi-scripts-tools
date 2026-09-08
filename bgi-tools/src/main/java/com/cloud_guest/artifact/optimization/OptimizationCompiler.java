@@ -40,10 +40,18 @@ public class OptimizationCompiler {
         snapshot.artifacts().forEach(item->{
             var value=items.addObject().put("scanIndex",item.scanIndex()).put("slotKey",item.slotKey()).put("setKey",item.setKey()).put("mainStatKey",item.mainStatKey())
                     .put("mainStatValue",mainStats.value(item.rarity(),item.level(),item.mainStatKey())).put("location",owners==null?canonical(item.location()):owners.resolve(item.location())).put("locked",item.locked()).put("fingerprint",item.contentFingerprint());
-            value.set("substats",mapper.valueToTree(item.substats()));
+            // Dormant is the scanner's explicit current-state marker (for
+            // example the pending fourth line at +0), not an activated roll.
+            // Keep it in the source fingerprint, but do not grant its stats.
+            value.set("substats",mapper.valueToTree(item.substats().stream().filter(stat->!stat.dormant()).toList()));
             if(!item.location().isBlank())current.computeIfAbsent(value.path("location").asText(),ignored->mapper.createArrayNode()).add(item.scanIndex());
         });
-        var protections=request.putArray("protectedCharacters");profiles.forEach((key,p)->{if(p.path("protected").asBoolean())protections.add(owners==null?key:owners.representative(key));});
+        var protections=request.putArray("protectedCharacters");
+        if(owners!=null)owners.protectedKeys(workspace).forEach(protections::add);
+        else{
+            if(!workspace.path("protectedInventoryOwners").isEmpty())throw new IllegalArgumentException("库存角色保护需要已核实的角色身份目录");
+            profiles.forEach((key,p)->{if(p.path("protected").asBoolean())protections.add(key);});
+        }
         var characters=request.putArray("characters");
         for(String key:selected) {
             var profile=profiles.get(key);

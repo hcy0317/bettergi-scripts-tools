@@ -7,6 +7,46 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptimizationCompilerTest {
+    @Test void currentlyDormantAffixIsNotAppliedOrRemovedFromPhysicalIdentity()throws Exception{
+        var mapper=new ObjectMapper();
+        var workspace=mapper.readTree("""
+            {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"builds":[{"id":"team"}]}],
+             "builds":[{"id":"team","duration":20,"enemyLevel":90,"resistance":0.1,"enemyCount":1,"members":[{"character":"amber"}],"rotation":"active amber; amber attack;"}]}
+            """);
+        var item=new ArtifactItem(0,"EmblemOfSeveredFate","flower",0,5,"hp",List.of(
+            new ArtifactSubstat("critRate_",3.9,false),new ArtifactSubstat("critDMG_",7.8,true)),"",false);
+        var snapshot=ArtifactSnapshot.create("100000001","scan","default","v1",List.of(item));
+        var result=new OptimizationCompiler(mapper,(a,b,c)->717).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"]}"));
+        assertEquals(1,result.path("items").get(0).path("substats").size());
+        assertEquals("critRate_",result.path("items").get(0).path("substats").get(0).path("key").asText());
+        assertEquals(item.contentFingerprint(),result.path("items").get(0).path("fingerprint").asText());
+        assertEquals(2,snapshot.artifacts().get(0).substats().size());
+    }
+
+    @Test void inventoryOnlyOwnerCanBeProtectedWithoutAPersonalSimulationProfile()throws Exception{
+        var mapper=new ObjectMapper();
+        var workspace=mapper.readTree("""
+            {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"builds":[{"id":"team"}]}],
+             "protectedInventoryOwners":["inventory10000133"],
+             "builds":[{"id":"team","duration":20,"enemyLevel":90,"resistance":0.1,"enemyCount":1,"members":[{"character":"amber"}],"rotation":"active amber; amber attack;"}]}
+            """);
+        var catalog=OptimizationInventoryCatalog.attach(mapper.readTree("""
+            {"characters":[{"key":"amber","id":10000021}]}
+            """),mapper.readTree("""
+            [{"id":10000021,"name":"安柏"},{"id":10000133,"name":"桑多涅","alias":["Marionette"]}]
+            """));
+        var snapshot=ArtifactSnapshot.create("100000001","scan","default","v1",List.of(
+            new ArtifactItem(0,"EmblemOfSeveredFate","flower",20,5,"hp",List.of(),"Marionette",false)));
+        var result=new OptimizationCompiler(mapper,(a,b,c)->4780,catalog).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"]}"));
+        assertEquals("inventory10000133",result.path("items").get(0).path("location").asText());
+        assertEquals("inventory10000133",result.path("protectedCharacters").get(0).asText());
+        assertEquals(1,result.path("characters").size());
+        assertFalse(result.path("scenarios").get(0).path("evaluation").path("config").asText().contains("inventory10000133 char"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)workspace).putArray("protectedInventoryOwners").add("unverified");
+        var invalid=assertThrows(OptimizationValidationException.class,()->new OptimizationCompiler(mapper,(a,b,c)->4780,catalog).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"]}")));
+        assertTrue(invalid.issues().stream().anyMatch(i->i.field().equals("protections")));
+    }
+
     @Test void sceneSettingsPreserveHpModeParticlesAndIndependentSampling()throws Exception {
         var mapper=new ObjectMapper();
         var workspace=mapper.readTree("""

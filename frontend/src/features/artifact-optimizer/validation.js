@@ -7,8 +7,13 @@ export function validateOptimization(workspace,selected,snapshot,catalog={},opti
   if(!selected.length)add('selection','','','selection','请选择参与本次配装的角色，或使用“将本队加入配装”')
   if(selected.length>16)add('selection','','','selection','一次最多为16名角色分配装备')
   if(!snapshot?.artifacts?.length)add('selection','','','snapshot','请选择含可识别圣遗物的扫描记录')
+  if(workspace.protectedInventoryOwners!==undefined){
+    if(!Array.isArray(workspace.protectedInventoryOwners)||workspace.protectedInventoryOwners.length>200)add('selection','','','protections','库存角色保护列表格式无效')
+    else if(workspace.protectedInventoryOwners.some(key=>typeof key!=='string'||!catalog.inventoryCharacters?.some(c=>c.key===key)))add('selection','','','protections','部分库存保护角色的身份尚未核实，请检查角色目录与保护选择')
+  }
   const personal=(key,p,buildId='')=>{
     const scope=buildId?'build':'character',name=profileLabel(catalog,{...p,key})
+    if(catalog.characters?.length&&!catalog.characters.some(c=>c.key===key))add(scope,key,buildId,'profile',name+'：当前引擎没有此角色的模拟实现；库存身份可用不等于可以参战计算')
     for(const [field,label,min,max] of [['level','角色等级',1,100],['maxLevel','突破等级上限',p.level||1,100],['constellation','命座',0,6],['weaponLevel','武器等级',1,90],['weaponMaxLevel','武器等级上限',p.weaponLevel||1,90],['refinement','精炼',1,5]])if(!integer(p[field],min,max))add(scope,key,buildId,field,`${name}：${label}未填写或超出范围`)
     if(!p.weapon||catalog.weapons?.length&&!catalog.weapons.some(w=>w.key===p.weapon))add(scope,key,buildId,'weapon',`${name}：请选择有效武器`)
     for(const field of ['maxLevel','weaponMaxLevel'])if(!integer(p[field],10,90)||p[field]%10!==0)add(scope,key,buildId,field,`${name}：等级上限须选择10至90之间的整十档位`)
