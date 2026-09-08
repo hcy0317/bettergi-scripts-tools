@@ -99,8 +99,8 @@ public class OptimizationEquipmentPlans {
         var resolver=new OptimizationOwnerResolver(catalog,workspace,active);
         var plan=base(uid,original.path("sourceJobId").asText(),workspace,scan.snapshot());plan.put("recoveryOf",id).put("recoveryRoot",original.path("id").asText());var targets=plan.putArray("targets");
         var available=new ArrayList<>(scan.snapshot().artifacts());
-        for(JsonNode oldTarget:original.path("targets")){
-            String owner=oldTarget.path("inventoryName").asText();var oldIds=original.path("originalEquipment").path(owner);
+        for(var owners=original.path("originalEquipment").fields();owners.hasNext();){
+            var entry=owners.next();String owner=entry.getKey();var oldIds=entry.getValue();
             if(oldIds.size()!=5)throw new IllegalStateException("角色 "+owner+" 原来存在空槽位，请先手动还原这些空槽位并重新扫描；不会伪造自动恢复完成");
         }
         for(var owners=original.path("originalEquipment").fields();owners.hasNext();){var entry=owners.next();String character=resolver.resolve(entry.getKey());String nativeName=resolver.nativeName(character);var target=targets.addObject().put("character",character).put("nativeName",nativeName).put("inventoryName",entry.getKey());var ids=target.putArray("artifacts");

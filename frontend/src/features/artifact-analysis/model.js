@@ -14,6 +14,7 @@ const operationMap = {
   ANALYZE: {label: '扫描并分析', launchHost: 'analysis'},
   SCAN_CHARACTER_ROSTER: {label: '检测角色并更新配装', launchHost: 'characters'},
   EXECUTE_LOCK_PLAN: {label: '执行锁定方案', launchHost: 'execute'},
+  EXECUTE_EQUIP_PLAN: {label: '执行已确认穿戴', launchHost: 'equipment'},
   REBUILD_NATIVE_PLANS: {label: '重建原神方案', launchHost: 'native-sync'}
 }
 
