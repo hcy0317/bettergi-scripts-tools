@@ -9,6 +9,46 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptimizationCommunityServiceTest {
+    @Test void upstreamFailureHasAnActionableHttpResponse() throws Exception {
+        var mapper=new ObjectMapper();var client=mock(HttpClient.class);
+        var response=mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(503);
+        when(client.send(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenReturn(response);
+        var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+            new com.cloud_guest.controller.ArtifactCommunityController(new OptimizationCommunityService(mapper,client),mapper)).build();
+        var result=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/jwt/artifacts/optimizer/community/search")
+            .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{}")).andReturn().getResponse();
+        assertEquals(502,result.getStatus());
+        assertTrue(mapper.readTree(result.getContentAsString(java.nio.charset.StandardCharsets.UTF_8)).path("message").asText().contains("503"));
+    }
+
+    @Test void malformedResponseIsNotCachedAsAnEmptyOrSuccessfulSearch() throws Exception {
+        var mapper=new ObjectMapper();var client=mock(HttpClient.class);
+        var first=mock(HttpResponse.class);when(first.statusCode()).thenReturn(200);
+        when(first.body()).thenReturn("{\"message\":\"not a database response\"}".getBytes(StandardCharsets.UTF_8));
+        var second=mock(HttpResponse.class);when(second.statusCode()).thenReturn(200);
+        when(second.body()).thenReturn("{\"data\":[]}".getBytes(StandardCharsets.UTF_8));
+        when(client.send(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenReturn(first,second);
+        var service=new OptimizationCommunityService(mapper,client);
+        assertThrows(IllegalStateException.class,()->service.search(mapper.createObjectNode()));
+        assertTrue(service.search(mapper.createObjectNode()).path("entries").isEmpty());
+    }
+
+    @Test void emptyUpstreamObjectIsASuccessfulSearchWithNoMatches() throws Exception {
+        var mapper = new ObjectMapper();
+        var client = mock(HttpClient.class);
+        var response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn("{}".getBytes(StandardCharsets.UTF_8));
+        when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(response);
+
+        var result = new OptimizationCommunityService(mapper, client).search(mapper.createObjectNode());
+        assertTrue(result.path("entries").isArray());
+        assertTrue(result.path("entries").isEmpty());
+        assertFalse(result.path("hasMore").asBoolean());
+        assertEquals(1, result.path("page").asInt());
+    }
+
     @Test @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="artifact.optimizer.live.community",matches="true")
     void readsMaintainedPublicDatabaseWithoutAccountData()throws Exception {
         var mapper=new ObjectMapper();var service=new OptimizationCommunityService(mapper);

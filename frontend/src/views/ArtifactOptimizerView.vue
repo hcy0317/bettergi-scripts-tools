@@ -3,6 +3,7 @@ import {computed,nextTick,onBeforeUnmount,onMounted,ref,watch} from 'vue'
 import {ElMessage,ElMessageBox} from 'element-plus'
 import {ArrowLeft,HomeFilled,Plus,Refresh,Download} from '@element-plus/icons-vue'
 import router from '@router/router.js'
+import {onBeforeRouteLeave} from 'vue-router'
 import UidSelector from '@/components/UidSelector.vue'
 import CharacterEditor from '@/components/artifact-optimizer/OptimizerCharacterEditor.vue'
 import BuildEditor from '@/components/artifact-optimizer/OptimizerBuildEditor.vue'
@@ -23,6 +24,7 @@ const inputIssues=computed(()=>validateOptimization(workspace.value,selected.val
 const allIssues=computed(()=>[...inputIssues.value,...serverIssues.value])
 const addDialog=ref(false),addKey=ref(''),enkaDialog=ref(false),enka=ref(null),enkaKeys=ref([]),importing=ref(false)
 let scope=0,pollTimer=null,applying=false,editVersion=0
+const changingUid=ref(false),uidSelectorKey=ref(0)
 const character=computed(()=>workspace.value.characters.find(c=>c.key===activeCharacter.value))
 const build=computed(()=>workspace.value.builds.find(b=>b.id===activeBuild.value))
 const running=computed(()=>['QUEUED','RUNNING'].includes(job.value?.state))
@@ -47,6 +49,21 @@ watch(snapshotId,async id=>{const current=scope,account=uid.value;snapshot.value
 watch(()=>job.value?.snapshotId,async id=>{const current=scope,account=uid.value;resultSnapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&job.value?.snapshotId===id)resultSnapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
 async function reload(){if(dirty.value){try{await ElMessageBox.confirm('重新载入会放弃尚未保存的编辑，是否继续？','重新载入',{type:'warning'})}catch{return}}await load()}
 async function loadEngine(){engineError.value='';try{catalog.value=await api.loadCatalog()}catch(e){engineError.value=e.message||String(e)}}
+async function confirmDiscard(message){
+  if(!dirty.value)return true
+  try{await ElMessageBox.confirm(message,'有未保存编辑',{type:'warning',confirmButtonText:'放弃编辑并继续',cancelButtonText:'继续编辑'});return true}catch{return false}
+}
+async function changeUid(next){
+  if(next===uid.value||changingUid.value||loading.value||saving.value)return
+  changingUid.value=true
+  try{
+    if(await confirmDiscard('切换账号会放弃当前尚未保存的编辑，是否继续？'))uid.value=next
+    else uidSelectorKey.value++
+  }finally{changingUid.value=false}
+}
+onBeforeRouteLeave(()=>confirmDiscard('离开配装页面会放弃尚未保存的编辑，是否继续？'))
+function beforeUnload(event){if(dirty.value){event.preventDefault();event.returnValue=''}}
+function openAddDialog(){addKey.value='';addDialog.value=true}
 async function save(){
   if(!dirty.value&&workspace.value.version>0)return true
   const current=scope,id=uid.value,payload=clone(workspace.value),revision=editVersion;saving.value=true;error.value=''
@@ -83,15 +100,15 @@ async function start(){
 }
 async function cancel(){const current=scope,account=uid.value,id=job.value?.id;if(!id)return;try{const value=await api.cancelOptimization(account,id);if(current===scope&&job.value?.id===id){job.value=value;stopPoll()}}catch(e){if(current===scope)error.value=e.message||String(e)}}
 async function showHistory(value){if(!value)return;stopPoll();const current=scope,account=uid.value;try{const detail=await api.loadOptimization(account,value.id);if(current!==scope)return;job.value=detail;tab.value='results';if(['QUEUED','RUNNING'].includes(detail.state))await poll(detail.id,account,current)}catch(e){if(current===scope)error.value=e.message||String(e)}}
-onMounted(loadEngine)
-onBeforeUnmount(()=>{scope++;stopPoll()})
+onMounted(()=>{loadEngine();window.addEventListener('beforeunload',beforeUnload)})
+onBeforeUnmount(()=>{scope++;stopPoll();window.removeEventListener('beforeunload',beforeUnload)})
 </script>
 
 <template>
   <main class="optimizer-page">
     <section class="optimizer-shell">
       <header class="page-header"><div class="nav"><el-button circle :icon="ArrowLeft" aria-label="返回" @click="router.back()"/><el-button circle :icon="HomeFilled" aria-label="首页" @click="router.push('/')"/></div><div><h1>圣遗物自动配装</h1><p>同一背包，多人分配。一套装备兼顾多个配队方案。</p></div><el-tag v-if="dirty" type="warning">有未保存编辑</el-tag></header>
-      <section class="toolbar"><UidSelector v-model="uid"/><el-button :icon="Refresh" :loading="loading" @click="reload">重新载入</el-button><el-button :icon="Download" :disabled="!uid||loading" :loading="importing" @click="previewEnka">Enka 导入</el-button><el-button type="primary" :loading="saving" :disabled="!uid||loading" @click="save">保存档案</el-button></section>
+      <section class="toolbar"><UidSelector :key="uidSelectorKey" :model-value="uid" :disabled="changingUid||loading||saving" @update:model-value="changeUid"/><el-button :icon="Refresh" :loading="loading" @click="reload">重新载入</el-button><el-button :icon="Download" :disabled="!uid||loading" :loading="importing" @click="previewEnka">Enka 导入</el-button><el-button type="primary" :loading="saving" :disabled="!uid||loading" @click="save">保存档案</el-button></section>
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" class="notice"/>
       <el-alert v-if="engineError" :title="engineError" type="warning" :closable="false" class="notice"><el-button link type="primary" @click="loadEngine">重试读取计算引擎</el-button></el-alert>
       <section v-if="uid&&!loading&&allIssues.length" class="input-problems" aria-label="待修正的配装设置"><h2>还需完善 {{ allIssues.length }} 项设置</h2><p>这里统计的是本次参算角色和其关联方案，不是已创建的档案数量。</p><ul><li v-for="(issue,i) in allIssues" :key="i"><el-button link type="danger" @click="locateIssue(issue)">{{ issue.buildId?buildLabel(workspace.builds.find(b=>b.id===issue.buildId))+'：':'' }}{{ issue.message }}</el-button></li></ul></section>
@@ -100,7 +117,7 @@ onBeforeUnmount(()=>{scope++;stopPoll()})
       <template v-else>
         <el-tabs v-model="tab"><el-tab-pane label="角色档案" name="characters"/><el-tab-pane label="配队方案" name="builds"/><el-tab-pane label="分配结果" name="results"/><el-tab-pane label="战斗循环" name="rotations"/><el-tab-pane label="引擎与数据" name="engine"/></el-tabs>
         <section v-if="tab==='characters'" class="workbench">
-          <aside class="roster"><el-input v-model="search" clearable placeholder="搜索角色或标签" aria-label="搜索角色"/><el-button :icon="Plus" @click="addDialog=true">添加角色</el-button><div v-if="!workspace.characters.length" class="hint">添加个人档案，或从公开 Enka 展柜导入。</div>
+          <aside class="roster"><el-input v-model="search" clearable placeholder="搜索角色或标签" aria-label="搜索角色"/><el-button :icon="Plus" @click="openAddDialog">添加角色</el-button><div v-if="!workspace.characters.length" class="hint">添加个人档案，或从公开 Enka 展柜导入。</div><p v-else-if="!filteredCharacters.length" class="hint">没有匹配的角色或标签，请调整或清空搜索。</p>
             <div v-for="c in filteredCharacters" :key="c.key" :class="['role-row',{active:c.key===activeCharacter}]">
               <el-checkbox :model-value="selected.includes(c.key)" :aria-label="`选择${profileLabel(catalog,c)}参与计算`" @change="checked=>selected=checked?[...selected,c.key]:selected.filter(k=>k!==c.key)"/>
               <button type="button" class="role-select" @click="activeCharacter=c.key"><img v-if="catalog.characters?.find(m=>m.key===c.key)?.icon_name" :src="`https://enka.network/ui/${catalog.characters.find(m=>m.key===c.key).icon_name}.png`" alt="" loading="lazy"/><span><strong>{{ profileLabel(catalog,c) }}</strong><small>{{ c.builds?.length||0 }} 个方案{{ c.protected?' · 装备保护':'' }}</small><small v-if="c.tags?.length">{{ c.tags.join(' / ') }}</small></span></button>
@@ -120,7 +137,7 @@ onBeforeUnmount(()=>{scope++;stopPoll()})
         </section>
       </template>
     </section>
-    <el-dialog v-model="addDialog" title="添加角色档案" width="min(520px,94vw)"><el-select v-model="addKey" filterable placeholder="选择 gcsim 已知角色" style="width:100%"><el-option v-for="c in catalog.characters.filter(c=>!workspace.characters.some(p=>p.key===c.key))" :key="c.key" :value="c.key" :label="characterLabel(catalog,c.key)"/></el-select><p class="hint">已有条目不保证所有机制完整。新角色可通过明确标记试算使用，缺失基础资料不能伪造。</p><template #footer><el-button @click="addDialog=false">取消</el-button><el-button type="primary" :disabled="!addKey" @click="addCharacter">添加</el-button></template></el-dialog>
+    <el-dialog v-model="addDialog" title="添加角色档案" width="min(520px,94vw)" destroy-on-close><el-select v-model="addKey" filterable placeholder="选择 gcsim 已知角色" style="width:100%"><el-option v-for="c in catalog.characters.filter(c=>!workspace.characters.some(p=>p.key===c.key))" :key="c.key" :value="c.key" :label="characterLabel(catalog,c.key)"/></el-select><p class="hint">已有条目不保证所有机制完整。新角色可通过明确标记试算使用，缺失基础资料不能伪造。</p><template #footer><el-button @click="addDialog=false">取消</el-button><el-button type="primary" :disabled="!addKey" @click="addCharacter">添加</el-button></template></el-dialog>
     <el-dialog v-model="enkaDialog" title="Enka 导入预览" width="min(760px,94vw)"><p>{{ enka?.note }}</p><el-alert v-for="warning in enka?.warnings||[]" :key="warning" :title="warning" type="warning" :closable="false"/><el-checkbox-group v-model="enkaKeys"><label v-for="c in enka?.characters||[]" :key="c.key" class="enka-row"><el-checkbox :value="c.key">{{ characterLabel(catalog,c.key) }}</el-checkbox><span>等级 {{ c.level??'未知' }} / {{ c.constellation }} 命 / {{ c.weapon?weaponLabel(catalog,c.weapon):'武器未知' }} / 天赋 {{ c.talents?.map(t=>t??'?').join('/') }}</span><el-tag v-if="workspace.characters.some(old=>old.key===c.key)" type="warning">将替换个人条件</el-tag></label></el-checkbox-group><template #footer><el-button @click="enkaDialog=false">不导入</el-button><el-button type="primary" :disabled="!enkaKeys.length" @click="acceptEnka">合并选中角色</el-button></template></el-dialog>
   </main>
 </template>

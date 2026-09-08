@@ -1,11 +1,12 @@
 <script setup>
-const props=defineProps({build:{type:Object,required:true},loopChoices:{type:Array,default:()=>[]},outlineError:{type:String,default:''}})
+const props=defineProps({build:{type:Object,required:true},loopChoices:{type:Array,default:()=>[]},outlineError:{type:String,default:''},maxTrajectorySeconds:{type:Number,default:0}})
 function addTarget(){props.build.targets.push({level:100,resistance:0.1,radius:1,x:0,y:0,hp:null})}
 function automaticRounds(){props.build.legacyRounds=JSON.parse(JSON.stringify(props.build.rounds||[]));props.build.rounds=[];props.build.roundPolicy={mode:'auto',warmup:0,loopIndex:0}}
 </script>
 <template>
   <section class="scene-editor" id="optimizer-scene">
     <h3>单次模拟与敌人</h3>
+    <p v-if="build.stopMode==='target_or_script'&&maxTrajectorySeconds" class="hint">单条战斗超过 {{ maxTrajectorySeconds }} 游戏秒仍未结束时，计算会保护性中止并报告无法判定；这是资源上限，不是每轮时长，也不会把截断伤害当作合格结果。</p>
     <el-form label-position="top" class="scene-grid">
       <el-form-item label="单次模拟如何结束"><el-select v-model="build.stopMode"><el-option value="fixed_duration" label="达到固定游戏内时长"/><el-option value="target_or_script" label="敌人被击败或脚本结束"/></el-select></el-form-item>
       <el-form-item v-if="build.stopMode==='fixed_duration'" label="单次战斗时长（游戏内秒）"><el-input-number v-model="build.duration" :min="1" :max="600"/></el-form-item>
