@@ -65,7 +65,12 @@ public class OptimizationJobs {
         } finally{synchronized(this){active.remove(id);}}
     }
     public synchronized ObjectNode get(String uid,String id){
-        var job=stored(uid,id);if(Set.of("RUNNING","QUEUED").contains(job.path("state").asText())&&!active.containsKey(id))job.put("state","INTERRUPTED").put("error","服务重启后任务已中断，请重新计算");return publicView(job);
+        var job=stored(uid,id);
+        if(Set.of("RUNNING","QUEUED").contains(job.path("state").asText())&&!active.containsKey(id)){
+            job.put("state","INTERRUPTED").put("error","服务重启后任务已中断，请重新计算").put("finishedAt",Instant.now().toString());
+            persist(uid,id,job);
+        }
+        return publicView(job);
     }
     public synchronized ObjectNode cancel(String uid,String id){
         var job=stored(uid,id);if(Set.of("QUEUED","RUNNING").contains(job.path("state").asText())){
