@@ -26,9 +26,13 @@ public class OptimizationRotationService {
         JsonNode scenario=null;for(JsonNode s:compiled.path("scenarios"))if(s.path("id").asText().equals(buildId))scenario=s;
         if(scenario==null)throw new IllegalArgumentException("本次选择没有引用该配队 Build");
         var memberKeys=new LinkedHashSet<String>();build.path("members").forEach(m->memberKeys.add(m.path("character").asText()));
-        ObjectNode base=scenario.path("evaluation").deepCopy();String config=base.path("config").asText(),rotation=OptimizationLocalization.translateRotation(build.path("rotation").asText(),catalog,memberKeys);
-        if(!config.endsWith(rotation))throw new IllegalStateException("循环模板身份不一致");
-        base.put("config",config.substring(0,config.length()-rotation.length())+"__BETTERGI_ROTATION__");base.put("mainLoopIndex",0);base.set("inventory",compiled.path("inventory"));
+        ObjectNode base=scenario.path("evaluation").deepCopy();
+        if(!base.has("nativeFlow")){
+            String config=base.path("config").asText(),rotation=OptimizationLocalization.translateRotation(build.path("rotation").asText(),catalog,memberKeys);
+            if(!config.endsWith(rotation))throw new IllegalStateException("循环模板身份不一致");
+            base.put("config",config.substring(0,config.length()-rotation.length())+"__BETTERGI_ROTATION__");
+        }
+        base.put("mainLoopIndex",0);base.set("inventory",compiled.path("inventory"));
         JsonNode outfit=null;String priorId=input.path("equipmentJobId").asText("");
         if(!priorId.isBlank()){
             var prior=jobs.frozen(uid,priorId);
@@ -40,7 +44,7 @@ public class OptimizationRotationService {
         for(JsonNode c:compiled.path("characters")){String key=c.path("character").asText();if(!participants.contains(key))continue;JsonNode ids=outfit==null?c.path("current"):outfit.path(key);if(!ids.isArray()||ids.size()!=5)throw new IllegalArgumentException(key+" 当前没有完整五件装备，请先配装或扫描");idsByOwner.set(key,ids);}
         var byId=new HashMap<Integer,JsonNode>();compiled.path("items").forEach(item->byId.put(item.path("scanIndex").asInt(),item));var equipment=base.putObject("equipment");
         idsByOwner.fields().forEachRemaining(entry->{var pieces=equipment.putArray(entry.getKey());for(JsonNode id:entry.getValue()){JsonNode item=byId.get(id.asInt());if(item==null)throw new IllegalArgumentException("所选装备已不在该快照");ObjectNode piece=item.deepCopy();piece.remove(List.of("location","locked","fingerprint"));pieces.add(piece);}});
-        var request=mapper.createObjectNode();request.set("base",base);request.set("actions",input.path("actions").deepCopy());request.set("searchSeeds",compiled.path("searchSeeds"));request.set("validationSeeds",compiled.path("validationSeeds"));request.put("budget",input.path("rotationBudget").asInt(48));
+        var request=mapper.createObjectNode();request.set("base",base);request.set("actions",base.has("nativeFlow")?mapper.createArrayNode():input.path("actions").deepCopy());request.set("searchSeeds",compiled.path("searchSeeds"));request.set("validationSeeds",compiled.path("validationSeeds"));request.put("budget",input.path("rotationBudget").asInt(48));
         if(request.path("budget").asInt()<4||request.path("budget").asInt()>512)throw new IllegalArgumentException("循环候选预算须为 4 至 512");
         int wall=input.path("wallTimeSeconds").asInt(120);var payload=mapper.createObjectNode();payload.set("rotation",request);payload.putObject("limits").put("wallTimeMs",wall*1000).put("memoryMiB",768).put("outputKiB",16384);
         var meta=mapper.createObjectNode().put("kind","rotation").put("buildId",buildId).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("workspaceVersion",workspace.path("version").asLong()).put("engineRevision",catalog.path("engineRevision").asText());meta.set("request",request);meta.set("selection",input.deepCopy());return jobs.enqueue(uid,meta,payload,wall,"--rotation");
@@ -50,8 +54,16 @@ public class OptimizationRotationService {
     public ObjectNode nativePreview(String uid,String id,String preset)throws Exception{
         var job=jobs.frozen(uid,id);var report=job.path("result").path("report");
         if(!job.path("state").asText().equals("COMPLETED")||!report.path("validation").path("state").asText().equals("passed")||!report.path("validation").path("complete").asBoolean())throw new IllegalStateException("只有最终独立验证通过的循环才能生成执行候选");
-        if(!report.path("assumptions").isEmpty()||report.path("support").asText().equals("trial"))throw new IllegalStateException("该循环依赖手动 Buff、外部能量或不完整机制，目前只可模拟参考，不能当作已核验的实机执行策略");
         if(job.path("workspaceVersion").asLong()!=workspaces.get(uid).path("version").asLong())throw new IllegalStateException("Build 已改变，请重新计算");
+        if(job.path("result").path("native").asBoolean()){
+            String source=job.path("request").path("base").path("nativeFlow").path("source").asText();
+            var changes=job.path("result").path("nativeChanges");if(changes.isMissingNode())changes=mapper.createArrayNode();
+            String script=new OptimizationNativeFlow(mapper,source,mapping(uid,job.path("buildId").asText()).aliases()).referenceSource(changes);
+            var response=mapper.createObjectNode().put("script",script).put("baseSource",source).put("preset","original").put("simulationOnly",true).put("requiresReview",true).put("kind","native_reference")
+                .put("note","带假设试算参考：保留原宏和全部护盾/补盾/降级/预算，只替换列出的等待或普攻秒数。不是实机核验通过的执行策略；请自行复核，不会覆盖原文件或启动战斗。");
+            response.set("changes",changes);response.set("assumptions",report.path("assumptions"));return response;
+        }
+        if(!report.path("assumptions").isEmpty()||report.path("support").asText().equals("trial"))throw new IllegalStateException("该循环依赖手动 Buff、外部能量或不完整机制，目前只可模拟参考，不能当作已核验的实机执行策略");
         String script=new OptimizationRotationCompiler(mapper).nativeScript(job.path("result").path("actions"),mapping(uid,job.path("buildId").asText()).names(),preset);
         var response=mapper.createObjectNode().put("script",script).put("preset",preset).put("simulationOnly",false).put("note","这是待确认的执行候选，使用现有运行器的等待、容错与重新判断；不会启动游戏或覆盖原策略。Buff 假设不等于实机已触发。");response.set("assumptions",report.path("assumptions"));return response;
     }

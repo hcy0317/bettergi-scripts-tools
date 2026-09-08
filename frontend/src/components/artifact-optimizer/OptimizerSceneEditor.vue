@@ -33,11 +33,12 @@ function automaticRounds(){props.build.legacyRounds=JSON.parse(JSON.stringify(pr
       </el-form><p v-if="build.energy.enabled" class="hint">{{ build.energy.start/60 }}{{ build.energy.mode==='every'?` 至 ${build.energy.end/60}`:'' }} 秒，{{ build.energy.amount }} 颗无元素微粒。沿用 gcsim 的掉球分配和充能效率计算；这是外部供能假设，不替代角色技能自身产球。</p>
     </section>
     <section id="optimizer-rounds"><h3>自动统计循环</h3><p class="hint">按主循环每次实际执行的起止帧统计。充能等待和分支耗时会计入，不需要填写每轮秒数或计分轮数；整体每秒伤害仍按完整战斗轨迹计算。</p>
-      <el-alert v-if="build.roundPolicy.mode==='legacy'" title="旧方案保存了手工时间窗。切换后改为自动测时，原窗口会留在兼容备份中。" type="info" :closable="false"/>
-      <el-button v-if="build.roundPolicy.mode==='legacy'" @click="automaticRounds">改用脚本自动测时</el-button>
+      <el-alert v-if="build.nativeRotation?.enabled" title="原生流程按主轴每次真实执行的边界自动计时；旧手填窗口或gcsim循环位置不参与此模式。" type="info" :closable="false"/>
+      <el-alert v-else-if="build.roundPolicy.mode==='legacy'" title="旧方案保存了手工时间窗。切换后改为自动测时，原窗口会留在兼容备份中。" type="info" :closable="false"/>
+      <el-button v-if="!build.nativeRotation?.enabled&&build.roundPolicy.mode==='legacy'" @click="automaticRounds">改用脚本自动测时</el-button>
       <el-alert v-if="outlineError" :title="outlineError" type="warning" :closable="false"/>
       <el-form v-else-if="build.roundPolicy.mode==='auto'&&loopChoices.length>1" label-position="top" class="scene-grid"><el-form-item label="脚本有多个主循环，请选择统计范围"><el-select v-model="build.roundPolicy.loopIndex"><el-option :value="0" label="尚未指定，计算时将报告歧义"/><el-option v-for="choice in loopChoices" :key="choice.index" :value="choice.index" :label="`第 ${choice.index} 个主循环：脚本第 ${choice.line} 行`"/></el-select></el-form-item></el-form>
-      <p v-else-if="build.roundPolicy.mode==='auto'" class="hint">{{ loopChoices.length===1?`已识别脚本第 ${loopChoices[0].line} 行的主循环，实际秒数由运行结果自动记录。`:'未发现顶层主循环时，按线性脚本的一次完整执行统计。' }}</p>
+      <p v-else-if="!build.nativeRotation?.enabled&&build.roundPolicy.mode==='auto'" class="hint">{{ loopChoices.length===1?`已识别脚本第 ${loopChoices[0].line} 行的主循环，实际秒数由运行结果自动记录。`:'未发现顶层主循环时，按线性脚本的一次完整执行统计。' }}</p>
       <el-collapse><el-collapse-item title="逐轮指标高级设置" name="advanced-rounds"><el-form label-position="top"><el-form-item label="逐轮指标忽略开场轮数"><el-input-number v-model="build.roundPolicy.warmup" :min="0" :max="63"/></el-form-item></el-form><p class="hint">只影响逐轮指标，不改变整场每秒伤害。没有完整计分轮次时会明确标为未知。</p></el-collapse-item></el-collapse>
     </section>
   </section>

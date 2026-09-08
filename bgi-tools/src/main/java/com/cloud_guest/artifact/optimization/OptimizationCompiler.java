@@ -91,21 +91,23 @@ public class OptimizationCompiler {
                 } else throw new IllegalArgumentException("未参选队友须明确为真实固定装备或假设属性");
             }
             for(String key:selected)if(profiles.get(key).path("builds").findValuesAsText("id").contains(id)&&!memberNames.contains(key))throw new IllegalArgumentException("所选 Build 中缺少角色 "+key);
-            String rotation=b.path("rotation").asText("");
+            ObjectNode nativeFlow=OptimizationNativeFlow.fromBuild(mapper,b,catalog,memberNames);
+            String rotation=nativeFlow==null?b.path("rotation").asText(""):"active "+OptimizationNativeFlow.initialCharacter(nativeFlow)+";";
             if(rotation.isBlank()||rotation.length()>100_000)throw new IllegalArgumentException("循环内容不能为空或超过大小限制");
             String translated=OptimizationLocalization.translateRotation(rotation,catalog,memberNames);
             OptimizationScriptParts.requireExecutableOnly(translated,id,"rotation");
             String prelude=b.path("scriptPrelude").asText("");
-            if(!prelude.isBlank()&&b.path("scriptPreludeEnabled").asBoolean(true)){
+            if(nativeFlow==null&&!prelude.isBlank()&&b.path("scriptPreludeEnabled").asBoolean(true)){
                 prelude=OptimizationLocalization.translateRotation(prelude,catalog,memberNames);
                 OptimizationScriptParts.requireExecutableOnly(prelude,id,"scriptPrelude");config.append(prelude).append('\n');
             }else if(!prelude.isBlank())evaluation.putArray("assumptions").add("auxiliary_logic_disabled");
-            boolean autoRounds=b.path("roundPolicy").path("mode").asText().equals("auto");
+            boolean autoRounds=nativeFlow!=null||b.path("roundPolicy").path("mode").asText().equals("auto");
             if(autoRounds)evaluation.put("autoRounds",true)
                 .put("rotationLineOffset",(int)config.toString().chars().filter(c->c=='\n').count())
                 .put("mainLoopIndex",OptimizationSceneSettings.integer(b.path("roundPolicy"),"loopIndex",0,64,0,id,"rounds"))
                 .put("roundWarmup",OptimizationSceneSettings.integer(b.path("roundPolicy"),"warmup",0,63,0,id,"rounds"));
             config.append(translated);
+            if(nativeFlow!=null){evaluation.set("nativeFlow",nativeFlow);evaluation.put("mainLoopIndex",0);}
             evaluation.put("config",config.toString()).put("allowPartial",b.path("allowPartial").asBoolean(false));
             for(String field:List.of("rounds","constraints"))if(b.path(field).isArray()&&(!field.equals("rounds")||!autoRounds))evaluation.set(field,b.get(field).deepCopy());
             var buffs=evaluation.putArray("buffs");for(JsonNode buff:b.path("buffs")){if(!buff.isObject())throw new IllegalArgumentException("Buff 格式无效");if(buff.path("enabled").asBoolean(true)){ObjectNode value=buff.deepCopy();if(catalog!=null&&value.path("relationship").asText().equals("additional")&&!value.path("reviewedEngineRevision").asText().equals(catalog.path("engineRevision").asText()))value.put("relationship","pending_review");value.remove(List.of("enabled","reviewedEngineRevision"));buffs.add(value);}}

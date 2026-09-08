@@ -10,6 +10,7 @@ public class OptimizationRotationCompiler {
     private final ObjectMapper mapper;
     public OptimizationRotationCompiler(ObjectMapper mapper){this.mapper=mapper;}
     public ObjectNode parse(String source,Map<String,String> aliases){
+        if(OptimizationNativeFlow.recognizes(source))return new OptimizationNativeFlow(mapper,source,aliases).parse();
         if(source==null||source.length()>100_000)throw new IllegalArgumentException("战斗策略为空或超过大小限制");
         var result=mapper.createObjectNode();var actions=result.putArray("actions");var issues=result.putArray("issues");
         String character="";int lineNumber=0;boolean segment=false,segmentSeen=false;

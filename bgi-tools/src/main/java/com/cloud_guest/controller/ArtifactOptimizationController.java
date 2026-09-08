@@ -19,7 +19,10 @@ public class ArtifactOptimizationController {
     private final ArtifactAnalysisJobRepository scans;
     public ArtifactOptimizationController(OptimizationWorkspace workspace,OptimizationJobs jobs,GcsimGateway engine,OptimizationEnka enka,ArtifactAnalysisJobRepository scans){this.workspace=workspace;this.jobs=jobs;this.engine=engine;this.enka=enka;this.scans=scans;}
     @GetMapping("/workspace") public Result<ObjectNode> workspace(@RequestParam String uid){return ok(workspace.get(uid));}
-    @PutMapping("/workspace") public Result<ObjectNode> save(@RequestParam String uid,@RequestBody ObjectNode value){return ok(workspace.save(uid,value));}
+    @PutMapping("/workspace") public Result<ObjectNode> save(@RequestParam String uid,@RequestBody ObjectNode value)throws Exception{
+        boolean nativeEnabled=false;for(JsonNode build:value.path("builds"))if(build.path("nativeRotation").path("enabled").asBoolean())nativeEnabled=true;
+        workspace.validateNativeDraft(value,nativeEnabled?engine.catalog():null);return ok(workspace.save(uid,value));
+    }
     @GetMapping("/catalog") public Result<JsonNode> catalog() throws Exception{return ok(engine.catalog());}
     @PostMapping("/enka-preview") public Result<ObjectNode> enka(@RequestParam String uid) throws Exception{return ok(enka.preview(uid,engine.catalog()));}
     @GetMapping("/snapshots") public Result<List<Map<String,Object>>> snapshots(@RequestParam String uid){

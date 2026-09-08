@@ -24,7 +24,11 @@ export function validateOptimization(workspace,selected,snapshot,catalog={},opti
     if(!Array.isArray(b.members)||!b.members.length||b.members.length>4||new Set(b.members.map(m=>m.character)).size!==b.members.length)add('build','',id,'members',`${name}：请设置一至四名不同队员`)
     for(const m of b.members||[]){const p=m.profile||profiles.get(m.character);if(!p){add('build',m.character,id,'members',`${name}：队员缺少个人档案`);continue}if(m.profile||!selected.includes(m.character))personal(m.character,p,m.profile?id:'');if(!selected.includes(m.character)&&m.kind==='hypothetical'&&!m.stats?.trim())add('build',m.character,id,'members',`${name}：未参算队友的假设属性不能为空`)}
     for(const key of selected)if(profiles.get(key)?.builds?.some(r=>r.id===id)&&!b.members?.some(m=>m.character===key))add('build',key,id,'members',`${name}：关联该方案的角色不在队伍中`)
-    if(!b.rotation?.trim())add('build','',id,'rotation',`${name}：请填写或导入循环脚本`)
+    if(b.nativeRotation?.enabled){
+      if(typeof b.nativeRotation.source!=='string'||!b.nativeRotation.source.trim()||b.nativeRotation.source.length>100000)add('build','',id,'rotation',`${name}：原生流程为空或超过大小限制`)
+      if(catalog.capabilities?.nativeFlow?.schemaVersion!=='native-flow-v1')add('build','',id,'rotation',`${name}：当前计算引擎尚未安装原生流程适配，请更新引擎`)
+      if(b.scriptPrelude?.trim()&&b.scriptPreludeEnabled!==false)add('build','',id,'scriptPrelude',`${name}：请明确停用gcsim辅助逻辑，或切回gcsim循环；不能和原生流程混合运行`)
+    }else if(!b.rotation?.trim())add('build','',id,'rotation',`${name}：请填写或导入循环脚本`)
     if(b.stopMode!=='target_or_script'&&!number(b.duration,1,600))add('build','',id,'scene',`${name}：单次模拟时长应在1至600秒内`)
     if(Array.isArray(b.targets)){if(b.targets.length<1||b.targets.length>10)add('build','',id,'scene',`${name}：敌人数量应为1至10`);b.targets.forEach((t,i)=>{if(!integer(t.level,1,200)||!number(t.resistance,-1,10)||!number(t.radius,0.01,100)||!number(t.x,-1000,1000)||!number(t.y,-1000,1000)||(b.stopMode==='target_or_script'&&!number(t.hp,1,1e12)))add('build','',id,'scene',`${name}：敌人${i+1}的等级、抗性、位置、半径或血量未填对`)})}
     if(b.energy?.enabled){const e=b.energy;if(!['once','every'].includes(e.mode)||!integer(e.start,1,36000)||!integer(e.amount,1,100)||(e.mode==='every'&&(!integer(e.end,1,36000)||e.end<=e.start)))add('build','',id,'energy',`${name}：掉球时间或数量无效；周期最大间隔必须大于最小间隔`)}

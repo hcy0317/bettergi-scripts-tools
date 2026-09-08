@@ -38,6 +38,7 @@ export function applyCommunityPreview(build,preview,{script=true,settings=true}=
   if(!preview?.importable)throw new Error('仍有不能等价处理的语句，请先修正后重新预览')
   const clone=value=>JSON.parse(JSON.stringify(value))
   if(script){
+    if(build.nativeRotation)build.nativeRotation.enabled=false
     if(build.rounds?.length)build.legacyRounds=clone(build.rounds)
     build.rotation=preview.rotation;build.scriptPrelude=preview.scriptPrelude||'';build.scriptPreludeEnabled=true
     build.rounds=[];build.roundPolicy={mode:'auto',warmup:0,loopIndex:0}
