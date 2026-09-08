@@ -115,6 +115,12 @@ const routes = [
     }
     ,
     {
+        path: '/Artifacts/Optimizer',
+        name: 'ArtifactOptimizer',
+        component: () => import('@views/ArtifactOptimizerView.vue'),
+        meta: {group: 'JS扩展功能', isRoot: true, title: '圣遗物自动配装', desc: 'gcsim 多人通用配装与循环优化', icon: '🚀'},
+    },
+    {
         path: '/Artifacts/Analysis',
         name: 'ArtifactAnalysis',
         component: () => import('@views/ArtifactAnalysisView.vue'),
