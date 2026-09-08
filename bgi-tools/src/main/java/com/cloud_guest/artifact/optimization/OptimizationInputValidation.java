@@ -25,6 +25,16 @@ public final class OptimizationInputValidation {
             }
         }catch(IllegalArgumentException error){issues.add(new Issue("selection","","","inventoryOwners",error.getMessage()));}
         for(String key:selected){JsonNode profile=profiles.get(key);if(profile==null){issues.add(new Issue("character",key,"","profile","所选角色档案不存在"));continue;}personal(profile,key,"",catalog,issues);
+            for(var fixed=profile.path("fixedSlots").fields();fixed.hasNext();){
+                var entry=fixed.next();var binding=profile.path("fixedSlotBindings").path(entry.getKey());
+                boolean valid=snapshot!=null&&entry.getValue().isIntegralNumber()&&entry.getValue().canConvertToInt()
+                    &&binding.path("scanIndex").equals(entry.getValue())
+                    &&snapshot.uid().equals(binding.path("uid").asText())
+                    &&snapshot.scanSessionId().equals(binding.path("scanSessionId").asText())
+                    &&snapshot.snapshotDigest().equals(binding.path("snapshotDigest").asText())
+                    &&snapshot.artifacts().stream().anyMatch(item->item.scanIndex()==entry.getValue().asInt()&&item.slotKey().equals(entry.getKey()));
+                if(!valid)issues.add(new Issue("character",key,"","fixedSlots",name(catalog,key)+"：固定圣遗物与当前扫描不匹配，请在高级硬约束中重新选择或清除"));
+            }
             if(!profile.path("builds").isArray()||profile.path("builds").isEmpty())issues.add(new Issue("character",key,"","builds",name(catalog,key)+"尚未关联配队方案"));
             for(JsonNode ref:profile.path("builds")){String id=ref.path("id").asText();scenarios.add(id);if(!builds.containsKey(id))issues.add(new Issue("character",key,"","builds","角色关联的配队方案已不存在"));}
         }

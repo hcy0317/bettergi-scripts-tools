@@ -1,9 +1,12 @@
 <script setup>
-import {computed} from 'vue'
+import {computed,ref,watch} from 'vue'
 import {profileLabel,weaponLabel,setLabel,buildLabel} from '@/features/artifact-optimizer/localization.js'
 import {slotOptions,statOptions,levelCapOptions,ascensionDescription} from '@/features/artifact-optimizer/model.js'
-const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]},inventoryProtected:{type:Boolean,default:false}})
+import {fixedArtifactMatches,setFixedArtifact} from '@/features/artifact-optimizer/inventory.js'
+const props=defineProps({character:{type:Object,required:true},catalog:{type:Object,default:()=>({})},builds:{type:Array,default:()=>[]},items:{type:Array,default:()=>[]},snapshot:{type:Object,default:null},inventoryProtected:{type:Boolean,default:false}})
 const emit=defineEmits(['edit-build','remove','protection-change'])
+const expandedConstraints=ref([])
+watch(()=>Object.keys(props.character.fixedSlots||{}).some(slot=>!fixedArtifactMatches(props.character,slot,props.snapshot)),invalid=>{if(invalid)expandedConstraints.value=['constraints']},{immediate:true})
 const metadata=computed(()=>props.catalog.characters?.find(c=>c.key===props.character.key))
 const weapons=computed(()=>props.catalog.weapons?.filter(w=>!metadata.value||w.weapon_class===metadata.value.weapon_class)||[])
 function setBuilds(ids){props.character.builds=ids.map(id=>props.character.builds.find(b=>b.id===id)||{id,weight:1,metric:'damage_per_round',reference:0})}
@@ -38,12 +41,14 @@ function addMinimum(key){if(key)props.character.minimumStats[key]=0}
         <label>目标参照 <el-input-number v-model="binding.reference" :min="0" :max="100000000"/></label>
       </div><p class="hint">参照为 0 时从本次预算内合格样本生成并冻结，不是理论最优上界。</p>
     </section>
-    <el-collapse><el-collapse-item title="高级硬约束" name="constraints">
+    <el-collapse v-model="expandedConstraints"><el-collapse-item title="高级硬约束" name="constraints">
       <p class="hint">这些限制在所有档位都生效。初始属性是帧零面板，不代表战斗内增益覆盖率；持续循环请在方案中约束。</p>
       <div class="constraint-grid"><label v-for="[slot,label] in slotOptions" :key="slot">{{ label }}主词条
         <el-select v-model="character.mainStats[slot]" multiple clearable placeholder="不限"><el-option v-for="[key,text] in statOptions" :key="key" :label="text" :value="key"/></el-select>
       </label></div>
-      <div v-for="[slot,label] in slotOptions" :key="slot" class="fixed-row"><span>固定{{ label }}</span><el-select v-model="character.fixedSlots[slot]" clearable @clear="delete character.fixedSlots[slot]" placeholder="不固定"><el-option v-for="item in items.filter(i=>i.slotKey===slot)" :key="item.scanIndex" :value="item.scanIndex" :label="`#${item.scanIndex} ${setLabel(catalog,item.setKey)} +${item.level} ${statOptions.find(s=>s[0]===item.mainStatKey)?.[1]||'未知属性'}`"/></el-select></div>
+      <div data-field="fixedSlots">
+        <div v-for="[slot,label] in slotOptions" :key="slot" class="fixed-row"><span>固定{{ label }}</span><el-select :model-value="fixedArtifactMatches(character,slot,snapshot)?character.fixedSlots[slot]:undefined" :disabled="!snapshot?.snapshotDigest" clearable @update:model-value="value=>setFixedArtifact(character,slot,value,snapshot)" placeholder="不固定"><el-option v-for="item in items.filter(i=>i.slotKey===slot)" :key="item.scanIndex" :value="item.scanIndex" :label="`#${item.scanIndex} ${setLabel(catalog,item.setKey)} +${item.level} ${statOptions.find(s=>s[0]===item.mainStatKey)?.[1]||'未知属性'}`"/></el-select><template v-if="character.fixedSlots?.[slot]!==undefined&&!fixedArtifactMatches(character,slot,snapshot)"><span class="hint">原扫描已变化，请重新选择</span><el-button text @click="setFixedArtifact(character,slot,null,snapshot)">清除旧固定</el-button></template></div>
+      </div>
       <div class="fixed-row"><span>必需套装</span><el-select multiple :reserve-keyword="false" :model-value="Object.keys(character.requiredSets)" @update:model-value="keys=>character.requiredSets=Object.fromEntries(keys.map(k=>[k,character.requiredSets[k]||2]))" filterable><el-option v-for="s in catalog.sets||[]" :key="s.key" :value="s.key" :label="setLabel(catalog,s.key)"/></el-select></div>
       <label v-for="key in Object.keys(character.requiredSets)" :key="key" class="fixed-row">{{ setLabel(catalog,key) }}件数 <el-input-number v-model="character.requiredSets[key]" :min="1" :max="5"/></label>
       <el-select model-value="" placeholder="添加属性下限" @change="addMinimum"><el-option v-for="[key,label] in statOptions" :key="key" :value="key" :label="label"/></el-select>

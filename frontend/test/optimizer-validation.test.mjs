@@ -7,6 +7,18 @@ test('zero participants explains the missing selection instead of an unexplained
   const issues=validateOptimization(make(),[],{artifacts:[]},{})
   assert.ok(issues.some(i=>i.field==='selection'&&i.message.includes('参与')))
 })
+
+test('a fixed scan index is rejected after a rescan or when a legacy binding is absent',()=>{
+  const workspace=make(),p=workspace.characters[0]
+  p.fixedSlots={flower:0}
+  const snapshot={uid:'100000001',scanSessionId:'new-scan',snapshotDigest:'new-digest',artifacts:[{scanIndex:0,slotKey:'flower',contentFingerprint:'new-piece'}]}
+  const invalid=()=>validateOptimization(workspace,['amber'],snapshot,{}).filter(i=>i.field==='fixedSlots')
+  assert.equal(invalid().length,1)
+  p.fixedSlotBindings={flower:{scanIndex:0,uid:'100000001',scanSessionId:'old-scan',snapshotDigest:'old-digest',fingerprint:'old-piece'}}
+  assert.equal(invalid().length,1)
+  Object.assign(p.fixedSlotBindings.flower,{scanSessionId:'new-scan',snapshotDigest:'new-digest',fingerprint:'new-piece'})
+  assert.equal(invalid().length,0)
+})
 test('validation identifies the exact character and field and catches detached references',()=>{
   const workspace=make()
   let issues=validateOptimization(workspace,['amber'],{artifacts:[{}]},{});
