@@ -35,18 +35,25 @@ public final class OptimizationNativeFlow {
         return program;
     }
     public static String initialCharacter(JsonNode program) {
-        // The first actually executed instruction may be inside a call. Use its
-        // resolved actor, not a set/map iteration order from the Build.
-        return firstCharacter(program.path("root"),program.path("blocks"),new HashSet<>());
+        // Choose a reachable actor in control-flow order. Branches themselves
+        // still execute their guards at runtime; unrelated definitions never set active.
+        String key=firstCharacter(program.path("root"),program.path("blocks"),new HashSet<>());
+        if(key.isBlank())throw new IllegalArgumentException("原生流程没有可执行角色动作");
+        return key;
     }
     private static String firstCharacter(JsonNode nodes,JsonNode blocks,Set<String> visited) {
         for(JsonNode node:nodes) {
             String kind=node.path("kind").asText();
             if(kind.equals("call")){String target=node.path("args").path(0).asText();if(visited.add(target)){String key=firstCharacter(blocks.path(target).path("nodes"),blocks,visited);if(!key.isBlank())return key;}}
+            else if(kind.equals("branch")){
+                for(String arm:List.of("then","else","unknown")){
+                    String target=node.path("options").path(arm).asText();
+                    if(!target.isBlank()&&visited.add(target)){String key=firstCharacter(blocks.path(target).path("nodes"),blocks,visited);if(!key.isBlank())return key;}
+                }
+            }
             else if(!kind.equals("branch")&&!node.path("character").asText().isBlank())return node.path("character").asText();
         }
-        for(JsonNode block:blocks)for(JsonNode n:block.path("nodes"))if(!n.path("character").asText().isBlank())return n.path("character").asText();
-        throw new IllegalArgumentException("原生流程没有可执行角色动作");
+        return "";
     }
     public ObjectNode parse() {
         var response=mapper.createObjectNode().put("mode","native_flow").put("simulationOnly",true);
