@@ -17,8 +17,13 @@ public class OptimizationEngineUpdates {
     private static final String REPOSITORY="https://api.github.com/repos/hcy0317/better-genshin-impact";
     private final GcsimGateway gateway;
     private final ObjectMapper mapper;
+    @FunctionalInterface interface CandidateProbe { JsonNode execute(Path binary,String mode,JsonNode input,Duration timeout)throws Exception; }
+    private final CandidateProbe probeProcess;
     private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).followRedirects(HttpClient.Redirect.NORMAL).build();
-    public OptimizationEngineUpdates(GcsimGateway gateway,ObjectMapper mapper){this.gateway=gateway;this.mapper=mapper;}
+    @org.springframework.beans.factory.annotation.Autowired
+    public OptimizationEngineUpdates(GcsimGateway gateway,ObjectMapper mapper){this(gateway,mapper,(binary,mode,input,timeout)->new GcsimGateway(mapper,null,binary.toString()).execute(mode,input,timeout));}
+    // Replace only the external process boundary in update-transaction tests.
+    OptimizationEngineUpdates(GcsimGateway gateway,ObjectMapper mapper,CandidateProbe probeProcess){this.gateway=gateway;this.mapper=mapper;this.probeProcess=probeProcess;}
     private static String platform(){return System.getProperty("os.name").startsWith("Windows")?"windows":"linux";}
     public ObjectNode check()throws Exception{
         var result=mapper.createObjectNode();
@@ -55,9 +60,16 @@ public class OptimizationEngineUpdates {
         var manifest=mapper.readTree(stage.resolve("manifest.json").toFile());String revision=manifest.path("engineRevision").asText();Path binary=stage.resolve(binaryName);
         if(manifest.path("schemaVersion").asInt()!=1||!revision.matches("[0-9a-f]{40}")||!manifest.path("platform").asText().equals(platform())||!manifest.path("architecture").asText().equals("amd64")||!manifest.path("executable").asText().equals(binaryName)||!digest(Files.readAllBytes(binary)).equals(manifest.path("sha256").asText()))throw new IllegalArgumentException("更新包架构、身份或程序摘要无效");
         if(platform().equals("linux"))Files.setPosixFilePermissions(binary,Set.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE));
-        var candidate=new GcsimGateway(mapper,null,binary.toString());var capabilities=candidate.execute("--capabilities",null,Duration.ofSeconds(20));
+        var capabilities=probeProcess.execute(binary,"--capabilities",null,Duration.ofSeconds(20));
         if(!revision.equals(capabilities.path("engineRevision").asText())||!manifest.path("sdkVersion").asText().equals(capabilities.path("sdk").path("version").asText()))throw new IllegalStateException("引擎与数据版本不一致，未激活");
-        var result=candidate.execute("--optimize",probe(),Duration.ofSeconds(25));
+        var catalog=probeProcess.execute(binary,"--catalog",null,Duration.ofSeconds(20));
+        if(catalog==null||!revision.equals(catalog.path("engineRevision").asText()))throw new IllegalStateException("引擎目录版本不一致，未激活");
+        for(String field:List.of("characters","weapons","sets")){
+            var entries=catalog.path(field);var keys=new HashSet<String>();
+            if(!entries.isArray()||entries.isEmpty())throw new IllegalStateException("引擎目录缺少有效的 "+field+"，未激活");
+            for(JsonNode entry:entries)if(!entry.isObject()||entry.path("key").asText().isBlank()||!keys.add(entry.path("key").asText()))throw new IllegalStateException("引擎目录条目标识无效或重复："+field+"，未激活");
+        }
+        var result=probeProcess.execute(binary,"--optimize",probe(),Duration.ofSeconds(25));
         if(!result.path("result").path("plan").path("qualified").asBoolean()||result.path("result").path("plan").path("rank").path("weightedDps").asDouble()<=0)throw new IllegalStateException("代表场景回归未通过，未激活");
         var active=mapper.createObjectNode().put("engineRevision",revision).put("executable",directory.relativize(binary).toString().replace('\\','/')).put("validatedAt",java.time.Instant.now().toString());
         Path pointer=directory.resolve("active.json");if(Files.isRegularFile(pointer))atomicWrite(directory.resolve("previous.json"),Files.readAllBytes(pointer));

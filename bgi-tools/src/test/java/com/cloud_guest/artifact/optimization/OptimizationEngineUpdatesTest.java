@@ -20,6 +20,25 @@ class OptimizationEngineUpdatesTest {
         assertEquals("old-valid-pointer",Files.readString(active));
         assertThrows(IllegalArgumentException.class,()->updater.rollback(false));
     }
+    @Test void unusableCatalogCannotReplaceThePreviousEngineEvenWhenDpsProbeWouldPass()throws Exception{
+        var mapper=new ObjectMapper();String revision="1234567890123456789012345678901234567890";
+        String platform=System.getProperty("os.name").startsWith("Windows")?"windows":"linux";
+        String binaryName=platform.equals("windows")?"gcsim-bridge.exe":"gcsim-bridge";byte[] binary={1};
+        String hash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(binary));
+        var manifest=mapper.createObjectNode().put("schemaVersion",1).put("engineRevision",revision).put("platform",platform).put("architecture","amd64").put("executable",binaryName).put("sha256",hash).put("sdkVersion","test-sdk");
+        Path active=directory.resolve("active.json");Files.writeString(active,"old-valid-pointer");
+        var gateway=new GcsimGateway(mapper,null,directory.resolve(binaryName).toString());
+        for(String badCatalog:List.of("{}","{\"characters\":[]}","{\"characters\":[{\"key\":\"amber\"}],\"engineRevision\":\"wrong\"}")){
+            var updater=new OptimizationEngineUpdates(gateway,mapper,(executable,mode,request,timeout)->{
+                if(mode.equals("--capabilities"))return mapper.readTree("{\"engineRevision\":\""+revision+"\",\"sdk\":{\"version\":\"test-sdk\"}}");
+                if(mode.equals("--catalog"))return mapper.readTree(badCatalog);
+                if(mode.equals("--optimize"))return mapper.readTree("{\"result\":{\"plan\":{\"qualified\":true,\"rank\":{\"weightedDps\":1}}}}");
+                throw new AssertionError(mode);
+            });
+            assertThrows(IllegalStateException.class,()->updater.stageAndActivate(archive(Map.of("manifest.json",mapper.writeValueAsBytes(manifest),binaryName,binary))));
+            assertEquals("old-valid-pointer",Files.readString(active));
+        }
+    }
     @Test void selfBuiltPackagePassesRealRegressionBeforeActivation()throws Exception{
         String executable=System.getProperty("artifact.optimizer.test.executable","");assumeTrue(!executable.isBlank());
         var mapper=new ObjectMapper();byte[] binary=Files.readAllBytes(Path.of(executable));
