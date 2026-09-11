@@ -52,6 +52,10 @@ public class GcsimGateway {
         catalog=value;return value.deepCopy();
     }
     public void invalidateCatalog(){catalog=null;}
+    static int outputBudgetKiB(JsonNode compiledRequest){
+        // Preserve all independent evidence in large batches; never allow unbounded output.
+        return compiledRequest.path("validationSeeds").size()>64?65536:16384;
+    }
     public JsonNode execute(String mode,JsonNode request,Duration timeout) throws Exception {
         if(!Set.of("--catalog","--capabilities","--optimize","--rotation").contains(mode)||timeout.isNegative()||timeout.isZero()||timeout.compareTo(Duration.ofSeconds(130))>0)throw new IllegalArgumentException("无效的计算操作或时限");
         byte[] input=request==null?new byte[0]:mapper.writeValueAsBytes(request);
@@ -61,7 +65,7 @@ public class GcsimGateway {
         try(var io=Executors.newVirtualThreadPerTaskExecutor()) {
             process=new ProcessBuilder(executable().toString(),mode).start();
             var owned=process;
-            Future<byte[]> out=io.submit(()->readBounded(owned.getInputStream(),16*1024*1024,owned));
+            Future<byte[]> out=io.submit(()->readBounded(owned.getInputStream(),64*1024*1024,owned));
             Future<byte[]> error=io.submit(()->readBounded(owned.getErrorStream(),64*1024,owned));
             Future<?> writer=io.submit(()->{try(var stream=owned.getOutputStream()){stream.write(input);}return null;});
             try {

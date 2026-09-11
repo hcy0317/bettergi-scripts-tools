@@ -6,13 +6,12 @@ function automaticRounds(){props.build.legacyRounds=JSON.parse(JSON.stringify(pr
 <template>
   <section class="scene-editor" id="optimizer-scene">
     <h3>单次模拟与敌人</h3>
-    <p v-if="build.stopMode==='target_or_script'&&maxTrajectorySeconds" class="hint">单条战斗超过 {{ maxTrajectorySeconds }} 游戏秒仍未结束时，计算会保护性中止并报告无法判定；这是资源上限，不是每轮时长，也不会把截断伤害当作合格结果。</p>
+    <p v-if="maxTrajectorySeconds" class="hint">完成指定循环次数后结束。{{ maxTrajectorySeconds }} 游戏秒仅是异常保护上限；等待或分支卡住时报告已完成轮数，不会把截断伤害当作合格结果。</p>
     <el-form label-position="top" class="scene-grid">
-      <el-form-item label="单次模拟如何结束"><el-select v-model="build.stopMode"><el-option value="fixed_duration" label="达到固定游戏内时长"/><el-option value="target_or_script" label="敌人被击败或脚本结束"/></el-select></el-form-item>
-      <el-form-item v-if="build.stopMode==='fixed_duration'" label="单次战斗时长（游戏内秒）"><el-input-number v-model="build.duration" :min="1" :max="600"/></el-form-item>
+      <el-form-item label="每场模拟的循环次数"><el-input-number v-model="build.roundCount" :min="1" :max="64" :precision="0"/></el-form-item>
       <el-form-item label="切换角色额外延迟（帧）"><el-input-number v-model="build.swapDelay" :min="0" :max="120"/></el-form-item>
     </el-form>
-    <p class="hint">一秒为60帧。这里决定一条战斗轨迹的结束方式；随机重复模拟次数在底部统一设置，不是同一战斗的循环轮数。</p>
+    <p class="hint">按主流程实际完成的总轮数结束，每轮充能、等待和分支耗时照实计算。敌人为不因血量提前结束的试算靶子；原血量和时长保留作参考。底部的采样次数是不同随机种子的重复试验，不是循环次数。</p>
     <div v-for="(target,i) in build.targets" :key="i" class="target-row" :id="`optimizer-targets.${i}`">
       <strong>敌人 {{ i+1 }}</strong><el-form label-position="top" class="target-grid">
         <el-form-item label="等级"><el-input-number v-model="target.level" :min="1" :max="200"/></el-form-item>
@@ -20,7 +19,6 @@ function automaticRounds(){props.build.legacyRounds=JSON.parse(JSON.stringify(pr
         <el-form-item label="半径"><el-input-number v-model="target.radius" :min="0.01" :max="100" :step="0.1"/></el-form-item>
         <el-form-item label="横向位置"><el-input-number v-model="target.x" :min="-1000" :max="1000" :step="0.1"/></el-form-item>
         <el-form-item label="纵向位置"><el-input-number v-model="target.y" :min="-1000" :max="1000" :step="0.1"/></el-form-item>
-        <el-form-item v-if="build.stopMode==='target_or_script'" label="血量"><el-input-number v-model="target.hp" :min="1" :max="1000000000000" :controls="false"/></el-form-item>
       </el-form><el-button text type="danger" :disabled="build.targets.length===1" @click="build.targets.splice(i,1)">移除敌人</el-button>
     </div>
     <el-button :disabled="build.targets.length>=10" @click="addTarget">增加敌人</el-button>
@@ -32,13 +30,13 @@ function automaticRounds(){props.build.legacyRounds=JSON.parse(JSON.stringify(pr
         <el-form-item label="每次无元素微粒数量"><el-input-number v-model="build.energy.amount" :min="1" :max="100"/></el-form-item>
       </el-form><p v-if="build.energy.enabled" class="hint">{{ build.energy.start/60 }}{{ build.energy.mode==='every'?` 至 ${build.energy.end/60}`:'' }} 秒，{{ build.energy.amount }} 颗无元素微粒。沿用 gcsim 的掉球分配和充能效率计算；这是外部供能假设，不替代角色技能自身产球。</p>
     </section>
-    <section id="optimizer-rounds"><h3>自动统计循环</h3><p class="hint">按主循环每次实际执行的起止帧统计。充能等待和分支耗时会计入，不需要填写每轮秒数或计分轮数；整体每秒伤害仍按完整战斗轨迹计算。</p>
+    <section id="optimizer-rounds"><h3>自动统计循环</h3><p class="hint">按所选主循环实际执行的起止帧统计，辅助嵌套循环不额外计数。达到上方设定轮数后结束；整体每秒伤害仍按完整战斗轨迹计算，不用固定秒数替代。</p>
       <el-alert v-if="build.nativeRotation?.enabled" title="原生流程按主轴每次真实执行的边界自动计时；旧手填窗口或gcsim循环位置不参与此模式。" type="info" :closable="false"/>
       <el-alert v-else-if="build.roundPolicy.mode==='legacy'" title="旧方案保存了手工时间窗。切换后改为自动测时，原窗口会留在兼容备份中。" type="info" :closable="false"/>
       <el-button v-if="!build.nativeRotation?.enabled&&build.roundPolicy.mode==='legacy'" @click="automaticRounds">改用脚本自动测时</el-button>
       <el-alert v-if="outlineError" :title="outlineError" type="warning" :closable="false"/>
       <el-form v-else-if="build.roundPolicy.mode==='auto'&&loopChoices.length>1" label-position="top" class="scene-grid"><el-form-item label="脚本有多个主循环，请选择统计范围"><el-select v-model="build.roundPolicy.loopIndex"><el-option :value="0" label="尚未指定，计算时将报告歧义"/><el-option v-for="choice in loopChoices" :key="choice.index" :value="choice.index" :label="`第 ${choice.index} 个主循环：脚本第 ${choice.line} 行`"/></el-select></el-form-item></el-form>
-      <p v-else-if="!build.nativeRotation?.enabled&&build.roundPolicy.mode==='auto'" class="hint">{{ loopChoices.length===1?`已识别脚本第 ${loopChoices[0].line} 行的主循环，实际秒数由运行结果自动记录。`:'未发现顶层主循环时，按线性脚本的一次完整执行统计。' }}</p>
+      <p v-else-if="!build.nativeRotation?.enabled&&build.roundPolicy.mode==='auto'" class="hint">{{ loopChoices.length===1?`已识别脚本第 ${loopChoices[0].line} 行的主循环，实际秒数由运行结果自动记录。`:'未发现顶层主循环时，将完整线性脚本作为一轮重复执行。' }}</p>
       <el-collapse><el-collapse-item title="逐轮指标高级设置" name="advanced-rounds"><el-form label-position="top"><el-form-item label="逐轮指标忽略开场轮数"><el-input-number v-model="build.roundPolicy.warmup" :min="0" :max="63"/></el-form-item></el-form><p class="hint">只影响逐轮指标，不改变整场每秒伤害。没有完整计分轮次时会明确标为未知。</p></el-collapse-item></el-collapse>
     </section>
   </section>

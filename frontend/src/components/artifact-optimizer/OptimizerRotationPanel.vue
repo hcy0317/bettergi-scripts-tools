@@ -6,15 +6,26 @@ import * as api from '@/api/artifact/artifactOptimizer.js'
 import RoundReport from './OptimizerRoundReport.vue'
 import NativeSource from './OptimizerNativeSource.vue'
 import {metric,resultLabels} from '@/features/artifact-optimizer/model.js'
-const props=defineProps({wallTimeSeconds:{type:Number,default:120},catalog:{type:Object,default:()=>({})},uid:{type:String,required:true},workspace:{type:Object,required:true},selected:{type:Array,default:()=>[]},snapshotId:{type:String,default:''},equipmentJob:{type:Object,default:null},beforeRun:{type:Function,required:true}})
+import {validateRotation} from '@/features/artifact-optimizer/validation.js'
+const props=defineProps({wallTimeSeconds:{type:Number,default:120},catalog:{type:Object,default:()=>({})},uid:{type:String,required:true},workspace:{type:Object,required:true},selected:{type:Array,default:()=>[]},snapshot:{type:Object,default:null},snapshotId:{type:String,default:''},equipmentJob:{type:Object,default:null},beforeRun:{type:Function,required:true}})
+const emit=defineEmits(['locate-issue','validation-issues'])
 const buildId=ref(props.workspace.builds[0]?.id||''),sourceName=ref(''),sourceText=ref(''),strategies=ref([]),actions=ref([]),error=ref(''),issues=ref([]),loading=ref(false),job=ref(null),preset=ref('moderate'),preview=ref(null),budget=ref(48),usePlan=ref(false)
 const sourceInfo=ref(null),sectionId=ref('whole'),referenceAccepted=ref(false)
 let generation=0,timer=null,restoring=false
+let validationRevision=0
+watch([()=>props.workspace,()=>props.selected,()=>props.snapshotId,()=>props.catalog],()=>validationRevision++,{deep:true,flush:'sync'})
 const build=computed(()=>props.workspace.builds.find(b=>b.id===buildId.value))
 const members=computed(()=>build.value?.members||[])
+const rotationSelection=computed(()=>props.selected.filter(key=>members.value.some(member=>member.character===key)))
+const inputProblems=computed(()=>validateRotation(props.workspace,buildId.value,rotationSelection.value,props.snapshot,props.catalog,props.workspace.computeSettings||{}))
 const nativeEnabled=computed(()=>Boolean(build.value?.nativeRotation?.enabled))
 const running=computed(()=>['QUEUED','RUNNING'].includes(job.value?.state))
 const result=computed(()=>job.value?.result)
+const qualityRows=computed(()=>{
+  const before=result.value?.baseline?.nativeQuality,after=result.value?.report?.nativeQuality
+  if(!after)return []
+  return [['minCriticalShieldCoverage','关键输出护盾覆盖',true],['minShieldCoverage','全程护盾覆盖',true],['maxFailedRounds','最差失败轮数',false],['maxDamageGapSeconds','最长无伤害间隔（秒）',false],['minPartyHp','最低队伍生命比例',true]].map(([key,label,percent])=>({label,before:before?.[key]==null?'—':metric(before[key]*(percent?100:1))+(percent?'%':''),after:after[key]==null?'—':metric(after[key]*(percent?100:1))+(percent?'%':'')}))
+})
 const history=ref([])
 watch(actions,value=>{if(!restoring&&build.value)build.value.rotationActions=JSON.parse(JSON.stringify(value))},{deep:true,flush:'sync'})
 function loadActions(){restoring=true;actions.value=JSON.parse(JSON.stringify(build.value?.rotationActions||[]));restoring=false}
@@ -61,12 +72,15 @@ async function poll(id,version,account){
 }
 async function start(){
   const version=generation,account=props.uid,id=buildId.value
+  if(inputProblems.value.length){error.value='请先修正当前方案的问题';emit('locate-issue',inputProblems.value[0]);return}
   if(!(await props.beforeRun())||version!==generation||account!==props.uid||id!==buildId.value)return
+  if(inputProblems.value.length){error.value='输入已变化，请先修正当前方案的问题';return}
+  const submittedValidation=validationRevision
   loading.value=true;error.value='';preview.value=null
   try{
-    const value=await api.startRotation(account,{workspaceVersion:props.workspace.version,buildId:id,snapshotId:props.snapshotId,characters:props.selected,actions:nativeEnabled.value?[]:JSON.parse(JSON.stringify(actions.value)),rotationBudget:budget.value,wallTimeSeconds:props.wallTimeSeconds,...props.workspace.computeSettings,equipmentJobId:usePlan.value?props.equipmentJob?.id:''})
+    const value=await api.startRotation(account,{workspaceVersion:props.workspace.version,buildId:id,snapshotId:props.snapshotId,characters:rotationSelection.value,actions:nativeEnabled.value?[]:JSON.parse(JSON.stringify(actions.value)),rotationBudget:budget.value,wallTimeSeconds:props.wallTimeSeconds,...props.workspace.computeSettings,equipmentJobId:usePlan.value?props.equipmentJob?.id:''})
     if(version!==generation)return;job.value=value;await poll(value.id,version,account)
-  }catch(e){if(version===generation)error.value=e.message||String(e)}finally{if(version===generation)loading.value=false}
+  }catch(e){if(version===generation){error.value=submittedValidation===validationRevision?e.message||String(e):'输入已改变，已忽略旧的校验结果';const problems=e.response?.data?.data;if(submittedValidation===validationRevision&&Array.isArray(problems)&&problems.length){emit('validation-issues',problems);emit('locate-issue',problems[0])}}}finally{if(version===generation)loading.value=false}
 }
 async function cancel(){const id=job.value?.id,version=generation;try{const value=await api.cancelOptimization(props.uid,id);if(version===generation){job.value=value;stopPoll()}}catch(e){if(version===generation)error.value=e.message||String(e)}}
 async function createPreview(){
@@ -111,12 +125,14 @@ onBeforeUnmount(()=>{generation++;stopPoll()})
     <header><h2>战斗循环自动优化</h2><p>复用同一队伍的个人条件、场景与装备，以实际整队每秒伤害比较，并用独立样本验证。</p></header>
     <el-select v-if="history.length" placeholder="查看或恢复循环计算" :model-value="job?.id" @change="showHistory"><el-option v-for="h in history" :key="h.id" :value="h.id" :label="`${h.createdAt} ${jobLabels[h.state]||'未知状态'}`"/></el-select>
     <el-alert v-if="error" :title="error" type="error" :closable="false"/>
+    <div v-if="inputProblems.length" class="input-problems" aria-label="当前循环的阻断问题"><p>请先修正以下问题，当前不会进入计算：</p><div v-for="(issue,i) in inputProblems" :key="i"><el-button link type="danger" @click="emit('locate-issue',issue)">{{ issue.message }}</el-button></div></div>
     <el-form label-position="top" class="setup-grid">
       <el-form-item label="配队方案"><el-select v-model="buildId"><el-option v-for="b in workspace.builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select></el-form-item>
       <el-form-item label="装备输入"><el-switch v-model="usePlan" :disabled="!equipmentJob?.result?.plan?.qualified" active-text="最近合格配装" inactive-text="扫描时实装"/></el-form-item>
       <el-form-item label="候选预算"><el-input-number v-model="budget" :min="4" :max="512" :step="16"/></el-form-item>
+      <el-form-item v-if="build" label="每场模拟的循环次数"><el-input-number v-model="build.roundCount" :min="1" :max="64" :precision="0" :disabled="running"/></el-form-item>
     </el-form>
-    <p class="hint">背包：{{ snapshotId||'未选择' }}。参选角色：{{ selected.map(k=>characterLabel(catalog,k)).join('、')||'请先到角色页勾选角色' }}。循环优化不改变圣遗物归属。</p>
+    <p class="hint">背包：{{ snapshotId||'未选择' }}。本方案参选角色：{{ rotationSelection.map(k=>characterLabel(catalog,k)).join('、')||'请先勾选本方案的角色' }}。只优化当前方案，不编译其他关联方案，也不改变圣遗物归属。</p>
     <el-collapse>
       <el-collapse-item title="接入已有 BetterGI 战斗策略" name="import">
         <div class="source-toolbar">
@@ -132,14 +148,14 @@ onBeforeUnmount(()=>{generation++;stopPoll()})
         </template>
         <el-input v-model="sourceText" type="textarea" :rows="7" aria-label="原生战斗策略正文" placeholder="也可直接粘贴完整策略"/>
         <el-button class="pasted-import" :disabled="!sourceText||!buildId" :loading="loading" @click="importSource">解析粘贴内容</el-button>
-        <p class="hint">原文和守卫不会被删除。那维莱特的完整喷射宏按gcsim标准重击试算，其余无法可靠转换的输入会给出具体位置。</p>
+        <p class="hint">原文件保留；候选允许重排、删除可选输出和化简等价分支，再核验保护依赖及护盾/鲁棒/进展指标。那维莱特的完整喷射宏按gcsim标准重击试算，不模拟镜头扫射命中。</p>
       </el-collapse-item>
     </el-collapse>
     <el-alert v-for="issue in issues" :key="issue" :title="issue" type="warning" :closable="false" class="issue"/>
     <NativeSource v-if="build" :build="build"/>
     <template v-if="nativeEnabled">
-      <h3>只优化允许调整的参数</h3>
-      <p class="hint">保留开场、条件分支、补盾、失败降级与完整宏。仅搜索非原子块内已有的等待 / 普攻时段，每个参数最多偏离本次基线0.5秒；没有可调参数时仅验证基线。</p>
+      <h3>在保护条件下优化循环</h3>
+      <p class="hint">每个候选执行本方案指定的循环次数，按实际耗时比较DPS。允许受保护依赖约束的重排、可选动作删除、等价分支化简及等待 / 普攻时段调整；保留必需开场、补盾和完整宏，再复评护盾覆盖与流程进展。</p>
     </template>
     <template v-else>
       <h3>可优化的一轮有限动作</h3>
@@ -156,17 +172,19 @@ onBeforeUnmount(()=>{generation++;stopPoll()})
     <div class="actions">
       <el-button v-if="!nativeEnabled" :disabled="!buildId||actions.length>=80" @click="add">添加动作</el-button>
       <el-button v-if="running" type="danger" plain @click="cancel">取消循环优化</el-button>
-      <el-button type="primary" :loading="loading" :disabled="(!nativeEnabled&&!actions.length)||!selected.length||!snapshotId||running" @click="start">自动搜索循环</el-button>
+      <el-button type="primary" :loading="loading" :disabled="(!nativeEnabled&&!actions.length)||!rotationSelection.length||!snapshotId||running||inputProblems.length>0" @click="start">自动搜索循环</el-button>
     </div>
     <section v-if="job" class="rotation-result" aria-live="polite">
       <h3>{{ result?resultLabels[result.status]||result.status:({QUEUED:'等待计算',RUNNING:'正在搜索循环',CANCELLED:'循环优化已取消',FAILED:'循环优化失败'}[job.state]||job.state) }}</h3>
       <el-alert v-if="job.error" :title="job.error" type="error" :closable="false"/><el-skeleton v-if="running" :rows="4" animated/>
       <template v-if="result?.report">
         <RoundReport :report="result.report"/>
+        <el-table v-if="result.nativeTradeoffs?.length" :data="result.nativeTradeoffs"><el-table-column label="未推荐的取舍示例：DPS"><template #default="{row}">{{ metric(row.dps) }}</template></el-table-column><el-table-column label="当时基线DPS"><template #default="{row}">{{ metric(row.baselineDps) }}</template></el-table-column><el-table-column prop="reason" label="未推荐原因"/></el-table>
+        <el-table v-if="result.nativeProbes?.length" :data="result.nativeProbes"><el-table-column label="受控扰动复评"><template #default="{row}">{{ row.kind==='input_delay_200ms'?'输入延迟200ms':'每人首次Q调用丢失' }}</template></el-table-column><el-table-column prop="samples" label="独立测试样本数"/><el-table-column label="候选结果"><template #default="{row}">{{ row.passed?'通过':'未通过，候选未推荐' }}</template></el-table-column><el-table-column prop="baselineError" label="基线检查问题"/><el-table-column prop="candidateError" label="候选检查问题"/></el-table>
         <div class="dps"><span>基线每秒伤害 <strong>{{ metric(result.baseline?.meanDps) }}</strong></span><span>候选每秒伤害 <strong>{{ metric(result.report.meanDps) }}</strong></span><span>实际评估 <strong>{{ result.evaluations }}</strong></span></div>
         <el-alert title="独立验证仅针对本批模拟样本；带假设试算不等于实机已验证" type="info" :closable="false"/>
         <el-alert v-if="result.status==='feasible_uncertain'" title="改善尚不确定，保留原基线供比较。" type="warning" :closable="false"/>
-        <el-table v-if="result.native" :data="result.nativeChanges||[]" empty-text="没有推荐数值变更，保留原流程"><el-table-column prop="line" label="原文行号"/><el-table-column label="参数"><template #default="{row}">{{ row.kind==='wait'?'等待':'普攻时段' }}</template></el-table-column><el-table-column label="原秒数" prop="original"/><el-table-column label="建议秒数" prop="value"/></el-table>
+        <template v-if="result.native"><el-table :data="qualityRows"><el-table-column prop="label" label="模拟安全与通畅指标"/><el-table-column prop="before" label="基线"/><el-table-column prop="after" label="候选"/></el-table><p class="hint">来自当前配置下的SDK护盾、动作和生命值，不代表实机观测或未配置敌人攻击下的生存保证。</p><el-table :data="result.nativeEdits||[]" empty-text="没有推荐结构变更"><el-table-column label="结构操作"><template #default="{row}">{{ {swap:'重排相邻节点',drop:'删除可选/冗余节点',collapse_branch:'化简同目标分支'}[row.kind]||row.kind }}</template></el-table-column><el-table-column prop="block" label="流程块"/><el-table-column prop="node" label="原节点"/><el-table-column prop="other" label="相邻节点"/></el-table><el-table :data="result.nativeChanges||[]" empty-text="没有推荐数值变更"><el-table-column prop="line" label="原文行号"/><el-table-column label="参数"><template #default="{row}">{{ row.kind==='wait'?'等待':'普攻时段' }}</template></el-table-column><el-table-column label="原秒数" prop="original"/><el-table-column label="建议秒数" prop="value"/></el-table></template>
         <el-input v-else :model-value="result.script" type="textarea" :rows="8" readonly aria-label="优化后的 gcsim 循环"/>
         <el-button @click="applyToBuild">应用到此方案的模拟循环</el-button>
         <div class="preview-controls">

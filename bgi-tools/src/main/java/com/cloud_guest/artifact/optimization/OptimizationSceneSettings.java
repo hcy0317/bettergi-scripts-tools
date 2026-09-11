@@ -9,10 +9,11 @@ import java.util.Set;
 public final class OptimizationSceneSettings {
     private OptimizationSceneSettings(){}
     public static String compile(ObjectMapper mapper,JsonNode build){
-        String id=build.path("id").asText(),mode=build.path("stopMode").asText("fixed_duration");
-        if(!Set.of("fixed_duration","target_or_script").contains(mode))throw bad(id,"scene","请选择有效的单次模拟停止方式");
-        var text=new StringBuilder("options ");
-        if(mode.equals("fixed_duration"))text.append("duration=").append(decimal(number(build,"duration",1,600,60.0,id,"scene"))).append(' ');
+        String id=build.path("id").asText();
+        roundCount(build);
+        // Duration here is solely the worker safety ceiling. roundCount ends
+        // successful trajectories at observed iteration boundaries in the SDK.
+        var text=new StringBuilder("options duration=600 ");
         text.append("swap_delay=").append(integer(build,"swapDelay",0,120,1,id,"scene"));
         for(String flag:Set.of("hitlag","defhalt")){if(build.has(flag)){if(!build.get(flag).isBoolean())throw bad(id,"scene","模拟选项必须为开关值");text.append(' ').append(flag).append('=').append(build.get(flag).asBoolean());}}
         text.append(";\n");
@@ -27,7 +28,6 @@ public final class OptimizationSceneSettings {
         int index=0;for(JsonNode target:targets){String field="targets."+index++;
             text.append("target lvl=").append(integer(target,"level",1,200,null,id,field)).append(" resist=").append(decimal(number(target,"resistance",-1,10,null,id,field)))
                 .append(" radius=").append(decimal(number(target,"radius",0.01,100,1.0,id,field))).append(" pos=").append(decimal(number(target,"x",-1000,1000,0.0,id,field))).append(',').append(decimal(number(target,"y",-1000,1000,0.0,id,field)));
-            if(mode.equals("target_or_script"))text.append(" hp=").append(decimal(number(target,"hp",1,1e12,null,id,field)));
             text.append(";\n");
         }
         JsonNode energy=build.path("energy");
@@ -39,6 +39,17 @@ public final class OptimizationSceneSettings {
             text.append(" amount=").append(amount).append(";\n");
         }
         return text.toString();
+    }
+    public static int roundCount(JsonNode build){
+        String id=build.path("id").asText();
+        int count=integer(build,"roundCount",1,64,3,id,"rounds");
+        int warmup=integer(build.path("roundPolicy"),"warmup",0,63,0,id,"rounds");
+        if(warmup>=count)throw bad(id,"rounds","循环次数必须大于逐轮指标忽略的开场轮数");
+        return count;
+    }
+    public static void requireRoundCountEngine(JsonNode catalog){
+        if(catalog==null||!catalog.path("capabilities").path("roundCountTermination").asBoolean())
+            throw new IllegalArgumentException("当前引擎尚不支持按循环次数结束，请安装配套引擎；不会退回固定秒数或击杀模式");
     }
     public static int integer(JsonNode node,String key,int min,int max,Integer fallback,String id,String field){JsonNode v=node.path(key);if(v.isMissingNode()&&fallback!=null)return fallback;if(!v.isIntegralNumber()||!v.canConvertToInt()||v.asInt()<min||v.asInt()>max)throw bad(id,field,"字段“"+label(key)+"”未填写或超出范围");return v.asInt();}
     private static double number(JsonNode node,String key,double min,double max,Double fallback,String id,String field){JsonNode v=node.path(key);if(v.isMissingNode()&&fallback!=null)return fallback;if(!v.isNumber()||!Double.isFinite(v.asDouble())||v.asDouble()<min||v.asDouble()>max)throw bad(id,field,"字段“"+label(key)+"”未填写或超出范围");return v.asDouble();}

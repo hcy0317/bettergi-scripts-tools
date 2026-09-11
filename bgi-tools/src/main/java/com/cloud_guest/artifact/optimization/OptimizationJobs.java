@@ -34,10 +34,11 @@ public class OptimizationJobs {
         if(!scan.uid().equals(uid)||scan.snapshot()==null)throw new IllegalArgumentException("扫描记录与账号不匹配");
         var catalog=gateway.catalog();
         var request=new OptimizationCompiler(mapper,stats,catalog).compile(workspace,scan.snapshot(),selection);
+        OptimizationSceneSettings.requireRoundCountEngine(catalog);
         int wall=selection.path("wallTimeSeconds").asInt(120);if(wall<5||wall>120)throw new IllegalArgumentException("单次计算时限须为 5 至 120 秒");
-        var payload=mapper.createObjectNode();payload.set("optimization",request);payload.putObject("limits").put("wallTimeMs",wall*1000).put("memoryMiB",768).put("outputKiB",16384);
+        var payload=mapper.createObjectNode();payload.set("optimization",request);payload.putObject("limits").put("wallTimeMs",wall*1000).put("memoryMiB",768).put("outputKiB",GcsimGateway.outputBudgetKiB(request));
         String id=UUID.randomUUID().toString();var job=mapper.createObjectNode().put("id",id).put("uid",uid).put("state","QUEUED").put("createdAt",Instant.now().toString())
-                .put("workspaceVersion",workspace.path("version").asLong()).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("engineRevision",catalog.path("engineRevision").asText());
+                .put("workspaceVersion",workspace.path("version").asLong()).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("engineRevision",catalog.path("engineRevision").asText()).put("adapterVersion",catalog.path("adapterVersion").asText());
         job.set("selection",selection.deepCopy());job.set("request",request);job.set("mainStatSource",stats.provenance().get("revision"));
         job.put("kind","equipment");
         return enqueue(uid,job,payload,wall,"--optimize");
@@ -88,6 +89,7 @@ public class OptimizationJobs {
     private static void verifyEngine(JsonNode job,JsonNode result){
         var reports=new ArrayList<JsonNode>();if(result.path("report").isObject())reports.add(result.path("report"));result.path("plan").path("reports").forEach(reports::add);
         for(JsonNode report:reports)if(!job.path("engineRevision").asText().equals(report.path("engineRevision").asText()))throw new IllegalStateException("排队期间引擎版本发生变化，请重新计算");
+        for(JsonNode report:reports)if(job.hasNonNull("adapterVersion")&&!job.path("adapterVersion").asText().isBlank()&&!job.path("adapterVersion").asText().equals(report.path("adapterVersion").asText()))throw new IllegalStateException("排队期间计算适配器发生变化，请重新计算");
     }
     private ObjectNode stored(String uid,String id){OptimizationWorkspace.requireUid(uid);if(!OptimizationWorkspace.key(id))throw new IllegalArgumentException("任务标识无效");return store.get(TYPE,uid+":"+id,ObjectNode.class).map(ObjectNode::deepCopy).orElseThrow(()->new IllegalArgumentException("计算任务不存在"));}
     private static ObjectNode publicView(ObjectNode job){var copy=job.deepCopy();copy.remove("request");return copy;}

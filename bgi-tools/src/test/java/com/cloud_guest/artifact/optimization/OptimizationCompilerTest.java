@@ -7,6 +7,20 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptimizationCompilerTest {
+    @Test void compilerRejectsContradictoryScriptWithoutRewritingIt()throws Exception{
+        var m=new ObjectMapper();
+        var workspace=m.readTree("""
+            {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"builds":[{"id":"team"}]}],
+             "builds":[{"id":"team","duration":20,"members":[{"character":"amber"}],"rotation":"active amber; while !.amber.mods.favonius-cd {amber attack;} amber skill;"}]}
+            """);
+        String original=workspace.path("builds").get(0).path("rotation").asText();
+        var snapshot=ArtifactSnapshot.create("100000001","scan","default","v1",List.of(new ArtifactItem(0,"EmblemOfSeveredFate","flower",20,5,"hp",List.of(),"",false)));
+        var selection=m.readTree("{\"characters\":[\"amber\"]}");
+        var error=assertThrows(OptimizationValidationException.class,()->new OptimizationCompiler(m,(a,b,c)->4780).compile(workspace,snapshot,selection));
+        assertEquals("rotation",error.issues().get(0).field());
+        assertNotNull(error.issues().get(0).startOffset());
+        assertEquals(original,workspace.path("builds").get(0).path("rotation").asText());
+    }
     @Test void currentlyDormantAffixIsNotAppliedOrRemovedFromPhysicalIdentity()throws Exception{
         var mapper=new ObjectMapper();
         var workspace=mapper.readTree("""
@@ -47,7 +61,7 @@ class OptimizationCompilerTest {
         assertTrue(invalid.issues().stream().anyMatch(i->i.field().equals("protections")));
     }
 
-    @Test void sceneSettingsPreserveHpModeParticlesAndIndependentSampling()throws Exception {
+    @Test void sceneSettingsUseRoundsPreservingParticlesAndIndependentSampling()throws Exception {
         var mapper=new ObjectMapper();
         var workspace=mapper.readTree("""
           {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"builds":[{"id":"team"}]}],
@@ -56,7 +70,8 @@ class OptimizationCompilerTest {
         var snapshot=ArtifactSnapshot.create("100000001","scan","default","v1",List.of(new ArtifactItem(0,"EmblemOfSeveredFate","flower",20,5,"hp",List.of(),"",false)));
         var result=new OptimizationCompiler(mapper,(a,b,c)->4780).compile(workspace,snapshot,mapper.readTree("{\"characters\":[\"amber\"],\"searchSamples\":3,\"validationSamples\":100}"));
         var evaluation=result.path("scenarios").get(0).path("evaluation");String config=evaluation.path("config").asText();
-        assertTrue(config.contains("hp=999999999"),config);assertFalse(config.contains("duration="),config);
+        assertFalse(config.contains("hp=999999999"),config);assertTrue(config.contains("duration=600"),config);assertEquals(3,evaluation.path("roundCount").asInt());
+        assertEquals(999999999,workspace.path("builds").get(0).path("targets").get(0).path("hp").asInt());
         assertTrue(config.contains("energy every interval=480,720 amount=1;"));assertTrue(config.contains("swap_delay=12"));assertTrue(config.contains("fn execute_action"));assertTrue(evaluation.path("autoRounds").asBoolean());
         assertEquals(100,result.path("validationSeeds").size());assertEquals(3,result.path("searchSeeds").size());
     }

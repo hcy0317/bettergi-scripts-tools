@@ -29,11 +29,15 @@ public final class OptimizationNativeFlow {
         if(!nativeInput.path("enabled").isBoolean())throw new IllegalArgumentException("原生流程启用状态无效");
         if(catalog==null||!catalog.path("capabilities").path("nativeFlow").path("schemaVersion").asText().equals("native-flow-v1"))throw new IllegalArgumentException("当前计算引擎尚未安装原生流程适配，请更新引擎后重试");
         var program=new OptimizationNativeFlow(mapper,nativeInput.path("source").asText(),OptimizationLocalization.aliases(catalog,members)).program();
+        var nodes=new ArrayList<JsonNode>();program.path("root").forEach(nodes::add);for(JsonNode b:program.path("blocks"))b.path("nodes").forEach(nodes::add);
+        boolean extended=nodes.stream().anyMatch(n->Set.of("charge","dash","walk").contains(n.path("kind").asText())||n.path("options").has("refresh")||extendedCondition(n.path("condition"))||extendedCondition(n.path("requires")));
+        if(extended&&!java.util.stream.StreamSupport.stream(catalog.path("capabilities").path("nativeFlow").path("features").spliterator(),false).anyMatch(f->f.asText().equals("nine-strategies-v1")))throw new IllegalArgumentException("当前引擎尚不支持本流程的重击、移动或记录时间条件；请更新配套gcsim引擎后计算，原策略已保留");
         boolean macro=false;for(JsonNode block:program.path("blocks"))if(block.has("macro"))macro=true;
         if(macro&&!nativeInput.path("macroMapping").asText().equals(MACRO))throw new IllegalArgumentException("请确认喷射宏按gcsim标准重击进行带假设试算");
         if(!build.path("scriptPrelude").asText().isBlank()&&build.path("scriptPreludeEnabled").asBoolean(true))throw new IllegalArgumentException("原生流程不能同时运行gcsim辅助脚本；请明确停用辅助逻辑，或切回gcsim循环");
         return program;
     }
+    private static boolean extendedCondition(JsonNode n){return !n.isMissingNode()&&(n.path("name").asText().equals("record-remaining")||n.path("name").asText().startsWith("round-")||extendedCondition(n.path("left"))||extendedCondition(n.path("right")));}
     public static String initialCharacter(JsonNode program) {
         // The first actually executed instruction may be inside a call. Use its
         // resolved actor, not a set/map iteration order from the Build.
@@ -121,6 +125,9 @@ public final class OptimizationNativeFlow {
         for(var replacement:replacements)output.replace(replacement.start(),replacement.end(),replacement.value());
         String result=output.toString();new OptimizationNativeFlow(mapper,result,aliases).program();return result;
     }
+    public String referenceSource(JsonNode changes,JsonNode edits,Map<String,String> names) {
+        return new OptimizationNativeStructure(mapper,referenceSource(changes),aliases,names).apply(edits);
+    }
     private static void lockBlock(String name,JsonNode blocks,Set<String> locked) {
         if(!locked.add(name))return;JsonNode block=blocks.path(name);
         for(String target:targets(block.path("declaration")))lockBlock(target,blocks,locked);
@@ -157,7 +164,7 @@ public final class OptimizationNativeFlow {
         var matcher=Pattern.compile("^([a-z-]+)(?:\\((.*)\\))?$",Pattern.DOTALL).matcher(text);
         if(!matcher.matches())throw bad(token,"无法识别命令或队伍角色："+text);
         String kind=switch(matcher.group(1)){case "e"->"skill";case "q"->"burst";default->matcher.group(1);};
-        if(!Set.of("strategy","timing","segment","call","branch","skill","burst","attack","wait","check","keydown","keyup","moveby").contains(kind))throw bad(token,"未支持的动作："+kind);
+        if(!Set.of("strategy","timing","segment","call","branch","skill","burst","attack","charge","dash","walk","wait","check","keydown","keyup","moveby").contains(kind))throw bad(token,"未支持的动作："+kind);
         if(!Set.of("strategy","timing","segment","call","branch").contains(kind)&&actor.isBlank())throw bad(token,"缺少本队可映射的角色名");
         var node=mapper.createObjectNode().put("id","n"+(++sequence)).put("kind",kind).put("character",actor).put("line",token.line).put("column",token.column).put("start",token.start).put("end",token.end);
         var args=node.putArray("args");var options=node.putObject("options");
@@ -174,14 +181,14 @@ public final class OptimizationNativeFlow {
             case "call"->Set.of("required","if","once","timeout","attempts");
             case "branch"->Set.of("if","then","else","unknown","required");
             case "skill"->Set.of("hold","fast","wait","required","timeout","if","record","maintain","watch","watch-mode","watch-target","before","timing","keep","feed");
-            case "burst"->Set.of("required","timeout","attempts","no-progress","if","keep","record","timing");
-            case "attack","wait"->Set.of("required","timeout","if","keep");
+            case "burst"->Set.of("required","timeout","attempts","no-progress","if","keep","record","timing","refresh");
+            case "attack","charge","dash","walk","wait"->Set.of("required","timeout","if","keep");
             case "keydown"->Set.of("required","keep");default->Set.of();
         };
         options.fieldNames().forEachRemaining(key->{if(!allowed.contains(key))throw bad(token,"动作"+kind+"未支持参数："+key);});
         for(String field:List.of("timeout","duration","cd","before"))if(options.has(field))number(options.path(field).asText(),field,field.equals("cd")||field.equals("before")?0:0.01,600,token);
         for(String field:List.of("attempts","no-progress"))if(options.has(field)){double value=number(options.path(field).asText(),field,1,64,token);if(value!=Math.rint(value))throw bad(token,field+"须为整数");}
-        for(String field:List.of("record","keep","maintain","watch","watch-target","onfail","then","else","unknown","timing"))if(options.has(field))name(options.path(field).asText(),token);
+        for(String field:List.of("record","keep","refresh","maintain","watch","watch-target","onfail","then","else","unknown","timing"))if(options.has(field))name(options.path(field).asText(),token);
         if(options.has("if"))node.set("condition",new Condition(options.path("if").asText(),actor,token).parse());
         if(options.has("requires"))node.set("requires",new Condition(options.path("requires").asText(),actor,token).parse());
         if(options.has("feed")){String receiver=aliases.get(options.path("feed").asText());if(receiver==null||receiver.isBlank())throw bad(token,"接球队员不在当前队伍");options.put("feed",receiver);}
@@ -189,7 +196,11 @@ public final class OptimizationNativeFlow {
         if(kind.equals("branch")&&(!options.has("if")||!options.has("then")||!args.isEmpty()))throw bad(token,"branch需要if和then，不能含位置参数");
         if(kind.equals("call")&&(args.size()!=1||!validName(args.path(0).asText())))throw bad(token,"call需要一个合法片段名");
         if(Set.of("skill","burst","check").contains(kind)&&!args.isEmpty())throw bad(token,"动作不接受这些位置参数");
-        if(kind.equals("attack")||kind.equals("wait")) {
+        if(kind.equals("walk")) {
+            if(args.size()!=2||!Set.of("w","a","s","d").contains(args.path(0).asText()))throw bad(token,"walk需要方向w/a/s/d和秒数");
+            node.put("seconds",number(args.get(1).asText(),"秒数",0.01,30,token));
+        }
+        if(Set.of("attack","charge","dash","wait").contains(kind)) {
             if(args.size()!=1)throw bad(token,"普攻/等待需要一个明确秒数");double seconds=number(args.get(0).asText(),"秒数",0.01,30,token);node.put("seconds",seconds);
             int valueStart=token.start+offset+text.indexOf('(')+1;while(valueStart<source.length()&&Character.isWhitespace(source.charAt(valueStart)))valueStart++;
             node.put("valueStart",valueStart).put("valueEnd",valueStart+args.get(0).asText().length());
@@ -202,7 +213,8 @@ public final class OptimizationNativeFlow {
         var records=new HashSet<String>();for(JsonNode n:all)if(n.path("options").has("record"))records.add(n.path("options").path("record").asText());
         for(JsonNode n:all) {
             JsonNode o=n.path("options");
-            for(String key:List.of("keep","maintain","watch"))if(o.has(key)&&!records.contains(o.path(key).asText()))throw nodeError(n,"未定义记录："+o.path(key).asText());
+            for(String key:List.of("keep","refresh","maintain","watch"))if(o.has(key)&&!records.contains(o.path(key).asText()))throw nodeError(n,"未定义记录："+o.path(key).asText());
+            if(o.has("refresh")&&(!n.path("character").asText().equals("sangonomiyakokomi")||!n.path("kind").asText().equals("burst")))throw nodeError(n,"refresh目前仅支持心海爆发刷新已存在水母");
             validateConditionRecords(n.path("condition"),records,n);validateConditionRecords(n.path("requires"),records,n);
             if(o.has("timing")&&!timings.has(o.path("timing").asText()))throw nodeError(n,"未声明timing："+o.path("timing").asText());
             if(o.has("watch")&&(!o.path("watch-mode").asText().equals("call")||!o.has("watch-target")||!o.path("watch").asText().equals(o.path("record").asText())||!o.path("watch").asText().equals(o.path("maintain").asText())))throw nodeError(n,"维护观察须绑定同一record/maintain并声明watch-mode=call和watch-target");
@@ -256,6 +268,18 @@ public final class OptimizationNativeFlow {
         ObjectNode primary(){if(take("!")){var n=mapper.createObjectNode().put("op","not");n.set("left",atom());return n;}if(take("(")){var n=or();if(!take(")"))throw bad(token,"条件括号未配对");return n;}
             space();int start=position;while(position<text.length()&&(Character.isLetter(text.charAt(position))||text.charAt(position)=='-'))position++;
             String function=text.substring(start,position);if(!take("("))throw bad(token,"无效条件函数："+function);int argStart=position;while(position<text.length()&&text.charAt(position)!=')')position++;if(position==text.length())throw bad(token,"条件缺少右括号");String arg=text.substring(argStart,position++).trim();
+            if(function.equals("round-odd")||function.equals("round-even")) {
+                if(!arg.isEmpty())throw bad(token,"轮次条件不接受参数");
+                return mapper.createObjectNode().put("op","call").put("name",function);
+            }
+            if(function.equals("record-remaining")) {
+                name(arg,token);String comparison=null;
+                for(String op:List.of(">=","<=","==","!=",">","<"))if(take(op)){comparison=op;break;}
+                if(comparison==null)throw bad(token,"record-remaining必须与秒数比较");
+                space();int begin=position;while(position<text.length()&&(Character.isDigit(text.charAt(position))||text.charAt(position)=='.'))position++;
+                double seconds=number(text.substring(begin,position),"剩余秒数",0,600,token);
+                return mapper.createObjectNode().put("op",switch(comparison){case ">"->"gt";case ">="->"ge";case "<"->"lt";case "<="->"le";case "=="->"eq";default->"ne";}).put("name",function).put("argument",arg).put("threshold",seconds);
+            }
             if(!Set.of("q-ready","q-energy-low","q-cd","e-ready","e-cd","low-hp","record-active","record-exists").contains(function))throw bad(token,"尚未支持条件："+function);
             if(function.startsWith("record-"))name(arg,token);else {arg=arg.isEmpty()?character:aliases.get(arg);if(arg==null||arg.isBlank())throw bad(token,"条件角色不在当前队伍");}
             return mapper.createObjectNode().put("op","call").put("name",function).put("argument",arg);

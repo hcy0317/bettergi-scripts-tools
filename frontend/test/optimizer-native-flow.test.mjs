@@ -1,7 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {applyCommunityPreview} from '../src/features/artifact-optimizer/community.js'
-import {applyNativeImport,nativeImportTicket} from '../src/features/artifact-optimizer/native-flow.js'
+import {applyNativeImport,nativeImportTicket,nativeAssumptionLabel} from '../src/features/artifact-optimizer/native-flow.js'
+
+test('weapon-wait projection explains that the original script is preserved',()=>{
+  assert.match(nativeAssumptionLabel('removed_impossible_favonius_wait:furina'),/furina.*西风.*计算副本.*原文/)
+})
 
 test('choosing a community loop disables but preserves the previous native source',()=>{
   const build={rotation:'old',nativeRotation:{enabled:true,source:'strategy(loop=battle)'}}
@@ -22,4 +26,11 @@ test('native import keeps the reference script and refuses stale source ownershi
   assert.equal(build.nativeRotation.macroMapping,'neuvillette_charge_v1')
   assert.equal(build.nativeRotation.source,'source')
   assert.equal(ticket.matches('100000001',build,'source'),false)
+})
+
+test('switching to a native flow disables but preserves unrelated gcsim auxiliary code',()=>{
+  const build={scriptPrelude:'let communityOnly=1;',scriptPreludeEnabled:true}
+  applyNativeImport(build,{supported:true,mode:'native_flow',program:{schemaVersion:'native-flow-v1',source:'strategy(loop=battle)\n琴 e',root:[],blocks:{}}})
+  assert.equal(build.scriptPrelude,'let communityOnly=1;')
+  assert.equal(build.scriptPreludeEnabled,false)
 })

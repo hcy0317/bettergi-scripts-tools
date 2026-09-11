@@ -29,6 +29,7 @@ public final class OptimizationInputValidation {
             for(JsonNode ref:profile.path("builds")){String id=ref.path("id").asText();scenarios.add(id);if(!builds.containsKey(id))issues.add(new Issue("character",key,"","builds","角色关联的配队方案已不存在"));}
         }
         for(String id:scenarios){JsonNode build=builds.get(id);if(build==null)continue;var members=new LinkedHashSet<String>();
+            issues.addAll(OptimizationScriptDiagnostics.forBuild(workspace,build,catalog));
             for(JsonNode m:build.path("members")){String key=m.path("character").asText();if(!members.add(key))issues.add(new Issue("build",key,id,"members","队伍中存在重复角色"));JsonNode p=m.path("profile").isObject()?m.path("profile"):profiles.get(key);
                 if(p==null){issues.add(new Issue("build",key,id,"members","队员缺少个人档案"));continue;}
                 if(m.has("profile")||!selected.contains(key))personal(p,key,m.has("profile")?id:"",catalog,issues);

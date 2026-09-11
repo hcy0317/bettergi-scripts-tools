@@ -12,17 +12,24 @@ export const slotOptions=[['flower','生之花'],['plume','死之羽'],['sands',
 export const statOptions=[['hp','生命值'],['hp_','生命值 %'],['atk','攻击力'],['atk_','攻击力 %'],['def','防御力'],['def_','防御力 %'],['eleMas','元素精通'],['enerRech_','元素充能效率 %'],['critRate_','暴击率 %'],['critDMG_','暴击伤害 %'],['heal_','治疗加成 %'],...['pyro','hydro','cryo','electro','anemo','geo','dendro','physical'].map((s,i)=>[`${s}_dmg_`,`${['火','水','冰','雷','风','岩','草','物理'][i]}伤加成 %`])]
 export function newCharacter(key,name=key){return {key,name,level:90,maxLevel:90,constellation:0,talents:[6,6,6],weapon:'',weaponLevel:90,weaponMaxLevel:90,refinement:1,tags:[],weight:1,protected:false,builds:[],minimumStats:{},mainStats:{},requiredSets:{},fixedSlots:{}}}
 export function normalizeBuild(build){
-  build.stopMode ??= 'fixed_duration'
+  if(build.stopMode&&build.stopMode!=='loop_count')build.legacyStopMode ??= build.stopMode
+  build.stopMode='loop_count'
+  if(build.roundCount===undefined)build.roundCount=3
   build.targets ??= Array.from({length:Math.max(1,Math.min(10,build.enemyCount??1))},()=>({level:build.enemyLevel??100,resistance:build.resistance??0.1,radius:1,x:0,y:0,hp:null}))
   build.swapDelay ??= 1
   build.energy ??= {enabled:false,mode:'every',start:480,end:720,amount:1}
   build.roundPolicy ??= {mode:build.rounds?.length?'legacy':'auto',warmup:0,loopIndex:0}
+  if(build.rounds?.length)build.legacyRounds ??= JSON.parse(JSON.stringify(build.rounds))
+  build.roundPolicy.mode='auto'
+  build.roundPolicy.warmup ??= 0
+  build.roundPolicy.loopIndex ??= 0
+  build.rounds=[]
   build.scriptPrelude ??= ''
   build.scriptPreludeEnabled ??= true
   build.rounds ??= [];build.constraints ??= [];build.buffs ??= [];build.members ??= []
   return build
 }
-export function newBuild(id=crypto.randomUUID()){return normalizeBuild({id,name:'新的配队方案',weight:1,duration:60,members:[],rotation:'',rounds:[],constraints:[],buffs:[],allowPartial:false})}
+export function newBuild(id=crypto.randomUUID()){return normalizeBuild({id,name:'新的配队方案',weight:1,roundCount:3,members:[],rotation:'',rounds:[],constraints:[],buffs:[],allowPartial:false})}
 export function selectedScenarioIds(characters,selected){return [...new Set(characters.filter(c=>selected.includes(c.key)).flatMap(c=>(c.builds||[]).map(b=>b.id)))]}
 function linkBuild(character,id){character.builds ||= [];if(!character.builds.some(b=>b.id===id))character.builds.push({id,weight:1,metric:'damage_per_round',reference:0})}
 export function updateBuildMembers(workspace,id,keys,selected){
@@ -52,4 +59,4 @@ export function mergeEnkaPreview(current,incoming,acceptedKeys){
   return result
 }
 export function metric(value){return Number.isFinite(value)?value.toLocaleString('zh-CN',{maximumFractionDigits:1}):'未知'}
-export const resultLabels={feasible_recommendation:'已找到合格方案',feasible_baseline:'保留合格旧装',feasible_uncertain:'可行，改善尚不确定',budget_no_feasible:'预算内未找到可行方案',proven_infeasible:'已证明约束无法满足',indeterminate:'缺少必要计算证据',validation_failed:'最终独立验证未通过',cancelled:'已取消'}
+export const resultLabels={feasible_recommendation:'已找到合格方案',feasible_baseline:'保留合格基线',feasible_simplification:'指标未退化，流程已简化',feasible_uncertain:'可行，改善尚不确定',budget_no_feasible:'预算内未找到可行方案',proven_infeasible:'已证明约束无法满足',indeterminate:'缺少必要计算证据',validation_failed:'最终独立验证未通过',cancelled:'已取消'}
