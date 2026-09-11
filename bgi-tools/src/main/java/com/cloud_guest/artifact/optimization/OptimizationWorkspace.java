@@ -15,9 +15,19 @@ public class OptimizationWorkspace {
     public OptimizationWorkspace(ArtifactJsonStore store,ObjectMapper mapper) { this.store=store;this.mapper=mapper; }
     public ObjectNode get(String uid) {
         requireUid(uid);
-        return store.get(TYPE,uid,ObjectNode.class).map(ObjectNode::deepCopy).orElseGet(()->{
+        var workspace=store.get(TYPE,uid,ObjectNode.class).map(ObjectNode::deepCopy).orElseGet(()->{
             var node=mapper.createObjectNode().put("version",0);node.putArray("characters");node.putArray("builds");return node;
         });
+        for(JsonNode item:workspace.path("builds"))if(item instanceof ObjectNode build){
+            if(!build.path("stopMode").asText().equals("loop_count")&&!build.has("legacyStopMode"))build.put("legacyStopMode",build.path("stopMode").asText("fixed_duration"));
+            build.put("stopMode","loop_count");
+            if(!build.has("roundCount"))build.put("roundCount",3);
+            if(build.path("rounds").isArray()&&!build.path("rounds").isEmpty()&&!build.has("legacyRounds"))build.set("legacyRounds",build.path("rounds").deepCopy());
+            build.putArray("rounds");
+            ObjectNode policy=build.path("roundPolicy") instanceof ObjectNode p?p:build.putObject("roundPolicy");
+            policy.put("mode","auto");if(!policy.has("warmup"))policy.put("warmup",0);if(!policy.has("loopIndex"))policy.put("loopIndex",0);
+        }
+        return workspace; // A read projection, never a database migration/write.
     }
     public synchronized ObjectNode save(String uid,ObjectNode incoming) {
         var current=get(uid);

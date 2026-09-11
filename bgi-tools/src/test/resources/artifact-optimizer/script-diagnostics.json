@@ -1,0 +1,9 @@
+[
+  {"name":"Chinese CRLF and supplementary character offsets","source":"// 😀\r\nwhile !.芙宁娜.mods.favonius-cd { furina attack; }","weapons":{"furina":"fleuvecendreferryman"},"aliases":{"furina":"furina","芙宁娜":"furina"},"expected":[{"startOffset":14,"endOffset":35,"line":2,"column":8,"character":"furina"}]},
+  {"name":"known impossible weapon wait","source":"while !.furina.mods.favonius-cd {furina attack;}","weapons":{"furina":"fleuvecendreferryman"},"aliases":{"furina":"furina"},"expected":[{"startOffset":7,"endOffset":31,"line":1,"column":8,"character":"furina"}]},
+  {"name":"matching weapon","source":"while !.furina.mods.favonius-cd {furina attack;}","weapons":{"furina":"favoniussword"},"aliases":{"furina":"furina"},"expected":[]},
+  {"name":"active missing member","source":"active kaeya;\namber skill;","weapons":{"amber":"huntersbow"},"aliases":{"amber":"amber"},"expected":[{"startOffset":7,"endOffset":12,"line":1,"column":8,"character":"kaeya"}]},
+  {"name":"action missing member","source":"raiden burst;","weapons":{"amber":"huntersbow"},"aliases":{"amber":"amber"},"expected":[{"startOffset":0,"endOffset":6,"line":1,"column":1,"character":"raiden"}]},
+  {"name":"comments strings and function names are not actors","source":"// raiden burst;\nlet x=\"active raiden;\"; fn skill(){amber skill;}\namber attack;","weapons":{"amber":"huntersbow"},"aliases":{"amber":"amber"},"expected":[]},
+  {"name":"ordinary conditional remains valid","source":"if .furina.mods.favonius-cd {furina skill;}","weapons":{"furina":"fleuvecendreferryman"},"aliases":{"furina":"furina"},"expected":[]}
+]

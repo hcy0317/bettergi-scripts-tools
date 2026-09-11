@@ -1,3 +1,4 @@
+import {normalizeBuild} from './model.js'
 export function createCommunityRequestScope(){
   let generation=0,controller=null
   return {
@@ -45,11 +46,12 @@ export function applyCommunityPreview(build,preview,{script=true,settings=true}=
   }
   if(settings)for(const key of ['stopMode','duration','swapDelay','targets','energy','hitlag','defhalt'])if(Object.hasOwn(preview.settings||{},key))build[key]=clone(preview.settings[key])
   build.communityReference={url:preview.sourceUrl||'',note:'仅借用循环和已确认的场景设置，个人条件与背包未从社区覆盖'}
+  normalizeBuild(build)
 }
 export function describeCommunitySettings(settings={}){
   const rows=[]
-  if(settings.stopMode)rows.push({label:'单次停止方式',value:settings.stopMode==='target_or_script'?'敌人被击败或脚本动作结束':'达到固定游戏内时长'})
-  if(settings.duration!==undefined&&settings.stopMode!=='target_or_script')rows.push({label:'单次战斗时长',value:`${settings.duration} 秒`})
+  if(settings.stopMode)rows.push({label:'来源停止设置（仅参考）',value:'导入后统一按方案循环次数结束，不沿用固定秒数或击杀条件'})
+  if(settings.duration!==undefined&&settings.stopMode!=='target_or_script')rows.push({label:'来源模拟时长（仅参考）',value:`${settings.duration} 秒`})
   if(settings.swapDelay!==undefined)rows.push({label:'切人延迟',value:`${settings.swapDelay} 帧`})
   for(const [i,t] of (settings.targets||[]).entries())rows.push({label:`敌人 ${i+1}`,value:`等级 ${t.level}，抗性 ${t.resistance*100}%，半径 ${t.radius}，位置 (${t.x}, ${t.y})${settings.stopMode==='target_or_script'?`，血量 ${t.hp}`:''}`})
   if(settings.energy?.enabled){const e=settings.energy;rows.push({label:'外部掉球',value:`${e.mode==='once'?`第 ${e.start/60} 秒一次`:`每 ${e.start/60} 至 ${e.end/60} 秒`}，${e.amount} 颗无元素微粒`})}

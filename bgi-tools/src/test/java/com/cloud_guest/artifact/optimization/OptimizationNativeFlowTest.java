@@ -9,7 +9,66 @@ import com.cloud_guest.artifact.domain.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OptimizationNativeFlowTest {
+    @Test void movingAControlNodeDoesNotChangeItsImplicitConditionActor() throws Exception {
+        String source="strategy(loop=battle)\n琴 e\ncall(补,if=q-ready())\n芙宁娜 q\nsegment(补,define){琴 q}\n";
+        var adapter=new OptimizationNativeFlow(mapper,source,ALIASES);var p=adapter.program();
+        var edits=mapper.createArrayNode();edits.addObject().put("kind","swap").put("block","$root").put("node",p.path("root").get(1).path("id").asText()).put("other",p.path("root").get(2).path("id").asText());
+        var text=adapter.referenceSource(mapper.createArrayNode(),edits,Map.of("jean","琴","furina","芙宁娜"));
+        var changed=new OptimizationNativeFlow(mapper,text,ALIASES).program();
+        assertEquals("jean",changed.path("root").get(2).path("condition").path("argument").asText());
+    }
+    @Test void realEngineStructuralResultsCanBeExportedAndParsedAgain() throws Exception {
+        String root=System.getProperty("artifact.optimizer.test.nativeResults","");org.junit.jupiter.api.Assumptions.assumeTrue(!root.isBlank());
+        var aliases=new java.util.HashMap<>(ALIASES);aliases.putAll(Map.of("班尼特","bennett","香菱","xiangling","娜维娅","navia","枫原万叶","kaedeharakazuha","纳西妲","nahida","久岐忍","kukishinobu","菲谢尔","fischl","雷电将军","raidenshogun","珊瑚宫心海","sangonomiyakokomi","神里绫华","kamisatoayaka"));
+        var names=new java.util.HashMap<String,String>();aliases.forEach((name,key)->names.put(key,name));
+        for(String name:List.of("冰","采集","草","风","火","矿物","雷","水","岩")) {
+            var result=mapper.readTree(java.nio.file.Path.of(root,"00-"+name+".json").toFile());
+            String source;try(var stream=getClass().getResourceAsStream("/artifact-optimizer/nine/00-"+name+".txt")){source=new String(stream.readAllBytes(),StandardCharsets.UTF_8);}
+            var numeric=result.path("nativeChanges");if(numeric.isMissingNode())numeric=mapper.createArrayNode();var edits=result.path("nativeEdits");if(edits.isMissingNode())edits=mapper.createArrayNode();
+            String candidate=new OptimizationNativeFlow(mapper,source,aliases).referenceSource(numeric,edits,names);
+            assertNotNull(new OptimizationNativeFlow(mapper,candidate,aliases).program());
+        }
+    }
+    @Test void structuralExportRebindsImplicitActorsAndRejectsProtectedDeletion() throws Exception {
+        String source="strategy(loop=battle)\n琴 e(required),attack(1)\n芙宁娜 q\n";
+        var adapter=new OptimizationNativeFlow(mapper,source,ALIASES);var p=adapter.program();
+        String attack=p.path("root").get(1).path("id").asText(),burst=p.path("root").get(2).path("id").asText();
+        var edits=mapper.createArrayNode();edits.addObject().put("kind","swap").put("block","$root").put("node",attack).put("other",burst);
+        String candidate=adapter.referenceSource(mapper.createArrayNode(),edits,Map.of("jean","琴","furina","芙宁娜"));
+        var parsed=new OptimizationNativeFlow(mapper,candidate,ALIASES).program();
+        assertEquals("furina",parsed.path("root").get(1).path("character").asText());
+        assertEquals("jean",parsed.path("root").get(2).path("character").asText());
+        edits.removeAll();edits.addObject().put("kind","drop").put("block","$root").put("node",p.path("root").get(0).path("id").asText());
+        assertThrows(IllegalArgumentException.class,()->adapter.referenceSource(mapper.createArrayNode(),edits,Map.of("jean","琴","furina","芙宁娜")));
+    }
+    @Test void importsAllNineWholeStrategiesWithTheirOriginalSource() throws Exception {
+        var aliases=new java.util.HashMap<>(ALIASES);
+        aliases.putAll(Map.of("班尼特","bennett","香菱","xiangling","娜维娅","navia","枫原万叶","kaedeharakazuha","纳西妲","nahida","久岐忍","kukishinobu","菲谢尔","fischl","雷电将军","raidenshogun","珊瑚宫心海","sangonomiyakokomi","神里绫华","kamisatoayaka"));
+        var assertions=new java.util.ArrayList<org.junit.jupiter.api.function.Executable>();
+        for(String name:List.of("冰","采集","草","风","火","矿物","雷","水","岩")) {
+            try(var stream=getClass().getResourceAsStream("/artifact-optimizer/nine/00-"+name+".txt")) {
+                assertNotNull(stream);String source=new String(stream.readAllBytes(),StandardCharsets.UTF_8);
+                var parsed=new OptimizationRotationCompiler(mapper).parse(source,aliases);
+                assertions.add(()->assertTrue(parsed.path("supported").asBoolean(),name+": "+parsed.path("issues")));
+                if(parsed.path("supported").asBoolean()) {
+                    assertEquals(source,parsed.path("program").path("source").asText());
+                    var directory=java.nio.file.Path.of("target","native-flow-fixtures");java.nio.file.Files.createDirectories(directory);
+                    mapper.writeValue(directory.resolve("00-"+name+".json").toFile(),parsed.path("program"));
+                }
+            }
+        }
+        assertAll(assertions);
+    }
     private final ObjectMapper mapper = new ObjectMapper();
+    @Test void extendedFlowRequiresTheMatchingEngineCapability() throws Exception {
+        var build=mapper.createObjectNode();build.putObject("nativeRotation").put("enabled",true).put("source","strategy(loop=battle)\n琴 dash(0.2)");
+        var catalog=mapper.createObjectNode();catalog.putArray("characters").addObject().put("key","jean").put("nativeName","琴");
+        var capability=catalog.putObject("capabilities").putObject("nativeFlow").put("schemaVersion","native-flow-v1");
+        var error=assertThrows(IllegalArgumentException.class,()->OptimizationNativeFlow.fromBuild(mapper,build,catalog,java.util.Set.of("jean")));
+        assertTrue(error.getMessage().contains("更新"));
+        capability.putArray("features").add("nine-strategies-v1");
+        assertNotNull(OptimizationNativeFlow.fromBuild(mapper,build,catalog,java.util.Set.of("jean")));
+    }
     static final Map<String,String> ALIASES = Map.of("钟离","zhongli","芙宁娜","furina","那维莱特","neuvillette","琴","jean");
     static String water() throws Exception {
         try(var stream=OptimizationNativeFlowTest.class.getResourceAsStream("/artifact-optimizer/native-water.txt")) {

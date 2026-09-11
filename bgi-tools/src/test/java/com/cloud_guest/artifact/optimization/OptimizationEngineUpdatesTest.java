@@ -10,6 +10,42 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class OptimizationEngineUpdatesTest {
+    @Test void checkUsesAdvertisedDefaultBranchAndDistinguishesNoPackage() throws Exception {
+        var mapper=new ObjectMapper();
+        var gateway=new GcsimGateway(mapper,null,"") {
+            @Override public com.fasterxml.jackson.databind.JsonNode catalog(){return mapper.createObjectNode().put("engineRevision","old");}
+        };
+        var updater=new OptimizationEngineUpdates(gateway,mapper) {
+            @Override protected com.fasterxml.jackson.databind.JsonNode fetchJson(String url) throws Exception {
+                if(url.endsWith("/genshinsim/gcsim"))return mapper.readTree("{\"default_branch\":\"main\"}");
+                if(url.endsWith("/commits/main"))return mapper.createObjectNode().put("sha","ab".repeat(20));
+                if(url.contains("/releases?"))return mapper.createArrayNode();
+                throw new IOException("wrong branch: "+url);
+            }
+        };
+        var result=updater.check();
+        assertEquals("ab".repeat(20),result.path("upstreamRevision").asText());
+        assertEquals("complete",result.path("checkStatus").asText());
+        assertTrue(result.path("packages").isEmpty());
+        assertEquals("old",result.path("active").path("engineRevision").asText());
+    }
+    @Test void offlineUpstreamStillReturnsLocalStatusAndPackageResults() throws Exception {
+        var mapper=new ObjectMapper();
+        var gateway=new GcsimGateway(mapper,null,"") {
+            @Override public com.fasterxml.jackson.databind.JsonNode catalog(){return mapper.createObjectNode().put("engineRevision","old");}
+        };
+        var updater=new OptimizationEngineUpdates(gateway,mapper) {
+            @Override protected com.fasterxml.jackson.databind.JsonNode fetchJson(String url) throws Exception {
+                if(url.contains("/releases?"))return mapper.createArrayNode();
+                throw new IOException("network unavailable");
+            }
+        };
+        var result=updater.check();
+        assertEquals("partial",result.path("checkStatus").asText());
+        assertFalse(result.path("upstreamError").asText().isBlank());
+        assertEquals("old",result.path("active").path("engineRevision").asText());
+        assertTrue(result.path("packages").isArray());
+    }
     @TempDir Path directory;
     private byte[] archive(Map<String,byte[]> files)throws Exception{var out=new ByteArrayOutputStream();try(var zip=new ZipOutputStream(out)){for(var entry:files.entrySet()){zip.putNextEntry(new ZipEntry(entry.getKey()));zip.write(entry.getValue());zip.closeEntry();}}return out.toByteArray();}
     @Test void badPackageCannotChangeTheActivePointer()throws Exception{
@@ -44,7 +80,7 @@ class OptimizationEngineUpdatesTest {
         var mapper=new ObjectMapper();byte[] binary=Files.readAllBytes(Path.of(executable));
         var source=new GcsimGateway(mapper,null,executable);var cap=source.execute("--capabilities",null,java.time.Duration.ofSeconds(20));
         String hash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(binary));
-        var manifest=mapper.createObjectNode().put("schemaVersion",1).put("engineRevision",cap.path("engineRevision").asText()).put("platform","windows").put("architecture","amd64").put("executable","gcsim-bridge.exe").put("sha256",hash).put("sdkVersion",cap.path("sdk").path("version").asText());
+        var manifest=mapper.createObjectNode().put("schemaVersion",1).put("engineRevision",cap.path("engineRevision").asText()).put("adapterVersion",cap.path("adapterVersion").asText()).put("platform","windows").put("architecture","amd64").put("executable","gcsim-bridge.exe").put("sha256",hash).put("sdkVersion",cap.path("sdk").path("version").asText());
         var gateway=new GcsimGateway(mapper,null,directory.resolve("gcsim-bridge.exe").toString());var updater=new OptimizationEngineUpdates(gateway,mapper);
         var active=updater.stageAndActivate(archive(Map.of("manifest.json",mapper.writeValueAsBytes(manifest),"gcsim-bridge.exe",binary)));
         assertEquals(cap.path("engineRevision").asText(),active.path("engineRevision").asText());

@@ -22,11 +22,13 @@ public class OptimizationRotationService {
         var scan=scans.findById(input.path("snapshotId").asText()).filter(s->s.uid().equals(uid)&&s.snapshot()!=null).orElseThrow(()->new IllegalArgumentException("扫描记录不存在"));
         var catalog=gateway.catalog();var selection=input.deepCopy().put("mode","balanced").put("budget",256);
         if(!selection.path("characters").isArray()||selection.path("characters").isEmpty())throw new IllegalArgumentException("请选择有完整装备的参选角色");
-        var compiled=new OptimizationCompiler(mapper,stats,catalog).compile(workspace,scan.snapshot(),selection);
+        var compiled=new OptimizationCompiler(mapper,stats,catalog).compileBuild(workspace,scan.snapshot(),selection,buildId);
+        OptimizationSceneSettings.requireRoundCountEngine(catalog);
         JsonNode scenario=null;for(JsonNode s:compiled.path("scenarios"))if(s.path("id").asText().equals(buildId))scenario=s;
         if(scenario==null)throw new IllegalArgumentException("本次选择没有引用该配队 Build");
         var memberKeys=new LinkedHashSet<String>();build.path("members").forEach(m->memberKeys.add(m.path("character").asText()));
         ObjectNode base=scenario.path("evaluation").deepCopy();
+        if(base.has("nativeFlow")&&!java.util.stream.StreamSupport.stream(catalog.path("capabilities").path("nativeFlow").path("features").spliterator(),false).anyMatch(f->f.asText().equals("structure-v1")))throw new IllegalArgumentException("当前引擎尚不支持结构优化与护盾复评，请更新配套引擎后重试");
         if(!base.has("nativeFlow")){
             String config=base.path("config").asText(),rotation=OptimizationLocalization.translateRotation(build.path("rotation").asText(),catalog,memberKeys);
             if(!config.endsWith(rotation))throw new IllegalStateException("循环模板身份不一致");
@@ -46,8 +48,8 @@ public class OptimizationRotationService {
         idsByOwner.fields().forEachRemaining(entry->{var pieces=equipment.putArray(entry.getKey());for(JsonNode id:entry.getValue()){JsonNode item=byId.get(id.asInt());if(item==null)throw new IllegalArgumentException("所选装备已不在该快照");ObjectNode piece=item.deepCopy();piece.remove(List.of("location","locked","fingerprint"));pieces.add(piece);}});
         var request=mapper.createObjectNode();request.set("base",base);request.set("actions",base.has("nativeFlow")?mapper.createArrayNode():input.path("actions").deepCopy());request.set("searchSeeds",compiled.path("searchSeeds"));request.set("validationSeeds",compiled.path("validationSeeds"));request.put("budget",input.path("rotationBudget").asInt(48));
         if(request.path("budget").asInt()<4||request.path("budget").asInt()>512)throw new IllegalArgumentException("循环候选预算须为 4 至 512");
-        int wall=input.path("wallTimeSeconds").asInt(120);var payload=mapper.createObjectNode();payload.set("rotation",request);payload.putObject("limits").put("wallTimeMs",wall*1000).put("memoryMiB",768).put("outputKiB",16384);
-        var meta=mapper.createObjectNode().put("kind","rotation").put("buildId",buildId).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("workspaceVersion",workspace.path("version").asLong()).put("engineRevision",catalog.path("engineRevision").asText());meta.set("request",request);meta.set("selection",input.deepCopy());return jobs.enqueue(uid,meta,payload,wall,"--rotation");
+        int wall=input.path("wallTimeSeconds").asInt(120);var payload=mapper.createObjectNode();payload.set("rotation",request);payload.putObject("limits").put("wallTimeMs",wall*1000).put("memoryMiB",768).put("outputKiB",GcsimGateway.outputBudgetKiB(request));
+        var meta=mapper.createObjectNode().put("kind","rotation").put("buildId",buildId).put("snapshotId",scan.id()).put("snapshotDigest",scan.snapshot().snapshotDigest()).put("workspaceVersion",workspace.path("version").asLong()).put("engineRevision",catalog.path("engineRevision").asText()).put("adapterVersion",catalog.path("adapterVersion").asText());meta.set("request",request);meta.set("selection",input.deepCopy());return jobs.enqueue(uid,meta,payload,wall,"--rotation");
     }
     public ObjectNode importNative(String uid,String buildId,String name)throws Exception{return strategies.read(name,mapping(uid,buildId));}
     public ObjectNode parseNative(String uid,String buildId,String source)throws Exception{return strategies.parseSource(source,mapping(uid,buildId));}
@@ -58,9 +60,12 @@ public class OptimizationRotationService {
         if(job.path("result").path("native").asBoolean()){
             String source=job.path("request").path("base").path("nativeFlow").path("source").asText();
             var changes=job.path("result").path("nativeChanges");if(changes.isMissingNode())changes=mapper.createArrayNode();
-            String script=new OptimizationNativeFlow(mapper,source,mapping(uid,job.path("buildId").asText()).aliases()).referenceSource(changes);
+            var edits=job.path("result").path("nativeEdits");if(edits.isMissingNode())edits=mapper.createArrayNode();
+            var names=mapping(uid,job.path("buildId").asText());
+            String script=new OptimizationNativeFlow(mapper,source,names.aliases()).referenceSource(changes,edits,names.names());
             var response=mapper.createObjectNode().put("script",script).put("baseSource",source).put("preset","original").put("simulationOnly",true).put("requiresReview",true).put("kind","native_reference")
-                .put("note","带假设试算参考：保留原宏和全部护盾/补盾/降级/预算，只替换列出的等待或普攻秒数。不是实机核验通过的执行策略；请自行复核，不会覆盖原文件或启动战斗。");
+                .put("note","结构优化试算参考：允许列出的重排、可选动作删除和等价分支化简，导出时重新核验角色绑定与保护依赖。保留输入宏和终止底线；不是实机核验通过的执行策略，不会覆盖原文件或启动战斗。");
+            response.set("structuralChanges",edits);
             response.set("changes",changes);response.set("assumptions",report.path("assumptions"));return response;
         }
         if(!report.path("assumptions").isEmpty()||report.path("support").asText().equals("trial"))throw new IllegalStateException("该循环依赖手动 Buff、外部能量或不完整机制，目前只可模拟参考，不能当作已核验的实机执行策略");

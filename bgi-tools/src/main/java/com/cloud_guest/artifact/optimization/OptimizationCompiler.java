@@ -15,6 +15,22 @@ public class OptimizationCompiler {
     private final JsonNode catalog;
     public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats){this(mapper,mainStats,null);}
     public OptimizationCompiler(ObjectMapper mapper,MainStats mainStats,JsonNode catalog){this.mapper=mapper;this.mainStats=mainStats;this.catalog=catalog;}
+    /** A rotation targets one explicit Build, not every Build linked to its members. */
+    public ObjectNode compileBuild(JsonNode workspace,ArtifactSnapshot snapshot,JsonNode selection,String buildId) {
+        ObjectNode scoped=workspace.deepCopy();JsonNode chosen=null;
+        for(JsonNode build:workspace.path("builds"))if(build.path("id").asText().equals(buildId))chosen=build;
+        if(chosen==null)throw new IllegalArgumentException("Build 不存在");
+        var members=new HashSet<String>();chosen.path("members").forEach(m->members.add(m.path("character").asText()));
+        var selected=new HashSet<String>();selection.path("characters").forEach(c->selected.add(c.asText()));
+        if(!members.containsAll(selected))throw new IllegalArgumentException("循环优化只能选择当前Build内的角色");
+        scoped.putArray("builds").add(chosen.deepCopy());
+        for(JsonNode profile:scoped.path("characters"))if(selected.contains(profile.path("key").asText())) {
+            JsonNode binding=null;for(JsonNode ref:profile.path("builds"))if(ref.path("id").asText().equals(buildId))binding=ref.deepCopy();
+            var bindings=((ObjectNode)profile).putArray("builds");
+            if(binding!=null)bindings.add(binding);else bindings.addObject().put("id",buildId).put("weight",1);
+        }
+        return compile(scoped,snapshot,selection);
+    }
     public ObjectNode compile(JsonNode workspace,ArtifactSnapshot snapshot,JsonNode selection) {
         var validationIssues=OptimizationInputValidation.validate(mapper,workspace,selection,catalog,snapshot);
         if(!validationIssues.isEmpty())throw new OptimizationValidationException(validationIssues);
@@ -74,10 +90,12 @@ public class OptimizationCompiler {
             if(!b.path("members").isArray()||b.path("members").isEmpty()||b.path("members").size()>4)throw new IllegalArgumentException("每个配队 Build 需要 1 至 4 名队员");
             var config=new StringBuilder(OptimizationSceneSettings.compile(mapper,b));
             var memberNames=new HashSet<String>();
+            var memberWeapons=new HashMap<String,String>();
             for(JsonNode member:b.path("members")) {
                 String key=member.path("character").asText();
                 if(!memberNames.add(key))throw new IllegalArgumentException("队伍内角色重复");
                 JsonNode profile=member.path("profile").isObject()?member.path("profile"):required(profiles,key,"队员档案");
+                memberWeapons.put(key,profile.path("weapon").asText());
                 config.append(personalConfig(key,profile));
                 if(selected.contains(key))participants.add(key);
                 else if(member.path("kind").asText().equals("real_fixed")) {
@@ -101,14 +119,19 @@ public class OptimizationCompiler {
                 prelude=OptimizationLocalization.translateRotation(prelude,catalog,memberNames);
                 OptimizationScriptParts.requireExecutableOnly(prelude,id,"scriptPrelude");config.append(prelude).append('\n');
             }else if(!prelude.isBlank())evaluation.putArray("assumptions").add("auxiliary_logic_disabled");
-            boolean autoRounds=nativeFlow!=null||b.path("roundPolicy").path("mode").asText().equals("auto");
+            boolean autoRounds=true;
+            evaluation.put("roundCount",OptimizationSceneSettings.roundCount(b));
             if(autoRounds)evaluation.put("autoRounds",true)
                 .put("rotationLineOffset",(int)config.toString().chars().filter(c->c=='\n').count())
                 .put("mainLoopIndex",OptimizationSceneSettings.integer(b.path("roundPolicy"),"loopIndex",0,64,0,id,"rounds"))
                 .put("roundWarmup",OptimizationSceneSettings.integer(b.path("roundPolicy"),"warmup",0,63,0,id,"rounds"));
             config.append(translated);
+            String effectiveConfig=config.toString();
+            if(nativeFlow==null){
+                OptimizationScriptParts.requireCompatibleWeaponWaits(effectiveConfig,id,memberWeapons);
+            }
             if(nativeFlow!=null){evaluation.set("nativeFlow",nativeFlow);evaluation.put("mainLoopIndex",0);}
-            evaluation.put("config",config.toString()).put("allowPartial",b.path("allowPartial").asBoolean(false));
+            evaluation.put("config",effectiveConfig).put("allowPartial",b.path("allowPartial").asBoolean(false));
             for(String field:List.of("rounds","constraints"))if(b.path(field).isArray()&&(!field.equals("rounds")||!autoRounds))evaluation.set(field,b.get(field).deepCopy());
             var buffs=evaluation.putArray("buffs");for(JsonNode buff:b.path("buffs")){if(!buff.isObject())throw new IllegalArgumentException("Buff 格式无效");if(buff.path("enabled").asBoolean(true)){ObjectNode value=buff.deepCopy();if(catalog!=null&&value.path("relationship").asText().equals("additional")&&!value.path("reviewedEngineRevision").asText().equals(catalog.path("engineRevision").asText()))value.put("relationship","pending_review");value.remove(List.of("enabled","reviewedEngineRevision"));buffs.add(value);}}
         }

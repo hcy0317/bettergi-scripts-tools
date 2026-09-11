@@ -1,12 +1,16 @@
 <script setup>
-import {onBeforeUnmount,ref,watch} from 'vue'
+import {computed,onBeforeUnmount,ref,watch} from 'vue'
 import MemberCard from './OptimizerMemberCard.vue'
 import SceneEditor from './OptimizerSceneEditor.vue'
 import CommunityPanel from './OptimizerCommunityPanel.vue'
 import NativeSource from './OptimizerNativeSource.vue'
+import ScriptEditor from './OptimizerScriptEditor.vue'
+import {validateBuildScripts} from '@/features/artifact-optimizer/script-diagnostics.js'
 import {outlineScript} from '@/api/artifact/artifactOptimizer.js'
 import {characterLabel,profileLabel,weaponLabel,statLabel,elementLabels,buildLabel} from '@/features/artifact-optimizer/localization.js'
-const props=defineProps({uid:{type:String,default:''},build:{type:Object,required:true},characters:{type:Array,default:()=>[]},catalog:{type:Object,default:()=>({})},templates:{type:Array,default:()=>[]},selected:{type:Array,default:()=>[]}})
+const props=defineProps({uid:{type:String,default:''},build:{type:Object,required:true},characters:{type:Array,default:()=>[]},catalog:{type:Object,default:()=>({})},templates:{type:Array,default:()=>[]},selected:{type:Array,default:()=>[]},issues:{type:Array,default:()=>[]}})
+const scriptProblems=computed(()=>[...validateBuildScripts(props.build,props.characters,props.catalog),...props.issues.filter(issue=>issue.buildId===props.build.id)])
+const preludeProblems=computed(()=>scriptProblems.value.filter(issue=>issue.field==='scriptPrelude'))
 const cName=key=>profileLabel(props.catalog,props.characters.find(c=>c.key===key)||{key})
 const emit=defineEmits(['remove','save-buff-template','members-change','select-member','use-team','sampling'])
 const loopChoices=ref([]),outlineError=ref('');let outlineTimer=null,outlineController=null,outlineGeneration=0
@@ -32,12 +36,12 @@ function anchorChanged(b){delete b.sourceCharacter;delete b.action;if(b.anchor==
     <div class="team-grid"><MemberCard v-for="member in build.members" :key="member.character" :member="member" :profile="characters.find(c=>c.key===member.character)||{key:member.character}" :catalog="catalog" :selected="selected.includes(member.character)" @select="value=>emit('select-member',member.character,value)" @remove="emit('members-change',build.members.filter(m=>m.character!==member.character).map(m=>m.character))"/></div>
     </section><section class="rotation-block"><div class="block-heading"><h3>循环脚本</h3><span class="section-meta">自动识别真实轮次</span></div><p class="hint">动作沿用 gcsim 语法，角色名支持中文（例如安柏、雷电将军）；编译时自动转为引擎标识，不改变原文。个人条件在上方编辑，此处不要重复声明 char、add stats 或敌人；模拟脚本不直接变成游戏输入。</p>
     <CommunityPanel :uid="uid" :build="build" :catalog="catalog" @sampling="value=>emit('sampling',value)"/>
-    <div id="optimizer-rotation"></div><NativeSource :build="build"/>
+    <NativeSource :build="build"/>
     <details v-if="build.nativeRotation?.enabled"><summary>保留的gcsim参考（当前未启用）</summary><el-input :model-value="build.rotation" type="textarea" :rows="6" readonly aria-label="保留的gcsim参考"/></details>
-    <el-input v-else v-model="build.rotation" type="textarea" :autosize="{minRows:8,maxRows:24}" spellcheck="false" aria-label="gcsim 循环脚本" placeholder="active 安柏;&#10;while 1 {&#10;  安柏 skill;&#10;  安柏 attack:3;&#10;}" class="script-input"/>
-    <el-collapse v-if="build.scriptPrelude" class="details"><el-collapse-item title="辅助脚本逻辑（导入时保留，不是角色配置）" name="prelude"><div id="optimizer-scriptPrelude"></div><el-switch v-model="build.scriptPreludeEnabled" active-text="保留辅助逻辑"/><p class="hint">这里可能包含自动拾晶等会影响计算的函数。禁用会改变模拟机制，结果将标记为试算。</p><el-input v-model="build.scriptPrelude" type="textarea" :rows="8" aria-label="gcsim 辅助逻辑"/></el-collapse-item></el-collapse>
+    <ScriptEditor v-else id="optimizer-rotation" v-model="build.rotation" field="rotation" label="gcsim 循环脚本" :issues="scriptProblems"/>
+    <details v-if="build.scriptPrelude" class="details" :open="preludeProblems.length>0"><summary>辅助脚本逻辑（导入时保留，不是角色配置）</summary><el-switch v-model="build.scriptPreludeEnabled" active-text="保留辅助逻辑"/><p class="hint">这里可能包含自动拾晶等会影响计算的函数。禁用会改变模拟机制，结果将标记为试算。</p><ScriptEditor id="optimizer-scriptPrelude" v-model="build.scriptPrelude" field="scriptPrelude" label="gcsim 辅助逻辑" :issues="scriptProblems"/></details>
     </section>
-    <details class="settings-disclosure"><summary><div><strong>场景与掉球</strong><span>{{ build.stopMode==='target_or_script'?'脚本/血量结束':`固定 ${build.duration} 秒` }} · {{ build.targets?.length||1 }} 个敌人{{ build.energy?.enabled?' · 已配置外部掉球':'' }}</span></div><span class="when-closed">展开设置</span><span class="when-open">收起设置</span></summary><SceneEditor :max-trajectory-seconds="catalog.capabilities?.maxTrajectorySeconds||0" :build="build" :loop-choices="loopChoices" :outline-error="outlineError"/></details>
+    <details class="settings-disclosure"><summary><div><strong>场景与掉球</strong><span>{{ build.roundCount }} 轮后结束 · {{ build.targets?.length||1 }} 个敌人{{ build.energy?.enabled?' · 已配置外部掉球':'' }}</span></div><span class="when-closed">展开设置</span><span class="when-open">收起设置</span></summary><SceneEditor :max-trajectory-seconds="catalog.capabilities?.maxTrajectorySeconds||0" :build="build" :loop-choices="loopChoices" :outline-error="outlineError"/></details>
     <el-collapse class="details"><el-collapse-item title="每轮硬约束" name="rounds">
       <el-button @click="addConstraint">添加每轮硬约束</el-button>
       <div v-for="(constraint,i) in build.constraints" :key="constraint.id" class="constraint-row"><el-select v-model="constraint.character" aria-label="约束角色"><el-option v-for="m in build.members" :key="m.character" :value="m.character" :label="cName(m.character)"/></el-select><el-select v-model="constraint.kind" aria-label="约束类型" @change="kind=>kind!=='min_actions'&&(delete constraint.action)"><el-option value="min_actions" label="最少成功动作次数"/><el-option value="max_failed_wait_frames" label="最多失败等待帧数"/><el-option value="min_effective_healing" label="最少有效治疗"/></el-select><el-select v-if="constraint.kind==='min_actions'" v-model="constraint.action" aria-label="约束动作"><el-option value="burst" label="元素爆发 Q"/><el-option value="skill" label="元素战技 E"/><el-option value="attack" label="普通攻击"/></el-select><el-input-number v-model="constraint.threshold" :min="0" aria-label="约束阈值"/><el-button text @click="build.constraints.splice(i,1)">删除</el-button></div>

@@ -24,6 +24,19 @@ class OptimizationOwnerResolverTest {
         assertThrows(IllegalArgumentException.class,()->resolver.resolve("未核实穿戴者"));
     }
 
+    @Test void nativeOnlyOwnerRetainsIdentityWithoutBecomingASimulatedCharacter() throws Exception {
+        var m=new ObjectMapper();
+        var catalog=m.readTree("""
+            {"characters":[{"id":"10000021","key":"amber","inventoryAliases":["安柏"]}],
+             "inventoryCharacters":[{"id":"10000133","key":"marionette","inventoryAliases":["桑多涅","Sandrone","Marionette"]}]}
+            """);
+        var resolver=new OptimizationOwnerResolver(catalog,m.readTree("{\"characters\":[]}"),Set.of("amber"));
+        assertEquals("marionette",resolver.resolve("桑多涅"));
+        assertEquals(resolver.resolve("桑多涅"),resolver.resolve("Sandrone"));
+        assertEquals("marionette",resolver.representative("marionette"));
+        assertEquals(1,catalog.path("characters").size());
+        assertThrows(IllegalArgumentException.class,()->resolver.resolve("无法确认的名字"));
+    }
     @Test void chineseOcrOwnersAndRenamedCharactersResolveWithoutUsingDisplayNames() throws Exception {
         var m=new ObjectMapper();
         var catalog=m.readTree("{\"characters\":[{\"id\":21,\"key\":\"amber\",\"inventoryAliases\":[\"安柏\"]},{\"id\":75,\"key\":\"wanderer\",\"inventoryAliases\":[\"流浪者\"]}]}");
