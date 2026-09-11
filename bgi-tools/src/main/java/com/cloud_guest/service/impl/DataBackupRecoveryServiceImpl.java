@@ -1,6 +1,6 @@
 package com.cloud_guest.service.impl;
 
-import cn.hutool.core.collection.CollUtil;
+import com.cloud_guest.entitys.records.WsProxyAccess;
 import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
@@ -10,8 +10,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cloud_guest.constants.KeyConstants;
+import com.cloud_guest.entitys.ClassConvert;
+import com.cloud_guest.entitys.common.enums.ActionType;
 import com.cloud_guest.entitys.domain.UidInfo;
-import com.cloud_guest.entitys.domain.WsProxyAccess;
 import com.cloud_guest.entitys.common.auto_plan.AutoPlan;
 import com.cloud_guest.entitys.pojo.*;
 import com.cloud_guest.exception.exceptions.GlobalException;
@@ -262,6 +263,8 @@ public class DataBackupRecoveryServiceImpl extends ServiceImpl<BackupMapper, Bac
     @Resource
     private UidService uidService;
     @Resource
+    private  UidTeamService uidTeamService;
+    @Resource
     private AutoPlanService autoPlanService;
     @Resource
     private DbKVService dbKVService;
@@ -346,6 +349,13 @@ public class DataBackupRecoveryServiceImpl extends ServiceImpl<BackupMapper, Bac
             autoPlanUidGlobalService.saveOrUpdateBatch((List) list);
         });
 
+
+        recoveryHandlers.put(uidTeamService.getSuffix(), json -> {
+            List<?> list = JSONUtil.toList(json, uidTeamService.getEntityClass());
+            uidTeamService.remove(Wrappers.lambdaQuery(uidTeamService.getEntityClass()));
+            uidTeamService.saveOrUpdateBatch((List) list);
+        });
+
         Consumer<String> dbConsumer = json -> {
             List<DbKV> list = JSONUtil.toList(json, dbKVService.getEntityClass())
                     .stream().map(item -> {
@@ -386,6 +396,7 @@ public class DataBackupRecoveryServiceImpl extends ServiceImpl<BackupMapper, Bac
         jsonObject.put(encrypt_salt, JSONUtil.toJsonStr(new CacheJson(KeyConstants.encrypt_salt, cacheService.findValueByKey(KeyConstants.encrypt_salt))));
 
         jsonObject.put(uidService.getSuffix(), JSONUtil.toJsonStr(uidService.list()));
+        jsonObject.put(uidTeamService.getSuffix(), JSONUtil.toJsonStr(uidTeamService.list()));
         jsonObject.put(wsProxyService.getSuffix(), JSONUtil.toJsonStr(wsProxyService.list()));
         jsonObject.put(autoPlanService.getSuffix(), JSONUtil.toJsonStr(autoPlanService.list()));
         jsonObject.put(dbKVService.getSuffix(), JSONUtil.toJsonStr(dbKVService.list()));
@@ -509,12 +520,11 @@ public class DataBackupRecoveryServiceImpl extends ServiceImpl<BackupMapper, Bac
         // 从 key 中提取 uid（例如 AUTO_PLAN:UID:125607110）
         String uid = key.substring("AUTO_PLAN:UID:".length());
         List<AutoPlanConfig> planList = JSONUtil.toList(dataJson, AutoPlan.class).stream()
-                .map(AutoPlan::toConfig)
-                .map(o -> {
-                    o.setUid(uid);
-                    return o;
-                })
-                .toList();
+                .map(info->{
+                    AutoPlanConfig convert = ClassConvert.convert(AutoPlan.class, AutoPlanConfig.class, info);
+                    convert.setUid(uid);
+                    return convert;
+                }).toList();
         // 根据实际业务调用保存方法（此处假定有 saveByUid 方法）
         autoPlanService.saveOrUpdateBatch(planList);
         log.info("恢复自动计划成功，uid: {}", uid);
@@ -538,12 +548,30 @@ public class DataBackupRecoveryServiceImpl extends ServiceImpl<BackupMapper, Bac
         log.info("恢复国家配置成功");
     }
 
+    static final String WS_PROXY_CONFIG_KEY = "WS_PROXY_ACCESS:UID:";
+    static final String MAPPING_CONFIG_KEY = "MAPPING:UID:";
+    static {
+        ClassConvert.register(WS_PROXY_CONFIG_KEY, String.class, WsProxyAccess.class, str->{
+            JSONObject bean = JSONUtil.toBean(str, JSONObject.class);
+            ActionType actionType = bean.get("action", ActionType.class);
+            String url = bean.get("url", String.class);
+            String proxyUrl = bean.get("proxyUrl", String.class);
+            String token = bean.get("token", String.class);
+            String atList = bean.get("atList", String.class);
+            String userId = bean.get("userId", String.class);
+            String groupId = bean.get("groupId", String.class);
+            String uid = bean.get("uid", String.class);
+            return new WsProxyAccess(actionType, url, proxyUrl, token, atList, userId, groupId, uid);
+        });
+    }
+
     /**
      * 处理 WS_PROXY_ACCESS:UID:xxx 数据
      */
     public void handleWsProxyConfig(String key, String dataJson) {
-        String uid = key.substring("WS_PROXY_ACCESS:UID:".length());
-        WsProxyAccessConfig access = JSONUtil.toBean(dataJson, WsProxyAccess.class).toConfig();
+        String uid = key.substring(WS_PROXY_CONFIG_KEY.length());
+        WsProxyAccess convert = ClassConvert.convert(WS_PROXY_CONFIG_KEY, String.class, WsProxyAccess.class, dataJson);
+        WsProxyAccessConfig access = ClassConvert.convert(WsProxyAccess.class, WsProxyAccessConfig.class, convert);
         wsProxyService.saveOrUpdate(access);
         log.info("恢复 WS 代理配置成功，uid: {}", uid);
     }
@@ -552,9 +580,12 @@ public class DataBackupRecoveryServiceImpl extends ServiceImpl<BackupMapper, Bac
      * 处理 MAPPING:UID:xxx 数据（用户映射）
      */
     public void handleMappingConfig(String key, String dataJson) {
-        String uid = key.substring("MAPPING:UID:".length());
+
+        String uid = key.substring(MAPPING_CONFIG_KEY.length());
         // 若已有 MappingService 则替换为对应服务
-        UidInfoConfig mapping = JSONUtil.toBean(dataJson, UidInfo.class).toConfig();
+        UidInfo info = JSONUtil.toBean(dataJson, UidInfo.class);
+        UidInfoConfig mapping = ClassConvert.convert(UidInfo.class, UidInfoConfig.class, info);
+
         uidService.saveOrUpdate(mapping); // 假设 uidService 支持该操作
         log.info("恢复用户映射成功，uid: {}", uid);
     }

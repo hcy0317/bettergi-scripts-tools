@@ -1,7 +1,15 @@
 <script setup>
-import {onMounted, reactive, ref} from "vue"
+import {computed, onMounted, reactive, ref} from "vue"
 import {ElMessage, ElMessageBox} from "element-plus"
-import {getUidMappings, saveUid, removeUidList, getUid, setDefaultUid} from "@api/uid/uid.js"
+import {
+  getPageUid,
+  saveUid,
+  removeUidList,
+  getUid,
+  getTeamInfoPage,
+  deleteTeamInfoIds,
+  updateTeamInfo, getTeamInfo, setDefaultUid
+} from "@api/uid/uid.js"
 import {goBack, toHomePage} from "@api/web/web.js"
 import router from "@router/router.js";
 import {CopyDocument} from '@element-plus/icons-vue'
@@ -27,6 +35,12 @@ const formData = reactive({
 
 // 表格数据
 const tableData = ref([])
+const tablePage = ref({
+  pageNumber: 1,// 当前页码
+  pageSize: 10,// 每页大小
+  pages: 1,// 总页数
+  total: 0// 总记录数
+})
 const loading = ref(false)
 const multipleSelection = ref(new Set())
 
@@ -46,8 +60,13 @@ const loadData = async () => {
   loading.value = true
   try {
     Object.keys(passwordMap).forEach(key => delete passwordMap[key]);
-    const response = await getUidMappings()
-    tableData.value = response || []
+    const page = {pageNumber: tablePage.value.pageNumber, pageSize: tablePage.value.pageSize}
+    const {list, total, pages, pageSize, pageNumber} = await getPageUid(page)
+    tableData.value = list || []
+    // tablePage.value.pageSize = pageSize
+    // tablePage.value.pageNumber = pageNumber
+    tablePage.value.total = total
+    tablePage.value.pages = pages
   } catch (error) {
     console.error('获取 UID 列表失败:', error)
     ElMessage.error('获取 UID 列表失败')
@@ -55,7 +74,12 @@ const loadData = async () => {
     loading.value = false
   }
 }
-
+const handleSizeChange = async () => {
+  await loadData()
+}
+const handleCurrentChange = async () => {
+  await loadData()
+}
 // 打开新增对话框
 const handleAdd = () => {
   formData.edit = false
@@ -224,6 +248,204 @@ const handleFetchPassword = async (row) => {
   }
 }
 
+//==========================================================
+const teamInfoDefault = {
+  search: {
+    id: undefined,
+    uid: undefined,
+    type: undefined,
+  },// 搜索条件
+  showDialog: {
+    info: false,// 队伍信息对话框是否显示
+    add: false,// 新增对话框是否显示
+    edit: false,// 编辑对话框是否显示
+  },
+  info: {id: undefined, uid: undefined, type: undefined, team: undefined},// 队伍信息 新增/编辑
+  list: [],// 队伍信息列表
+  pageNumber: 1,// 当前页码
+  pageSize: 10,// 每页大小
+  pages: 1,// 总页数
+  total: 0// 总记录数
+}
+const teamInfo = ref({...teamInfoDefault})
+const teamInfoFormRef = ref()
+const openEditTeamInfo = async (edit, info = {id: undefined, uid: undefined, type: undefined, team: undefined}) => {
+  teamInfo.value.showDialog.edit = edit
+  teamInfo.value.showDialog.add = !edit
+  teamInfo.value.info = {...info}
+  if (!teamInfo.value.info.uid){
+    teamInfo.value.info.uid = teamInfo.value.search.uid
+  }
+}
+
+const closeEditTeamInfo = async () => {
+  teamInfo.value.showDialog.edit = false
+  teamInfo.value.showDialog.add = false
+  teamInfo.value.info = {...teamInfoDefault.info}
+  await loadTeamInfoList()
+}
+
+const openDialogTeamInfo = async (uid) => {
+  teamInfo.value.showDialog.info = true
+  // 仅当 uid 是字符串时才赋值，避免事件对象或其他类型误入
+  if (typeof uid === 'string' && uid.trim() !== '') {
+    teamInfo.value.search.uid = uid
+    teamInfo.value.info.uid = uid
+  } else {
+    teamInfo.value.search.uid = undefined
+    teamInfo.value.info.uid = undefined
+  }
+  await loadTeamInfoList()
+}
+
+const closeDialogTeamInfo = async () => {
+  teamInfo.value = {...teamInfoDefault}
+}
+
+const loadTeamInfoList = async () => {
+  const search = {...teamInfo.value.search}
+
+  console.log('search:', JSON.stringify(search))
+  const page = {pageNumber: teamInfo.value.pageNumber, pageSize: teamInfo.value.pageSize}
+  const {list, pageNumber, pageSize, total, pages} = await getTeamInfoPage(search, page)
+  teamInfo.value.list = list
+  // teamInfo.value.pageNumber = pageNumber
+  // teamInfo.value.pageSize = pageSize
+  teamInfo.value.total = total
+  teamInfo.value.pages = pages
+}
+// 控制新增/编辑对话框显示的计算属性
+const teamInfoEditVisible = computed({
+  get: () => teamInfo.value.showDialog.info && (teamInfo.value.showDialog.add || teamInfo.value.showDialog.edit),
+  set: (val) => {
+    if (!val) {
+      teamInfo.value.showDialog.add = false
+      teamInfo.value.showDialog.edit = false
+    }
+  }
+})
+// 队伍信息表单验证规则
+const teamInfoRules = {
+  uid: [{required: true, message: '请输入 UID', trigger: 'blur'}],
+  type: [{required: true, message: '请输入类型', trigger: 'blur'}],
+  team: [{required: true, message: '请输入队伍', trigger: 'blur'}]
+}
+// 重置队伍信息搜索条件并重新加载
+const resetTeamInfoSearch = () => {
+  teamInfo.value.search = {id: undefined, uid: undefined, type: undefined}
+  loadTeamInfoList()
+}
+
+// 分页事件处理
+const handleTeamInfoSizeChange = async () => {
+  // teamInfo.value.pageNumber = 1
+  await loadTeamInfoList()
+}
+const handleTeamInfoCurrentChange = async () => {
+  await loadTeamInfoList()
+}
+
+/**
+ * 校验 uid + type 组合是否重复
+ * 返回 true 代表可继续提交
+ */
+const checkTeamInfoUnique = async () => {
+  const {uid: currentUid, type: currentType, id: currentId} = teamInfo.value.info
+  console.log('checkTeamInfoUnique:', {currentUid, currentType, currentId})
+  // 缺少 uid 或 type 时无法调用接口，交由表单必填校验处理
+  if (!currentUid || !currentType) return true
+
+  try {
+    // 调用后端接口查询相同 uid + type 的数据
+    const res = await getTeamInfo({uid: currentUid, type: currentType})
+    if (!res) return true
+
+    const {id, uid, type} = res
+    console.log('TeamInfo:', {id, uid, type})
+    if (currentId) {
+      //编辑场景
+      return !(currentId !== id &&uid === currentUid && type === currentType)
+    } else {
+      // 新增场景：已经存在记录说明重复
+      return !(uid === currentUid && type === currentType)
+    }
+  } catch (error) {
+    // 查询失败时放行，最终交给后端错误兜底
+    console.error('队伍信息唯一性校验失败:', error)
+    return true
+  }
+}
+
+// 提交新增/编辑队伍信息
+const handleSubmitTeamInfo = async () => {
+  // 先做表单校验
+  try {
+    await teamInfoFormRef.value.validate()
+  } catch {
+    return
+  }
+
+  // 再走后端唯一性校验
+  if (!(await checkTeamInfoUnique())) {
+    ElMessage.warning('UID 与类型的组合已存在，请修改后再提交')
+    return
+  }
+
+  try {
+    const isEdit = teamInfo.value.showDialog.edit
+    await ElMessageBox.confirm(`确定要${isEdit ? '修改' : '新增'}该队伍信息吗？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    let info = {...teamInfo.value.info}
+    info = await updateTeamInfo(info)
+    teamInfo.value.info = {...info}
+    ElMessage.success(`${isEdit ? '修改' : '新增'}成功`)
+    await closeEditTeamInfo()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('操作失败:', error)
+      ElMessage.error('操作失败')
+    }
+  }
+}
+
+// 删除队伍信息
+const handleDeleteTeamInfo = async (all=false,ids=[]) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除该队伍信息吗？`, '警告', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    if (all) {
+      ids=[...Array.from(selectedTeamRows.value).map(row => row.id)]
+    }
+    await deleteTeamInfoIds(ids)
+    await handleClearSelectionTeamInfo()
+    ElMessage.success('删除成功')
+    await loadTeamInfoList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+const selectedTeamRows = ref(new Set());
+const teamInfoTableRef = ref()
+// 表格选中变化回调
+const handleSelectionChangeTeamInfo = (selection) => {
+  selectedTeamRows.value = new Set(selection)
+}
+const handleClearSelectionTeamInfo   = async () => {
+  selectedTeamRows.value.clear()
+  // 同步清除表格上的勾选高亮
+  teamInfoTableRef.value?.clearSelection()
+}
+//==========================================================
+
 // 复制密码
 const copyPassword = async (uid) => {
   const pwd = passwordMap[uid]
@@ -247,6 +469,7 @@ const goToBack = async () => {
 onMounted(() => {
   loadData()
 })
+
 </script>
 
 <template>
@@ -271,9 +494,14 @@ onMounted(() => {
             <span class="button-icon" :class="{ 'rotating': loading }">↻</span>
             <span class="button-text">刷新</span>
           </el-button>
+          <el-button type="primary" @click="openDialogTeamInfo" class="action-button">
+            <span class="button-icon">🔍</span>
+            <span class="button-text">查看绑定队伍</span>
+          </el-button>
         </div>
 
         <div class="manager-context">
+          <!-- 表格容器：flex:1 占剩余高度 -->
           <div class="table-container" v-if="tableData.length > 0">
             <el-table
                 v-loading="loading"
@@ -318,8 +546,21 @@ onMounted(() => {
                   </el-button>
                 </template>
               </el-table-column>
+              <el-table-column label="绑定队伍" fixed="right">
+                <template #default="{ row }">
+                <el-button
+                    type="primary"
+                    size="small"
+                    @click="openDialogTeamInfo(row?.uid)"
+                    class="table-button"
+                >
+                  查看信息
+                </el-button>
+                </template>
+              </el-table-column>
               <el-table-column label="操作" fixed="right">
                 <template #default="{ row }">
+
                   <el-button
                       v-if="!row.defaultUid"
                       size="small"
@@ -348,14 +589,28 @@ onMounted(() => {
               </el-table-column>
             </el-table>
           </div>
-
+          <!-- 空提示：flex:1 垂直居中 -->
           <div class="empty-tip" v-else-if="!loading && tableData.length === 0">
             <div class="empty-icon">📭</div>
             <p class="empty-text">暂无 UID 映射数据</p>
             <el-button type="primary" @click="handleAdd">立即添加</el-button>
           </div>
+          <!-- 分页：flex-shrink:0 固定底部 -->
+          <div class="pagination-wrap">
+            <!-- 分页 -->
+            <el-pagination
+                style="margin-top: 15px; justify-content: flex-end;"
+                v-model:current-page="tablePage.pageNumber"
+                v-model:page-size="tablePage.pageSize"
+                :total="tablePage.total"
+                :page-sizes="[10, 20, 50, 100]"
+                append-size-to="#app"
+                layout="total, sizes, prev, pager, next, jumper"
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+            />
+          </div>
         </div>
-
       </div>
     </div>
 
@@ -440,6 +695,122 @@ onMounted(() => {
       </template>
     </el-dialog>
 
+
+    <!-- 队伍信息列表对话框 -->
+    <el-dialog
+        class="team-info"
+        v-model="teamInfo.showDialog.info"
+        title="队伍信息"
+        width="80%" style="height: 80vh"
+        :close-on-click-modal="closeDialogTeamInfo"
+    >
+      <div class="team-info-dialog">
+        <!-- 搜索区域 -->
+        <el-form :inline="true" :model="teamInfo.search" class="team-info-search">
+          <el-form-item label="UID">
+            <el-input
+                v-model="teamInfo.search.uid"
+                placeholder="请输入 UID"
+                clearable
+                style="width: 180px"
+            />
+          </el-form-item>
+          <el-form-item label="类型">
+            <el-input
+                v-model="teamInfo.search.type"
+                placeholder="请输入类型"
+                clearable
+                style="width: 180px"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" class="action-button" @click="loadTeamInfoList">搜索</el-button>
+            <el-button class="action-button" @click="resetTeamInfoSearch">重置</el-button>
+            <el-button  class="action-button" @click="openEditTeamInfo(false)">新增</el-button>
+            <el-button
+                type="danger"
+                :disabled="selectedTeamRows.size === 0"
+                @click="handleDeleteTeamInfo(true)"
+                class="action-button"
+            >
+             批量删除
+            </el-button>
+          </el-form-item>
+        </el-form>
+        <!--表格容器 flex:1 吃掉中间全部剩余高度 -->
+        <div class="team-info-table-wrap">
+        <!-- 队伍信息表格 -->
+        <el-table :data="teamInfo.list" v-loading="loading" border
+                  ref="teamInfoTableRef"
+                  @selection-change="handleSelectionChangeTeamInfo"
+        >
+          <!-- 多选框列 -->
+          <el-table-column type="selection" width="55"/>
+          <el-table-column prop="id" label="ID" width="80"/>
+          <el-table-column prop="uid" label="UID" min-width="120"/>
+          <el-table-column prop="type" label="分组类型" min-width="100"/>
+          <el-table-column prop="team" label="队伍" min-width="150"/>
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" @click="openEditTeamInfo(true, row)">
+                编辑
+              </el-button>
+              <el-button type="danger" size="small" @click="handleDeleteTeamInfo(false,[row.id])">
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        </div>
+        <!-- 分页：固定在容器底部，不会跟着表格滚动 -->
+        <div class="team-info-pagination-wrap">
+          <el-pagination
+              v-model:current-page="teamInfo.pageNumber"
+              v-model:page-size="teamInfo.pageSize"
+              :total="teamInfo.total"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="handleTeamInfoSizeChange"
+              @current-change="handleTeamInfoCurrentChange"
+          />
+        </div>
+      </div>
+
+    </el-dialog>
+
+    <!-- 新增/编辑队伍信息对话框 -->
+    <el-dialog
+        v-model="teamInfoEditVisible"
+        :title="teamInfo.showDialog.edit ? '编辑队伍信息' : '新增队伍信息'"
+        width="500px"
+        :close-on-click-modal="false"
+        @close="closeEditTeamInfo"
+    >
+      <el-form
+          :model="teamInfo.info"
+          ref="teamInfoFormRef"
+          :rules="teamInfoRules"
+          label-width="80px"
+      >
+        <el-form-item label="ID" v-if="teamInfo.showDialog.edit">
+          <el-input v-model="teamInfo.info.id" disabled/>
+        </el-form-item>
+        <el-form-item label="UID" prop="uid">
+          <el-input v-model="teamInfo.info.uid" placeholder="请输入 UID"/>
+        </el-form-item>
+        <el-form-item label="分组类型" prop="type">
+          <el-input v-model="teamInfo.info.type" placeholder="请输入类型"/>
+        </el-form-item>
+        <el-form-item label="队伍" prop="team">
+          <el-input v-model="teamInfo.info.team" placeholder="请输入队伍"/>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="closeEditTeamInfo">取消</el-button>
+        <el-button type="primary" @click="handleSubmitTeamInfo">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 底部按钮 -->
     <div class="fixed-back">
       <button @click="goToBack" class="btn secondary">返回上一页</button>
@@ -464,12 +835,16 @@ onMounted(() => {
 
 .manager-context {
   text-align: center;
-  margin-top: 20px; /*设置与上一个元素的间隔*/
+
+  display: flex;
+  flex-direction: column;
   height: 58vh;
+  margin-top: 20px;
+  padding: 20px;
   background: #ffffff;
   border-radius: 15px;
-  padding: 20px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  gap: 12px;
 }
 
 .manager-title {
@@ -512,7 +887,11 @@ onMounted(() => {
   box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
 }
 
+/* 表格容器：吃掉中间全部高度，表格内部滚动 */
 .table-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .table-button {
@@ -526,11 +905,23 @@ onMounted(() => {
   margin-left: 8px;
 }
 
+/* 空提示：占满剩余空间，内容居中 */
 .empty-tip {
-  text-align: center;
+  /*text-align: center;*/
   /*  background: #da7c7c;*/
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-
+/* 分页：固定底部，不被压缩 */
+.pagination-wrap {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
 .empty-icon {
   font-size: 80px;
   margin-bottom: 20px;
@@ -580,6 +971,41 @@ onMounted(() => {
     transform: rotate(360deg);
   }
 }
+
+/* ==========队伍弹窗布局 start========== */
+/* dialog内部body高度控制，不修改el-dialog__body原生display */
+:deep(.team-info .el-dialog__body) {
+  height: calc(80vh - 110px);
+  padding: 20px;
+}
+
+.team-info-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap:12px;
+}
+
+.team-info-search {
+  flex-shrink: 0;
+}
+
+/* 表格容器：占剩余全部高度，el-table设置height="100%"实现内部滚动 */
+.team-info-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 分页容器：flex-shrink:0，固定在底部，不会被压缩 */
+.team-info-pagination-wrap {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding-top:8px;
+}
+/* ==========队伍弹窗布局 end========== */
 
 
 @media (max-width: 768px) {

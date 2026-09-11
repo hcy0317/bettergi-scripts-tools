@@ -13,12 +13,53 @@ import javax.sql.DataSource;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class DatabaseInitRunnerTest {
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void legacyPlanMigrationPreservesRawDataAndProcessesEveryBatchWithoutControllers() throws Exception {
+        DataSource source = dataSource("legacy-plans.db");
+        String payload = "{\"bossName\":\"test-boss\",\"futureOption\":{\"keep\":true}}";
+        try (var connection = source.getConnection()) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("sql/sqlite.sql"));
+            // 启动流程先补充兼容列，再迁移旧 JSON；这里构造同一阶段的数据库。
+            connection.createStatement().execute("ALTER TABLE auto_plan_config ADD COLUMN cultivate INTEGER DEFAULT 0");
+            connection.setAutoCommit(false);
+            try (var insert = connection.prepareStatement("""
+                    INSERT INTO auto_plan_config(id,uid,col_order,days,day_name,run_type,enable,cultivate,record,auto_boss)
+                    VALUES (?,'123456789',7,'1,3','legacy','Boss',1,1,1,?)
+                    """)) {
+                for (int id = 1; id <= 1005; id++) {
+                    insert.setInt(1, id);
+                    insert.setString(2, payload);
+                    insert.addBatch();
+                }
+                insert.executeBatch();
+            }
+            connection.commit();
+        }
+        JdbcTemplate jdbc = new JdbcTemplate(source);
+        jdbc.update("INSERT INTO auto_plan_config(id,uid,run_type,json,auto_boss) VALUES (2000,'other','Boss','{\"current\":true}',?)", payload);
+        jdbc.update("INSERT INTO auto_plan_config(id,uid,run_type,auto_boss) VALUES (2001,'other','future-type',?)", payload);
+
+        DatabaseInitRunner runner = runner(source);
+        assertThat(runner.migrateLegacyAutoPlanJson()).isEqualTo(1005);
+        assertThat(runner.migrateLegacyAutoPlanJson()).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM auto_plan_config WHERE id<=1005 AND json=auto_boss
+                AND uid='123456789' AND col_order=7 AND days='1,3' AND day_name='legacy'
+                AND enable=1 AND cultivate=1 AND record=1
+                """, Integer.class)).isEqualTo(1005);
+        assertThat(jdbc.queryForObject("SELECT json FROM auto_plan_config WHERE id=1", String.class)).isEqualTo(payload);
+        assertThat(jdbc.queryForObject("SELECT json FROM auto_plan_config WHERE id=2000", String.class)).isEqualTo("{\"current\":true}");
+        assertThat(jdbc.queryForObject("SELECT json FROM auto_plan_config WHERE id=2001", String.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auto_plan_config", Integer.class)).isEqualTo(1007);
+    }
 
     @Test
     void refusesStartupWhenRequiredColumnsOrIndexesAreMissing() throws Exception {
