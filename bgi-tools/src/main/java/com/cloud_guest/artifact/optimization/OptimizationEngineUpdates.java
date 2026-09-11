@@ -27,15 +27,29 @@ public class OptimizationEngineUpdates {
     private static String platform(){return System.getProperty("os.name").startsWith("Windows")?"windows":"linux";}
     public ObjectNode check()throws Exception{
         var result=mapper.createObjectNode();
-        try{result.set("active",gateway.catalog());}catch(Exception e){result.put("activeError",e.getMessage());}
-        var latest=fetchJson("https://api.github.com/repos/genshinsim/gcsim/commits/master");result.put("upstreamRevision",latest.path("sha").asText());
+        try{result.set("active",gateway.catalog());}catch(InterruptedException e){Thread.currentThread().interrupt();throw e;}catch(Exception e){result.put("activeError",e.getMessage());}
+        try {
+            var repository=fetchJson("https://api.github.com/repos/genshinsim/gcsim");
+            String branch=repository.path("default_branch").asText();
+            if(branch.isBlank()||branch.length()>255)throw new IllegalStateException("上游未返回有效默认分支");
+            var latest=fetchJson("https://api.github.com/repos/genshinsim/gcsim/commits/"+java.net.URLEncoder.encode(branch,StandardCharsets.UTF_8));
+            String revision=latest.path("sha").asText();if(!revision.matches("[0-9a-f]{40}"))throw new IllegalStateException("上游提交信息不完整");
+            result.put("upstreamRevision",revision).put("upstreamBranch",branch);
+        } catch(InterruptedException error){Thread.currentThread().interrupt();throw error;}
+        catch(Exception error){result.put("upstreamError","无法检查上游："+Objects.toString(error.getMessage(),error.getClass().getSimpleName()));}
         var packages=result.putArray("packages");
-        for(JsonNode release:fetchJson(REPOSITORY+"/releases?per_page=30")){
+        try {
+        var releases=fetchJson(REPOSITORY+"/releases?per_page=30");
+        if(!releases.isArray())throw new IllegalStateException("发布包列表格式无效");
+        for(JsonNode release:releases){
             if(!release.path("tag_name").asText().startsWith("gcsim-engine-"))continue;
             for(JsonNode asset:release.path("assets"))if(asset.path("name").asText().equals("gcsim-bridge-"+platform()+"-amd64.zip")&&asset.path("digest").asText().matches("sha256:[0-9a-f]{64}")){
                 packages.addObject().put("assetId",asset.path("id").asLong()).put("name",asset.path("name").asText()).put("release",release.path("tag_name").asText()).put("digest",asset.path("digest").asText());
             }
         }
+        } catch(InterruptedException error){Thread.currentThread().interrupt();throw error;}
+        catch(Exception error){result.put("packagesError","无法检查验证包："+Objects.toString(error.getMessage(),error.getClass().getSimpleName()));}
+        result.put("checkStatus",result.has("activeError")||result.has("upstreamError")||result.has("packagesError")?"partial":"complete");
         result.put("note","动态机制来自固定版本 gcsim。上游有新提交但未发布验证包时，可运行仓库的 gcsim packages 工作流；不需要手写全量角色数据库。");return result;
     }
     public ObjectNode install(long assetId,boolean confirmed)throws Exception{
@@ -61,7 +75,7 @@ public class OptimizationEngineUpdates {
         if(manifest.path("schemaVersion").asInt()!=1||!revision.matches("[0-9a-f]{40}")||!manifest.path("platform").asText().equals(platform())||!manifest.path("architecture").asText().equals("amd64")||!manifest.path("executable").asText().equals(binaryName)||!digest(Files.readAllBytes(binary)).equals(manifest.path("sha256").asText()))throw new IllegalArgumentException("更新包架构、身份或程序摘要无效");
         if(platform().equals("linux"))Files.setPosixFilePermissions(binary,Set.of(java.nio.file.attribute.PosixFilePermission.OWNER_READ,java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE));
         var capabilities=probeProcess.execute(binary,"--capabilities",null,Duration.ofSeconds(20));
-        if(!revision.equals(capabilities.path("engineRevision").asText())||!manifest.path("sdkVersion").asText().equals(capabilities.path("sdk").path("version").asText()))throw new IllegalStateException("引擎与数据版本不一致，未激活");
+        if(!revision.equals(capabilities.path("engineRevision").asText())||!manifest.path("sdkVersion").asText().equals(capabilities.path("sdk").path("version").asText())||!manifest.path("adapterVersion").asText().equals(capabilities.path("adapterVersion").asText()))throw new IllegalStateException("引擎、适配器与数据版本不一致，未激活");
         var catalog=probeProcess.execute(binary,"--catalog",null,Duration.ofSeconds(20));
         if(catalog==null||!revision.equals(catalog.path("engineRevision").asText()))throw new IllegalStateException("引擎目录版本不一致，未激活");
         for(String field:List.of("characters","weapons","sets")){
@@ -94,7 +108,7 @@ public class OptimizationEngineUpdates {
         String[] slots={"flower","plume","sands","goblet","circlet"},keys={"hp","atk","atk_","pyro_dmg_","critRate_"};double[] values={4780,311,46.6,46.6,31.1};var items=(com.fasterxml.jackson.databind.node.ArrayNode)request.path("items");for(int i=0;i<5;i++)items.addObject().put("scanIndex",i).put("slotKey",slots[i]).put("setKey","EmblemOfSeveredFate").put("mainStatKey",keys[i]).put("mainStatValue",values[i]);
         var job=mapper.createObjectNode();job.set("optimization",request);job.putObject("limits").put("wallTimeMs",20000).put("memoryMiB",512);return job;
     }
-    private JsonNode fetchJson(String url)throws Exception{return mapper.readTree(fetch(url,4*1024*1024));}
+    protected JsonNode fetchJson(String url)throws Exception{return mapper.readTree(fetch(url,4*1024*1024));}
     private byte[] fetch(String url,int limit)throws Exception{var response=http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(45)).header("User-Agent","BetterGI-Gcsim-Updates").GET().build(),HttpResponse.BodyHandlers.ofInputStream());try(var body=response.body()){if(response.statusCode()!=200)throw new IllegalStateException("更新源返回 "+response.statusCode()+"；旧有效版本保持不变");byte[] bytes=body.readNBytes(limit+1);if(bytes.length>limit)throw new IllegalArgumentException("更新响应超过大小限制");return bytes;}}
     private static String digest(byte[] bytes)throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}
     private static void atomicWrite(Path target,byte[] bytes)throws Exception{Path temporary=Files.createTempFile(target.getParent(),"pointer-",".tmp");Files.write(temporary,bytes);try{Files.move(temporary,target,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}catch(AtomicMoveNotSupportedException e){throw new IllegalStateException("版本指针不支持原子切换，未更改有效版本",e);}}

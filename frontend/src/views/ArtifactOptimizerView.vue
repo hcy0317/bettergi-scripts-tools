@@ -7,6 +7,7 @@ import {onBeforeRouteLeave} from 'vue-router'
 import UidSelector from '@/components/UidSelector.vue'
 import CharacterEditor from '@/components/artifact-optimizer/OptimizerCharacterEditor.vue'
 import BuildEditor from '@/components/artifact-optimizer/OptimizerBuildEditor.vue'
+import PriorityOverview from '@/components/artifact-optimizer/OptimizerPriorityOverview.vue'
 import Results from '@/components/artifact-optimizer/OptimizerResults.vue'
 import RotationPanel from '@/components/artifact-optimizer/OptimizerRotationPanel.vue'
 import EnginePanel from '@/components/artifact-optimizer/OptimizerEnginePanel.vue'
@@ -26,6 +27,8 @@ const allIssues=computed(()=>[...inputIssues.value,...serverIssues.value])
 const addDialog=ref(false),addKey=ref(''),enkaDialog=ref(false),enka=ref(null),enkaKeys=ref([]),importing=ref(false)
 const changingUid=ref(false),uidSelectorKey=ref(0)
 let scope=0,pollTimer=null,applying=false,editVersion=0
+let validationRevision=0
+watch([workspace,selected,snapshotId,catalog],()=>{validationRevision++;serverIssues.value=[]},{deep:true,flush:'sync'})
 const character=computed(()=>workspace.value.characters.find(c=>c.key===activeCharacter.value))
 const build=computed(()=>workspace.value.builds.find(b=>b.id===activeBuild.value))
 const running=computed(()=>['QUEUED','RUNNING'].includes(job.value?.state))
@@ -65,6 +68,7 @@ onBeforeRouteLeave(()=>confirmDiscard('离开配装页面会放弃尚未保存�
 function beforeUnload(event){if(dirty.value){event.preventDefault();event.returnValue=''}}
 function openAddDialog(){addKey.value='';addDialog.value=true}
 watch(selected,()=>serverIssues.value=[])
+watch(catalog,()=>serverIssues.value=[])
 watch(snapshotId,async id=>{const current=scope,account=uid.value;snapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&id===snapshotId.value)snapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
 watch(()=>job.value?.snapshotId,async id=>{const current=scope,account=uid.value;resultSnapshot.value=null;if(!id)return;try{const value=await api.loadSnapshot(account,id);if(current===scope&&job.value?.snapshotId===id)resultSnapshot.value=value}catch(e){if(current===scope)error.value=e.message||String(e)}})
 async function reload(){if(dirty.value){try{await ElMessageBox.confirm('重新载入会放弃尚未保存的编辑，是否继续？','重新载入',{type:'warning'})}catch{return}}await load()}
@@ -84,6 +88,17 @@ function selectMember(key,value){if(value){selectBuildMembers(workspace.value,ac
 async function locateIssue(issue){
   if(issue.buildId){activeBuild.value=issue.buildId;tab.value='builds'}else if(issue.character){activeCharacter.value=issue.character;tab.value='characters'}else if(issue.field==='selection'){tab.value='builds'}else if(['protections','inventoryOwners'].includes(issue.field)){tab.value='characters'}
   await nextTick();
+  const scriptTarget=['rotation','scriptPrelude'].includes(issue.field)?document.querySelector('[data-script-field="'+CSS.escape(issue.field)+'"]'):null;
+  if(scriptTarget){
+    for(let container=scriptTarget.closest('details');container;container=container.parentElement?.closest('details'))container.open=true;
+    scriptTarget.scrollIntoView({behavior:'auto',block:'center'});
+    const textarea=scriptTarget.querySelector('textarea');textarea?.focus();
+    if(textarea&&Number.isInteger(issue.startOffset)&&Number.isInteger(issue.endOffset)){
+      textarea.setSelectionRange(issue.startOffset,issue.endOffset);
+      textarea.scrollTop=Math.max(0,((issue.line||1)-1)*(parseFloat(getComputedStyle(textarea).lineHeight)||22)-textarea.clientHeight/3);
+    }
+    return;
+  }
   const scopeElement=issue.buildId&&issue.character?document.querySelector(`[data-optimizer-member="${CSS.escape(issue.character)}"]`):document.querySelector(issue.scope==='character'?'.character-editor':'.build-editor');
   const target=scopeElement?.querySelector(`[data-field="${CSS.escape(issue.field)}"]`)||document.getElementById(`optimizer-${issue.field}`)||scopeElement||document.querySelector('.compute-bar');
   for(let container=target?.closest('details');container;container=container.parentElement?.closest('details'))container.open=true;
@@ -98,9 +113,9 @@ async function start(){
   error.value='';serverIssues.value=[];
   if(inputIssues.value.length){error.value='还有未填写或不匹配的设置，请点击下方问题定位修正';await locateIssue(inputIssues.value[0]);return}
   if(!(await save()))return;
-  const current=scope,account=uid.value;saving.value=true;
+  const current=scope,account=uid.value,submittedValidation=validationRevision;saving.value=true;
   try{const value=await api.startOptimization(account,{workspaceVersion:workspace.value.version,snapshotId:snapshotId.value,characters:[...selected.value],mode:mode.value,budget:budget.value,wallTimeSeconds:wallTimeSeconds.value,...workspace.value.computeSettings});if(current!==scope)return;job.value=value;tab.value='results';stopPoll();await poll(value.id,account,current)}
-  catch(e){if(current===scope){serverIssues.value=Array.isArray(e.response?.data?.data)?e.response.data.data:[];error.value=serverIssues.value.length?'请按下面的问题列表修正输入':e.message||String(e)}}
+  catch(e){if(current===scope){serverIssues.value=submittedValidation===validationRevision&&Array.isArray(e.response?.data?.data)?e.response.data.data:[];error.value=submittedValidation!==validationRevision?'输入已改变，已忽略旧的校验结果':serverIssues.value.length?'请按下面的问题列表修正输入':e.message||String(e)}}
   finally{if(current===scope)saving.value=false}
 }
 async function cancel(){const current=scope,account=uid.value,id=job.value?.id;if(!id)return;try{const value=await api.cancelOptimization(account,id);if(current===scope&&job.value?.id===id){job.value=value;stopPoll()}}catch(e){if(current===scope)error.value=e.message||String(e)}}
@@ -120,7 +135,7 @@ onBeforeUnmount(()=>{scope++;stopPoll();window.removeEventListener('beforeunload
       <el-skeleton v-if="loading" :rows="10" animated/>
       <el-empty v-else-if="!uid" description="先选择账号，复用圣遗物分析中已扫描的真实背包。"/>
       <template v-else>
-        <el-tabs v-model="tab"><el-tab-pane label="角色档案" name="characters"/><el-tab-pane label="配队方案" name="builds"/><el-tab-pane label="分配结果" name="results"/><el-tab-pane label="战斗循环" name="rotations"/><el-tab-pane label="引擎与数据" name="engine"/></el-tabs>
+        <el-tabs v-model="tab"><el-tab-pane label="角色档案" name="characters"/><el-tab-pane label="配队方案" name="builds"/><el-tab-pane label="优先级总表" name="priorities"/><el-tab-pane label="分配结果" name="results"/><el-tab-pane label="战斗循环" name="rotations"/><el-tab-pane label="引擎与数据" name="engine"/></el-tabs>
         <details v-if="tab==='characters'" class="inventory-protection">
           <summary>库存装备保护 <span>已保护 {{ inventoryProtections.length }} 位角色</span></summary>
           <div id="optimizer-protections">
@@ -142,14 +157,15 @@ onBeforeUnmount(()=>{scope++;stopPoll();window.removeEventListener('beforeunload
           </aside>
           <CharacterEditor v-if="character" :character="character" :inventory-protected="isCharacterProtected(workspace,catalog,character.key)" @protection-change="changeCharacterProtection" :catalog="catalog" :builds="workspace.builds" :items="itemList" :snapshot="snapshot" @edit-build="editBuild" @remove="removeCharacter"/><el-empty v-else description="从左侧添加或选择角色后，编辑个人条件和通用配装目标。"/>
         </section>
-        <section v-else-if="tab==='builds'"><div class="build-toolbar"><el-select v-model="activeBuild" filterable placeholder="选择配队方案"><el-option v-for="b in workspace.builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select><el-button :icon="Plus" @click="addBuild">新建方案</el-button></div><BuildEditor v-if="build" :uid="uid" @sampling="value=>workspace.computeSettings.validationSamples=value" :selected="selected" @members-change="changeMembers" @select-member="selectMember" @use-team="useTeam" :build="build" :characters="workspace.characters" :catalog="catalog" :templates="workspace.buffTemplates" @save-buff-template="template=>workspace.buffTemplates.push(template)" @remove="removeBuild"/><el-empty v-else description="新建方案，选择队员并编写一轮循环。"/></section>
+        <section v-else-if="tab==='builds'"><div class="build-toolbar"><el-select v-model="activeBuild" filterable placeholder="选择配队方案"><el-option v-for="b in workspace.builds" :key="b.id" :value="b.id" :label="buildLabel(b)"/></el-select><el-button :icon="Plus" @click="addBuild">新建方案</el-button></div><BuildEditor v-if="build" :uid="uid" :issues="serverIssues" @sampling="value=>workspace.computeSettings.validationSamples=value" :selected="selected" @members-change="changeMembers" @select-member="selectMember" @use-team="useTeam" :build="build" :characters="workspace.characters" :catalog="catalog" :templates="workspace.buffTemplates" @save-buff-template="template=>workspace.buffTemplates.push(template)" @remove="removeBuild"/><el-empty v-else description="新建方案，选择队员并编写一轮循环。"/></section>
+        <PriorityOverview v-else-if="tab==='priorities'" :key="uid" :workspace="workspace" :catalog="catalog" :selected="selected" :mode="mode" :disabled="saving||loading"/>
         <section v-else-if="tab==='results'"><el-select v-if="history.length" :model-value="job?.id" placeholder="查看历史计算" class="history" @change="id=>showHistory(history.find(j=>j.id===id))"><el-option v-for="j in history" :key="j.id" :value="j.id" :label="`${j.createdAt} · ${jobLabels[j.state]||'未知状态'}`"/></el-select><Results :catalog="catalog" :job="job" :items="resultSnapshot?.artifacts||[]" :characters="workspace.characters"/></section>
-        <RotationPanel :wall-time-seconds="wallTimeSeconds" :catalog="catalog" v-else-if="tab==='rotations'" :uid="uid" :workspace="workspace" :selected="selected" :snapshot-id="snapshotId" :equipment-job="job" :before-run="save"/>
+        <RotationPanel :wall-time-seconds="wallTimeSeconds" :catalog="catalog" v-else-if="tab==='rotations'" :uid="uid" :workspace="workspace" :selected="selected" :snapshot="snapshot" :snapshot-id="snapshotId" :equipment-job="job" :before-run="save" @locate-issue="locateIssue" @validation-issues="value=>serverIssues=value"/>
         <EnginePanel v-else :catalog="catalog" @changed="loadEngine"/>
         <section class="compute-bar" aria-label="计算设置">
           <details class="compute-options"><summary>计算设置 <span>搜索 {{ workspace.computeSettings.searchSamples }} 次 / 独立验证 {{ workspace.computeSettings.validationSamples }} 次</span></summary><div class="compute-inputs"><label>真实背包快照 <el-select id="optimizer-snapshot" v-model="snapshotId" placeholder="选择完整扫描记录"><el-option v-for="s in snapshots" :key="s.id" :value="s.id" :disabled="!s.complete" :label="`${s.count} 件 · ${s.createdAt}${s.complete?'':' · 扫描不完整'}`"/></el-select></label><label v-if="tab!=='rotations'">优化档位 <el-select v-model="mode"><el-option v-for="m in preferenceOptions" :key="m.value" :value="m.value" :label="m.label"/></el-select></label><label v-if="tab!=='rotations'">候选场景评估上限 <el-input-number v-model="budget" :min="16" :max="4096" :step="64"/></label><label>计算耗时上限（真实秒） <el-input-number v-model="wallTimeSeconds" :min="5" :max="120" :step="10"/></label></div>
           <div class="sampling-controls" id="optimizer-sampling"><label>每个候选的随机采样次数 <el-input-number v-model="workspace.computeSettings.searchSamples" :min="1" :max="32"/></label><label>最终独立验证次数 <el-input-number v-model="workspace.computeSettings.validationSamples" :min="2" :max="1000"/></label><p>每次采样重新执行完整脚本。与脚本里循环几轮、单次战斗多久不同，也不是自动收敛阈值。</p></div>
-          </details><div class="compute-bottom" id="optimizer-selection"><p><strong>本次参算 {{ selected.length }} 个角色 / {{ scenarios.length }} 个唯一方案</strong><span>{{ preferenceOptions.find(m=>m.value===mode)?.description }}</span><small v-if="!snapshots.length">尚无扫描记录，请先到 <router-link to="/Artifacts/Analysis">圣遗物分析</router-link> 扫描。</small></p><el-button v-if="running" type="danger" plain @click="cancel">取消本次计算</el-button><el-button v-if="tab!=='rotations'" type="primary" size="large" :disabled="saving||running||Boolean(engineError)" :loading="saving" @click="start">计算通用配装</el-button></div>
+          </details><div class="compute-bottom" id="optimizer-selection"><p><strong>本次参算 {{ selected.length }} 个角色 / {{ scenarios.length }} 个唯一方案</strong><span>{{ preferenceOptions.find(m=>m.value===mode)?.description }}</span><small v-if="!snapshots.length">尚无扫描记录，请先到 <router-link to="/Artifacts/Analysis">圣遗物分析</router-link> 扫描。</small></p><el-button v-if="running" type="danger" plain @click="cancel">取消本次计算</el-button><el-button v-if="tab!=='rotations'" type="primary" size="large" :disabled="saving||running||Boolean(engineError)||allIssues.length>0" :loading="saving" @click="start">计算通用配装</el-button></div>
           <p v-if="scenarios.length" class="hint">均衡去重场景：{{ scenarios.map(s=>`${s.name} × ${s.weight}`).join('；') }}</p>
         </section>
       </template>
