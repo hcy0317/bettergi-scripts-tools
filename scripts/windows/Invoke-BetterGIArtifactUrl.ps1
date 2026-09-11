@@ -38,6 +38,7 @@ $expectedOperation = switch ($parsedUri.Host.ToLowerInvariant()) {
     'characters' { 'SCAN_CHARACTER_ROSTER' }
     'execute' { 'EXECUTE_LOCK_PLAN' }
     'native-sync' { 'REBUILD_NATIVE_PLANS' }
+    'equipment' { 'EXECUTE_EQUIP_PLAN' }
     default { throw 'Unsupported BetterGI artifact launch operation.' }
 }
 
@@ -77,6 +78,12 @@ if ($expectedOperation -eq 'REBUILD_NATIVE_PLANS' -and
         [int]$request.nativeCapacity -lt 1 -or
         [string]$request.nativePlanDigest -notmatch '^[0-9a-f]{64}$')) {
     throw 'The BetterGI native artifact request is missing its reviewed plan binding.'
+}
+if ($expectedOperation -eq 'EXECUTE_EQUIP_PLAN' -and
+    ($null -eq $request.sourceArtifactCount -or
+        [int]$request.sourceArtifactCount -lt 0 -or
+        [string]$request.nativePlanDigest -notmatch '^[0-9a-f]{64}$')) {
+    throw 'The equipment request is missing its reviewed inventory and plan binding.'
 }
 if ($expectedOperation -eq 'SCAN_CHARACTER_ROSTER' -and
     ($null -eq $request.characterLevelThreshold -or

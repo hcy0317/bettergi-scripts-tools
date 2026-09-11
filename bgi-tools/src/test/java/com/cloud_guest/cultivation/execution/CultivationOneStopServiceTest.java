@@ -289,7 +289,11 @@ class CultivationOneStopServiceTest {
                 .contains("GridScreenName.CharacterDevelopmentItems")
                 .contains("targets.materialNamesByGrid")
                 .contains("for (const [gridScreenName, namesValue] of Object.entries(grouped))")
-                .contains("await countInventoryItems(names, gridScreenName)")
+                .contains("await countInventoryItems(names, gridScreenName, iconRecognitionMode)")
+                .contains("gridScreenName === \"Materials\"")
+                .contains("BGI_COMBAT_UNCONFIRMED")
+                .contains("allowFinalRefresh = false")
+                .contains("if (!recoveryFailed && !isTerminalAutomationError(executionError))")
                 .contains("async function countInventoryItems(names, gridScreenName, iconRecognitionMode = \"GridIcon\")")
                 .contains("await countInventoryItems(retryNames, gridScreenName, \"Item\")")
                 .contains("const retryNames = names.filter")
@@ -330,8 +334,9 @@ class CultivationOneStopServiceTest {
                 .doesNotContain("停止并等待完整重新清点")
                 .doesNotContain("batchCompleted ? 0 : -1")
                 .doesNotContain("}        const shouldContinue = await executeAction(")
-                .containsPattern("(?s)if \\(targets\\.status === \\\"BUSY\\\"\\).*?return false;")
-                .containsPattern("(?s)if \\(materialNames\\.length === 0\\).*?return true;");
+                .contains("targets?.status === \"NO_TARGETS\"")
+                .contains("targets?.status !== \"ACTION\"")
+                .containsPattern("(?s)if \\(materialNames\\.length === 0\\).*?return false;");
         assertThat(Files.readString(autoPlanScript.resolve("utils").resolve("load_check_run.js")))
                 .contains("return await dispatcher.RunAutoDomainTask(domainParam);")
                 .contains("return await dispatcher.RunAutoBossTask(param)");
