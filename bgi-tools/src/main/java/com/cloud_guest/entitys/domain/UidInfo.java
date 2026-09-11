@@ -29,6 +29,10 @@ public class UidInfo {
     private String password;
     private Boolean defaultUid;
 
+    public UidInfo(String uid, String as, String username, String password) {
+        this(uid, as, null, null, "MannequinGirl", username, password, Boolean.FALSE);
+    }
+
     @SneakyThrows
     public UidInfoConfig toConfig(){
         UidInfoConfig uidInfoConfig = new UidInfoConfig(

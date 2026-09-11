@@ -30,8 +30,8 @@ public class AutoLeyLineOutcrop {
     //@Schema(description = "[耗尽模式]是否开启取小值模式")
     //// 开启取小值模式
     //public boolean openModeCountMin;
-    @Schema(description = "是否使用冒险之证寻找地脉花")
-    //是否使用冒险之证寻找地脉花
+    // 旧客户端与已保存配置的兼容字段；新客户端无需设置。
+    @Deprecated
     public boolean useAdventurerHandbook;
     @Schema(description = "好感队名称")
     //好感队名称
@@ -52,8 +52,14 @@ public class AutoLeyLineOutcrop {
     @Schema(description = "是否使用须臾树脂")
     //是否使用须臾树脂
     public boolean useTransientResin;
-    @Schema(description = "通过BGI通知系统发送详细通知")
+    @Deprecated
     @JsonProperty("isNotification")
-    //通过BGI通知系统发送详细通知
     public boolean isNotification;
+
+    public AutoLeyLineOutcrop(int count, String country, String leyLineOutcropType,
+            String friendshipTeam, String team, int timeout, boolean isGoToSynthesizer,
+            boolean useFragileResin, boolean useTransientResin) {
+        this(count, country, leyLineOutcropType, false, friendshipTeam, team, timeout,
+                isGoToSynthesizer, useFragileResin, useTransientResin, false);
+    }
 }

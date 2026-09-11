@@ -3,10 +3,9 @@ package com.cloud_guest.runner;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import cn.hutool.json.JSONUtil;
 import com.cloud_guest.entitys.pojo.AutoPlanConfig;
 import com.cloud_guest.entitys.pojo.UidInfoConfig;
-import com.cloud_guest.entitys.vo.AutoPlanVo;
-import com.cloud_guest.service.AutoPlanService;
 import com.google.common.collect.Maps;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +29,6 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * 数据库初始化器：在 @PostConstruct 阶段执行建表脚本，并在脚本完成后手动启动 Quartz 调度器。
@@ -57,10 +55,11 @@ public class DatabaseInitRunner {
 
     /**
      * 数据库脚本
-     * @param dbType 数据库类型
-     * @param format 列脚本格式
-     * @param formatSize 列脚本格式个数
-     * @param remarkFormat 列注释格式
+     *
+     * @param dbType           数据库类型
+     * @param format           列脚本格式
+     * @param formatSize       列脚本格式个数
+     * @param remarkFormat     列注释格式
      * @param remarkFormatSize 列注释格式个数
      */
     record SqlFormat(String dbType, String format, int formatSize, String remarkFormat, int remarkFormatSize) {
@@ -68,26 +67,29 @@ public class DatabaseInitRunner {
 
     /**
      * 数据库脚本
-     * @param dbType 数据库类型
+     *
+     * @param dbType         数据库类型
      * @param scriptFileName 脚本文件名
-     * @param scriptSqlList 脚本
+     * @param scriptSqlList  脚本
      */
     record DbScript(String dbType, String scriptFileName, List<ColumnSql> scriptSqlList) {
     }
 
     /**
      * 数据库脚本
-     * @param table 表名
+     *
+     * @param table  表名
      * @param column 列名
      * @param remark 列注释
-     * @param sql 列脚本
+     * @param sql    列脚本
      */
     record ColumnSql(String table, String column, String remark, String sql) {
     }
 
     /**
      * 数据库表脚本
-     * @param table 表名
+     *
+     * @param table   表名
      * @param columns 列
      */
     record SqlTable(String table, List<SqlColumn> columns) {
@@ -95,17 +97,19 @@ public class DatabaseInitRunner {
 
     /**
      * 数据库表脚本
+     *
      * @param column 列名
      * @param remark 列注释
-     * @param types 数据库列类型
+     * @param types  数据库列类型
      */
     record SqlColumn(String column, String remark, List<DbSqlType> types) {
     }
 
     /**
      * 数据库列类型
-     * @param db 数据库类型
-     * @param type 列类型
+     *
+     * @param db            数据库类型
+     * @param type          列类型
      * @param columnDefault 列默认值
      */
     record DbSqlType(String db, String type, String columnDefault) {
@@ -363,7 +367,7 @@ public class DatabaseInitRunner {
                         continue;
                     }
                     try {
-                        log.info("[添加字段] `{}.{},备注:{}`", sql.table, sql.column,sql.remark);
+                        log.info("[添加字段] `{}.{},备注:{}`", sql.table, sql.column, sql.remark);
                         jdbcTemplate.execute(sql.sql);
                         //log.info("[字段添加成功] `{}.{}`", sql.table, sql.column);
                     } catch (Exception e) {
@@ -380,11 +384,11 @@ public class DatabaseInitRunner {
                 if (errorList.size() != sqlList.size()) {
                     log.info("====================================");
                 }
-                sqlList.stream().filter(sql -> !errorList.contains(sql)).forEach(sql -> log.info("[字段添加成功] `{}.{}`,备注:{}", sql.table, sql.column,sql.remark));
+                sqlList.stream().filter(sql -> !errorList.contains(sql)).forEach(sql -> log.info("[字段添加成功] `{}.{}`,备注:{}", sql.table, sql.column, sql.remark));
                 if (errorList.size() != sqlList.size() || CollUtil.isNotEmpty(errorList)) {
                     log.info("====================================");
                 }
-                errorList.stream().forEach(sql -> log.warn("[字段存在] `{}.{}`字段已存在，跳过添加 {}", sql.table, sql.column,sql.remark));
+                errorList.stream().forEach(sql -> log.warn("[字段存在] `{}.{}`字段已存在，跳过添加 {}", sql.table, sql.column, sql.remark));
                 log.info("====================================");
                 ensureArtifactStorageCapacity(dbType);
                 verifyCultivationExecutionSchema();
@@ -394,6 +398,11 @@ public class DatabaseInitRunner {
         } else {
             log.warn("无法识别数据库类型，跳过脚本执行");
         }
+
+        // 先完成数据兼容，再允许定时任务读取计划；不依赖 Web 控制器的静态转换器注册。
+        long migrationStarted = System.currentTimeMillis();
+        long migrated = migrateLegacyAutoPlanJson();
+        log.info("数据兼容性迁移耗时: {} ms，更新记录数: {}", System.currentTimeMillis() - migrationStarted, migrated);
 
         // 2. 手动启动 Quartz 调度器
         try {
@@ -409,31 +418,46 @@ public class DatabaseInitRunner {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        //3.执行数据库字段兼容性处理
-        AutoPlanService planService = SpringUtil.getBean(AutoPlanService.class);
-        // 分页查询，每次处理 500 条
-        int pageSize = 500;
-        int page = 0;
-        long totalUpdated = 0;
-        List<AutoPlanConfig> pageRecords;
-        long start = System.currentTimeMillis();
-        do {
-            pageRecords = planService.lambdaQuery()
-                    // 可增加条件过滤已迁移的记录，例如只处理 json 为空的
-                    .isNull(AutoPlanConfig::getJson)
-                    .last("limit " + page * pageSize + "," + pageSize)
-                    .list();
-            List<AutoPlanConfig> updated = pageRecords.stream()
-                    .map(AutoPlanConfig::toVo)
-                    .map(AutoPlanVo::toConfig)
-                    .collect(Collectors.toList());
-            if (CollUtil.isNotEmpty(updated)) {
-                planService.saveOrUpdateBatch(updated, pageSize); // 指定批次大小
-                totalUpdated += updated.size();
+    }
+
+    long migrateLegacyAutoPlanJson() {
+        Long upperId = jdbcTemplate.queryForObject("SELECT MAX(id) FROM auto_plan_config WHERE json IS NULL", Long.class);
+        if (upperId == null) return 0;
+        record LegacyPlan(long id, String type, String domain, String leyLine, String stygian, String boss) {}
+        Long cursor = null;
+        long updated = 0;
+        while (true) {
+            String query = "SELECT id,run_type,auto_fight,auto_ley_line_outcrop,auto_stygian_onslaught,auto_boss "
+                    + "FROM auto_plan_config WHERE json IS NULL AND id<=?"
+                    + (cursor == null ? "" : " AND id>?") + " ORDER BY id LIMIT 500";
+            Object[] parameters = cursor == null ? new Object[]{upperId} : new Object[]{upperId, cursor};
+            List<LegacyPlan> rows = jdbcTemplate.query(query, (row, index) -> new LegacyPlan(
+                    row.getLong("id"), row.getString("run_type"), row.getString("auto_fight"),
+                    row.getString("auto_ley_line_outcrop"), row.getString("auto_stygian_onslaught"), row.getString("auto_boss")), parameters);
+            if (rows.isEmpty()) break;
+            for (LegacyPlan row : rows) {
+                String legacy = row.type() == null ? null : switch (row.type()) {
+                    case "秘境" -> row.domain();
+                    case "地脉" -> row.leyLine();
+                    case "幽境" -> row.stygian();
+                    case "Boss" -> row.boss();
+                    default -> null;
+                };
+                if (StrUtil.isBlank(legacy)) continue;
+                try {
+                    if (!JSONUtil.isTypeJSONObject(legacy)) continue;
+                    JSONUtil.parseObj(legacy);
+                } catch (RuntimeException invalidJson) {
+                    log.warn("旧计划 {} 的JSON无效，保留原字段", row.id());
+                    continue;
+                }
+                // 仅复制匹配任务类型的原始JSON，不丢扩展字段，也不重写UID、开关或旧配置。
+                updated += jdbcTemplate.update("UPDATE auto_plan_config SET json=? WHERE id=? AND json IS NULL", legacy, row.id());
             }
-            page++;
-        } while (CollUtil.isNotEmpty(pageRecords));
-        log.info("数据兼容性迁移耗时: {} ms，更新记录数: {}", System.currentTimeMillis() - start, totalUpdated);
+            // 待迁移集合会缩小，不能使用递增OFFSET，否则跨批次会漏掉记录。
+            cursor = rows.get(rows.size() - 1).id();
+        }
+        return updated;
     }
 
     private void ensureArtifactStorageCapacity(String dbType) {

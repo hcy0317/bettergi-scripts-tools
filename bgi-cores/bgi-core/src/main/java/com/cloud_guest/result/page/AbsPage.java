@@ -4,6 +4,7 @@ import com.cloud_guest.result.Result;
 import com.github.pagehelper.PageInfo;
 
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * @Author yan
@@ -11,6 +12,11 @@ import java.util.List;
  * @Description
  */
 public interface AbsPage {
+    default <T, U> ResultPage<U> mapPage(List<T> rows, Function<T, U> mapper) {
+        // 先读取 PageHelper 的元数据，再映射 DTO；普通 List 会丢失原页码与总数。
+        return pageToVoPage(listToPage(rows), rows.stream().map(mapper).toList());
+    }
+
     /**
      * 通用返回
      *
