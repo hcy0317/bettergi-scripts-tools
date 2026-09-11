@@ -110,5 +110,19 @@ class OptimizationCompilerTest {
         assertEquals(5,result.path("scenarios").get(0).path("fixedEquipment").path("kaeya").size());
         assertFalse(result.path("scenarios").get(0).path("evaluation").path("config").asText().contains("add stats"));
         assertEquals(snapshot.snapshotDigest(),result.path("inventory").path("snapshotDigest").asText());
+        ((com.fasterxml.jackson.databind.node.ArrayNode)workspace.path("characters"))
+                .addObject().put("key","marionette").put("protected",true);
+        items.add(new ArtifactItem(5,"EmblemOfSeveredFate","flower",20,5,"hp",List.of(),"桑多涅",false));
+        var nativeCatalog=mapper.readTree("""
+            {"characters":[{"id":"10000021","key":"amber"},{"id":"10000015","key":"kaeya"}],
+             "inventoryCharacters":[{"id":"10000133","key":"marionette","inventoryAliases":["桑多涅"]}]}
+            """);
+        var withDonor=new OptimizationCompiler(mapper,(rarity,level,key)->46.6,nativeCatalog).compile(
+                workspace,ArtifactSnapshot.create("100000001","scan","default","v1",items),
+                mapper.readTree("{\"characters\":[\"amber\"],\"budget\":64}"));
+        assertEquals(6,withDonor.path("items").size());
+        assertEquals("marionette",withDonor.path("items").get(5).path("location").asText());
+        assertEquals("marionette",withDonor.path("protectedCharacters").get(0).asText());
+        assertFalse(withDonor.path("scenarios").get(0).path("evaluation").path("config").asText().contains("marionette char"));
     }
 }
