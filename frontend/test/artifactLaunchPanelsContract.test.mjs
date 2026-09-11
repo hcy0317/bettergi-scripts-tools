@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import path from 'node:path'
+import {validateArtifactLaunch} from '../src/features/artifact-analysis/model.js'
 
 const source = name => readFileSync(
   path.resolve(import.meta.dirname, `../src/components/artifact/${name}`),
@@ -47,4 +48,14 @@ test('manual BetterGI connection resumes native-plan completion observation', ()
   assert.match(panel, /requestGeneration !== previewRequestGeneration/)
   assert.match(panel, /watch\(\(\) => props\.uid,[\s\S]*?loading\.value = false/)
   assert.match(panel, /原神方案任务状态连续读取失败/)
+})
+
+test('confirmed equipment presents an explicit validated BetterGI connection without auto launch', () => {
+  assert.equal(validateArtifactLaunch({launchUri:'BetterGIArtifact://equipment?request=00000000-0000-0000-0000-000000000001'},'EXECUTE_EQUIP_PLAN'),true)
+  assert.equal(validateArtifactLaunch({launchUri:'javascript:alert(1)'},'EXECUTE_EQUIP_PLAN'),false)
+  const panel = readFileSync(path.resolve(import.meta.dirname, '../src/components/artifact-optimizer/OptimizerEquipmentPanel.vue'), 'utf8')
+  assert.match(panel, /validateArtifactLaunch\(value\.launch,'EXECUTE_EQUIP_PLAN'\)/)
+  assert.match(panel, /<ArtifactLaunchDialog[^>]+:launch="plan\.launch"/)
+  assert.match(panel, /连接 BetterGI/)
+  assert.doesNotMatch(panel, /window\.location/)
 })

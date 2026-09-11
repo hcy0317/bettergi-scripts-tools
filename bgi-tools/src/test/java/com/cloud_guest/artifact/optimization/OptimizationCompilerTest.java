@@ -21,6 +21,24 @@ class OptimizationCompilerTest {
         assertNotNull(error.issues().get(0).startOffset());
         assertEquals(original,workspace.path("builds").get(0).path("rotation").asText());
     }
+
+    @Test void fixedArtifactsMustBeBoundToTheSelectedPhysicalSnapshot()throws Exception{
+        var mapper=new ObjectMapper();var workspace=mapper.readTree("""
+            {"characters":[{"key":"amber","level":90,"maxLevel":90,"constellation":0,"talents":[6,6,6],"weapon":"huntersbow","weaponLevel":90,"weaponMaxLevel":90,"refinement":1,"fixedSlots":{"flower":0},"builds":[{"id":"team"}]}],
+             "builds":[{"id":"team","duration":20,"members":[{"character":"amber"}],"rotation":"active amber; amber attack;"}]}
+            """);
+        var profile=(com.fasterxml.jackson.databind.node.ObjectNode)workspace.path("characters").get(0);
+        var item=new ArtifactItem(0,"EmblemOfSeveredFate","flower",20,5,"hp",List.of(),"",false);
+        var snapshot=ArtifactSnapshot.create("100000001","first","default","v1",List.of(item));
+        var selection=mapper.readTree("{\"characters\":[\"amber\"]}");
+        var compiler=new OptimizationCompiler(mapper,(a,b,c)->4780);
+        var missing=assertThrows(OptimizationValidationException.class,()->compiler.compile(workspace,snapshot,selection));
+        assertTrue(missing.issues().stream().anyMatch(i->i.field().equals("fixedSlots")&&i.character().equals("amber")));
+        profile.putObject("fixedSlotBindings").putObject("flower").put("scanIndex",0).put("uid",snapshot.uid()).put("scanSessionId",snapshot.scanSessionId()).put("snapshotDigest",snapshot.snapshotDigest()).put("fingerprint",item.contentFingerprint());
+        assertEquals(0,compiler.compile(workspace,snapshot,selection).path("characters").get(0).path("fixedSlots").path("flower").asInt(-1));
+        var rescan=ArtifactSnapshot.create("100000001","second","default","v1",List.of(new ArtifactItem(0,"GladiatorsFinale","flower",0,5,"hp",List.of(),"",false)));
+        assertThrows(OptimizationValidationException.class,()->compiler.compile(workspace,rescan,selection));
+    }
     @Test void currentlyDormantAffixIsNotAppliedOrRemovedFromPhysicalIdentity()throws Exception{
         var mapper=new ObjectMapper();
         var workspace=mapper.readTree("""

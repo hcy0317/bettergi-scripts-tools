@@ -1,11 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {protectedInventoryKeys,setInventoryProtections,toggleCharacterProtection,isCharacterProtected} from '../src/features/artifact-optimizer/inventory.js'
+import {protectedInventoryKeys,setInventoryProtections,toggleCharacterProtection,isCharacterProtected,setFixedArtifact,fixedArtifactMatches} from '../src/features/artifact-optimizer/inventory.js'
 
 const catalog={
   characters:[{key:'amber',inventoryKey:'inventory21'},{key:'aetherdendro',inventoryKey:'inventory20000000'},{key:'lumineanemo',inventoryKey:'inventory20000000'}],
   inventoryCharacters:[{key:'inventory21',nativeName:'安柏'},{key:'inventory133',nativeName:'桑多涅'},{key:'inventory20000000',nativeName:'旅行者'}]
 }
+test('fixed selections retain their snapshot binding through saving and reject account or slot changes',()=>{
+  const p={fixedSlots:{}},snapshot={uid:'100000001',scanSessionId:'first',snapshotDigest:'digest',artifacts:[{scanIndex:0,slotKey:'flower'}]}
+  setFixedArtifact(p,'flower',0,snapshot)
+  const saved=JSON.parse(JSON.stringify(p))
+  assert.equal(fixedArtifactMatches(saved,'flower',snapshot),true)
+  assert.equal(fixedArtifactMatches(saved,'flower',{...snapshot,uid:'100000002'}),false)
+  assert.throws(()=>setFixedArtifact(p,'plume',0,snapshot),/扫描/)
+  setFixedArtifact(p,'flower',null,snapshot)
+  assert.deepEqual(p.fixedSlots,{})
+  assert.deepEqual(p.fixedSlotBindings,{})
+})
 test('inventory-only protection requires no invented combat profile and joins legacy protection',()=>{
   const workspace={characters:[{key:'amber',protected:true,weight:3}],protectedInventoryOwners:['inventory133']}
   assert.deepEqual(new Set(protectedInventoryKeys(workspace,catalog)),new Set(['inventory21','inventory133']))

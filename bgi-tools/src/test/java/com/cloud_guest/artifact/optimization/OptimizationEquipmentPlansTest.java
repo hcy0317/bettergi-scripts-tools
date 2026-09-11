@@ -7,6 +7,8 @@ import com.cloud_guest.artifact.persistence.ArtifactJsonStore;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.time.*;
@@ -43,7 +45,8 @@ class OptimizationEquipmentPlansTest {
         assertThrows(IllegalArgumentException.class,()->service.recover("100000001",id,"scan"));
         jobs.close();
     }
-    @Test void inventoryOnlyDonorIsNamedInRecoveryAndCannotBypassProtection()throws Exception{
+    @ParameterizedTest @ValueSource(ints={4,5})
+    void inventoryOnlyDonorIsNamedInRecoveryAndCannotBypassProtection(int donorCount)throws Exception{
         var mapper=new ObjectMapper();var data=new HashMap<String,ObjectNode>();var store=mock(ArtifactJsonStore.class);
         when(store.get(anyString(),anyString(),eq(ObjectNode.class))).thenAnswer(i->Optional.ofNullable(data.get(i.getArgument(0)+"|"+i.getArgument(1))).map(ObjectNode::deepCopy));
         when(store.put(anyString(),anyString(),any(ObjectNode.class))).thenAnswer(i->{ObjectNode value=i.getArgument(2);data.put(i.getArgument(0)+"|"+i.getArgument(1),value.deepCopy());return value;});
@@ -53,18 +56,24 @@ class OptimizationEquipmentPlansTest {
             mapper.readTree("[{\"id\":10000021,\"name\":\"安柏\"},{\"id\":10000133,\"name\":\"桑多涅\",\"alias\":[\"Marionette\"]}]"));
         var gateway=mock(GcsimGateway.class);when(gateway.catalog()).thenReturn(catalog);
         var items=new ArrayList<ArtifactItem>();String[] slots={"flower","plume","sands","goblet","circlet"};
-        for(int i=0;i<10;i++)items.add(new ArtifactItem(i,"EmblemOfSeveredFate",slots[i%5],20,5,"atk_",List.of(),i<5?"安柏":"Marionette",true));
+        for(int i=0;i<5+donorCount;i++)items.add(new ArtifactItem(i,"EmblemOfSeveredFate",slots[i%5],20,5,"atk_",List.of(),i<5?"安柏":"Marionette",true));
         var scans=mock(ArtifactAnalysisJobRepository.class);var snapshot=ArtifactSnapshot.create("100000001","scan","order","v1",items);
         when(scans.findById("scan")).thenReturn(Optional.of(new ArtifactAnalysisJob("scan","100000001",null,null,snapshot,null,null,"2026-09-07T00:00:00Z","2026-09-07T00:00:00Z",null)));
         var jobs=new OptimizationJobs(store,scans,workspace,new OptimizationMainStats(mapper),gateway,mapper);
         try{
             var job=(ObjectNode)mapper.readTree("{\"id\":\"job\",\"state\":\"COMPLETED\",\"workspaceVersion\":1,\"snapshotId\":\"scan\",\"engineRevision\":\""+revision+"\",\"result\":{\"plan\":{\"qualified\":true,\"equipment\":{\"amber\":[5,6,7,8,9]},\"reports\":{}}}}");
             data.put("artifact-optimizer-job|100000001:job",job);
+            ((ObjectNode)job.path("result").path("plan").path("equipment")).putArray("amber").add(5).add(1).add(2).add(3).add(4);
             var service=new OptimizationEquipmentPlans(store,jobs,workspace,scans,new ArtifactLaunchRequestService(directory,mapper,Clock.systemUTC(),Duration.ofMinutes(10)),gateway,mapper);
             var preview=service.preview("100000001","job");
             assertTrue(preview.path("affectedOwners").toString().contains("Marionette"));
             String after=Instant.parse(preview.path("createdAt").asText()).plusSeconds(1).toString();
             when(scans.findById("observed")).thenReturn(Optional.of(new ArtifactAnalysisJob("observed","100000001",null,null,snapshot,null,null,after,after,null)));
+            if(donorCount<5){
+                var error=assertThrows(IllegalStateException.class,()->service.recover("100000001",preview.path("id").asText(),"observed"));
+                assertTrue(error.getMessage().contains("Marionette")&&error.getMessage().contains("空槽位"));
+                return;
+            }
             var recovery=service.recover("100000001",preview.path("id").asText(),"observed");
             assertEquals(2,recovery.path("targets").size());
             assertTrue(recovery.path("targets").toString().contains("桑多涅"));

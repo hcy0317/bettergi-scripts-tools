@@ -3,6 +3,23 @@ function inventoryKey(catalog,key){
   return catalog.characters?.find(c=>c.key===key)?.inventoryKey||
     catalog.inventoryCharacters?.find(c=>c.simulationKeys?.includes(key))?.key||''
 }
+export function fixedArtifactMatches(profile,slot,snapshot){
+  const index=profile.fixedSlots?.[slot],binding=profile.fixedSlotBindings?.[slot]
+  const item=snapshot?.artifacts?.find(i=>i.scanIndex===index&&i.slotKey===slot)
+  return Boolean(Number.isInteger(index)&&binding&&item&&snapshot?.snapshotDigest&&
+    binding.scanIndex===index&&binding.uid===snapshot.uid&&binding.scanSessionId===snapshot.scanSessionId&&
+    binding.snapshotDigest===snapshot.snapshotDigest)
+}
+export function setFixedArtifact(profile,slot,index,snapshot){
+  if(index==null||index===''){
+    delete profile.fixedSlots?.[slot];delete profile.fixedSlotBindings?.[slot];return
+  }
+  const item=snapshot?.artifacts?.find(i=>i.scanIndex===index&&i.slotKey===slot)
+  if(!Number.isInteger(index)||!item||!snapshot.uid||!snapshot.scanSessionId||!snapshot.snapshotDigest)throw new Error('请先选择完整扫描记录中的圣遗物')
+  profile.fixedSlots??={};profile.fixedSlotBindings??={}
+  profile.fixedSlots[slot]=index
+  profile.fixedSlotBindings[slot]={scanIndex:index,uid:snapshot.uid,scanSessionId:snapshot.scanSessionId,snapshotDigest:snapshot.snapshotDigest}
+}
 export function protectedInventoryKeys(workspace,catalog={}){
   const keys=new Set(Array.isArray(workspace.protectedInventoryOwners)?workspace.protectedInventoryOwners.filter(k=>typeof k==='string'):[])
   for(const profile of workspace.characters||[])if(profile.protected){

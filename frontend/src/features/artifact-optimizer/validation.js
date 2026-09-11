@@ -1,5 +1,6 @@
 import {profileLabel,buildLabel} from './localization.js'
 import {validateBuildScripts} from './script-diagnostics.js'
+import {fixedArtifactMatches} from './inventory.js'
 const integer=(v,min,max)=>Number.isInteger(v)&&v>=min&&v<=max
 const number=(v,min,max)=>Number.isFinite(v)&&v>=min&&v<=max
 export function validateOptimization(workspace,selected,snapshot,catalog={},options={}){
@@ -20,7 +21,9 @@ export function validateOptimization(workspace,selected,snapshot,catalog={},opti
     for(const field of ['maxLevel','weaponMaxLevel'])if(!integer(p[field],10,90)||p[field]%10!==0)add(scope,key,buildId,field,`${name}：等级上限须选择10至90之间的整十档位`)
     if(!Array.isArray(p.talents)||p.talents.length!==3||p.talents.some(v=>!integer(v,1,15)))add(scope,key,buildId,'talents',`${name}：请补全三个基础天赋等级`)
   }
-  for(const key of selected){const p=profiles.get(key);if(!p){add('character',key,'','profile','所选角色的个人档案不存在');continue}personal(key,p);if(!p.builds?.length)add('character',key,'','builds',`${profileLabel(catalog,p)}：尚未关联配队方案`);for(const b of p.builds||[]){ids.add(b.id);if(!builds.has(b.id))add('character',key,'','builds','角色关联的方案已不存在')}}
+  for(const key of selected){const p=profiles.get(key);if(!p){add('character',key,'','profile','所选角色的个人档案不存在');continue}personal(key,p);
+    for(const slot of Object.keys(p.fixedSlots||{}))if(!fixedArtifactMatches(p,slot,snapshot))add('character',key,'','fixedSlots',`${profileLabel(catalog,p)}：固定圣遗物与当前扫描不匹配，请在高级硬约束中重新选择或清除`)
+    if(!p.builds?.length)add('character',key,'','builds',`${profileLabel(catalog,p)}：尚未关联配队方案`);for(const b of p.builds||[]){ids.add(b.id);if(!builds.has(b.id))add('character',key,'','builds','角色关联的方案已不存在')}}
   for(const id of ids){const b=builds.get(id);if(!b)continue;const name=buildLabel(b)
     issues.push(...validateBuildScripts(b,workspace.characters,catalog))
     if(!Array.isArray(b.members)||!b.members.length||b.members.length>4||new Set(b.members.map(m=>m.character)).size!==b.members.length)add('build','',id,'members',`${name}：请设置一至四名不同队员`)

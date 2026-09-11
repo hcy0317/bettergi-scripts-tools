@@ -75,6 +75,19 @@ class OptimizationNativeFlowTest {
             assertNotNull(stream); return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
+    @Test void initialActorComesFromReachableBranchTargetsNotUnrelatedDeclarations() {
+        var program=new OptimizationNativeFlow(mapper,"""
+            strategy(loop=battle)
+            segment(无关,define) {
+              琴 e
+            }
+            segment(开场,define) {
+              钟离 e
+            }
+            branch(if=q-ready(钟离),then=开场,else=开场,unknown=开场)
+            """,ALIASES).program();
+        assertEquals("zhongli",OptimizationNativeFlow.initialCharacter(program));
+    }
     @Test void importsWaterControlFlowWithoutFlatteningItsGuardsOrMacro() throws Exception {
         String source=water();
         var parsed=new OptimizationRotationCompiler(mapper).parse(source,ALIASES);
