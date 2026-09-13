@@ -199,7 +199,17 @@
                 <includes>
                     <include>**/*</include>
                 </includes>
+                <excludes>
+                    <exclude>cultivation/autoplan/**</exclude>
+                </excludes>
                 <filtering>true</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>cultivation/autoplan/**</include>
+                </includes>
+                <filtering>false</filtering>
             </resource>
         </resources>
 

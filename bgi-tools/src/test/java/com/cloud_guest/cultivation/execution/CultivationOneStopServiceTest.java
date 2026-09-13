@@ -292,7 +292,9 @@ class CultivationOneStopServiceTest {
                 .contains("await countInventoryItems(names, gridScreenName, iconRecognitionMode)")
                 .contains("gridScreenName === \"Materials\"")
                 .contains("BGI_COMBAT_UNCONFIRMED")
-                .contains("allowFinalRefresh = false")
+                .contains("const terminal = await drive()")
+                .contains("FINAL_INVENTORY_UNRESOLVED")
+                .contains("taskResult.report(result.kind, result.reason)")
                 .contains("if (!recoveryFailed && !isTerminalAutomationError(executionError))")
                 .contains("async function countInventoryItems(names, gridScreenName, iconRecognitionMode = \"GridIcon\")")
                 .contains("await countInventoryItems(retryNames, gridScreenName, \"Item\")")
@@ -314,19 +316,20 @@ class CultivationOneStopServiceTest {
                 .contains("action.actionType === \"CRAFT_BATCH\"")
                 .contains("async function executeCraftBatchAction(baseUrl, action, executorId, config)")
                 .contains("const craftActions = Array.isArray(action.craftActions) ? action.craftActions : []")
-                .containsOnlyOnce("await genshin.GoToCraftingBench(action.craftCountry)")
+                .contains("await genshin.GoToCraftingBench(action.craftCountry)")
+                .contains("async function executeCraftAction(")
                 .contains("for (const craftAction of craftActions)")
                 .doesNotContain("await genshin.GoCraftResin(action.craftCountry)")
                 .contains("await genshin.CraftMaterial(")
-                .doesNotContain("observeOwned(action.materialName, \"CharacterDevelopmentItems\")")
+                .contains("action.actionType === \"CRAFT\"")
                 .contains("批量合成后强制完整库存复核")
                 .contains("完整库存复核后仍未开放行动")
                 .contains("return response.status === \"REPLANNING\"")
                 .containsOnlyOnce("if (action.status === \"PLAN_NEEDS_RECONCILE\")")
-                .contains("return result.status === \"REPLANNING\"")
+                .contains("shouldContinue: result.status === \"REPLANNING\"")
                 .doesNotContain("config, inventoryReconcileState, `合成 ${action.materialName} 后复核`")
                 .containsPattern("(?s)if \\(action\\.actionType === \\\"CRAFT_BATCH\\\"\\).*?"
-                        + "executeCraftBatchAction.*?runCultivationInventoryReconcile\\(config\\).*?continue;")
+                        + "executeCraftBatchAction.*?reconcileInventoryCore\\(config\\).*?continue;")
                 .doesNotContain("param.GridScreenName = GridScreenName.Materials")
                 .doesNotContain("gridScreenName: \"Materials\"")
                 .doesNotContain("组末库存存在未知值，已停止后续执行")
@@ -464,6 +467,26 @@ class CultivationOneStopServiceTest {
                 .map(project -> project.path("folderName").asText()).toList())
                 .containsExactly("AutoPlan", "WeeklyBoss");
         assertThat(prunedGroup.toString()).doesNotContain("沙脂蛹", "HCY-FullyAutoAndSemiAutoTools");
+
+        Path pinnedBridge = autoPlanScript.resolve("utils").resolve("cultivation_plan.js");
+        Path pinnedManifest = autoPlanScript.resolve("utils").resolve("bridge-source.json");
+        byte[] bridgeBeforePinProbe = Files.readAllBytes(pinnedBridge);
+        byte[] manifestBeforePinProbe = Files.readAllBytes(pinnedManifest);
+        byte[] differentRevision = (new String(bridgeBeforePinProbe, java.nio.charset.StandardCharsets.UTF_8)
+                + "\n// another explicitly pinned revision\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var differentPin = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(manifestBeforePinProbe);
+        differentPin.put("sha256", java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(differentRevision)));
+        try {
+            Files.write(pinnedBridge, differentRevision);
+            Files.write(pinnedManifest, new ObjectMapper().writeValueAsBytes(differentPin));
+            assertThatThrownBy(() -> service.prepare("102550550")).isInstanceOf(IllegalStateException.class);
+            assertThat(Files.readAllBytes(pinnedBridge)).isEqualTo(differentRevision);
+            assertThat(new ObjectMapper().readTree(pinnedManifest.toFile()).path("sha256").asText())
+                    .isEqualTo(differentPin.path("sha256").asText());
+        } finally {
+            Files.write(pinnedBridge, bridgeBeforePinProbe);
+            Files.write(pinnedManifest, manifestBeforePinProbe);
+        }
 
         when(executionService.projection("102550550")).thenReturn(projection());
         when(configurationService.find("102550550", AutoPlanResinExecutionModule.ID)).thenReturn(

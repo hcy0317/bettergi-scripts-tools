@@ -158,6 +158,7 @@ public class CultivationOneStopService {
         paths.addAll(findManagedGroupDuplicates(root, uid, groupFile));
         paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "main.js")));
         paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "utils", "cultivation_plan.js")));
+        paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "utils", "bridge-source.json")));
         paths.add(root.resolve(Path.of("User", "JsScript", "AutoPlan", "utils", "load_check_run.js")));
         paths.add(root.resolve(Path.of("User", "JsScript", "CD-Aware-AutoGather", "settings.json")));
         for (String alias : List.of("HCY-FullyAutoAndSemiAutoTools", "FullyAutoAndSemiAutoTools")) {
@@ -1169,16 +1170,21 @@ public class CultivationOneStopService {
             throw new IllegalStateException("未找到 AutoPlan/main.js，无法启用计划驱动执行");
         }
 
-        String bridge;
-        try (InputStream input = getClass().getResourceAsStream(
-                "/cultivation/autoplan/cultivation_plan.js")) {
-            if (input == null) throw new IllegalStateException("计划驱动 AutoPlan 桥接资源缺失");
-            bridge = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        }
+        AutoPlanBridgeResource resource = AutoPlanBridgeResource.load(objectMapper);
         Path bridgeFile = scriptRoot.resolve(Path.of("utils", "cultivation_plan.js"));
+        Path sourceFile = scriptRoot.resolve(Path.of("utils", "bridge-source.json"));
+        if (Files.isRegularFile(sourceFile)) {
+            AutoPlanBridgeResource installed = AutoPlanBridgeResource.validate(
+                    Files.readAllBytes(bridgeFile), Files.readAllBytes(sourceFile), objectMapper);
+            if (!installed.sha256().equals(resource.sha256())) {
+                throw new IllegalStateException("已安装桥接属于其他主源版本；请部署匹配版本，配置生成不能覆盖或降级它");
+            }
+        }
         writeTextIfChanged(
-                bridgeFile, bridge,
+                bridgeFile, resource.script(),
                 backupDirectory.resolve(Path.of("JsScript", "AutoPlan", "utils", "cultivation_plan.js")));
+        writeTextIfChanged(sourceFile, resource.manifest(),
+                backupDirectory.resolve(Path.of("JsScript", "AutoPlan", "utils", "bridge-source.json")));
         installAutoPlanRewardPassthrough(scriptRoot, backupDirectory);
 
         String main = Files.readString(mainFile);
