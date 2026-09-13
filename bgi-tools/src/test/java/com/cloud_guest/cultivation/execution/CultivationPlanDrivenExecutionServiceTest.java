@@ -28,6 +28,115 @@ class CultivationPlanDrivenExecutionServiceTest {
             Instant.parse("2026-08-24T04:00:00Z"), ZoneId.of("Asia/Shanghai"));
 
     @Test
+    void preparationProbeRequestsResinWithoutCreatingAConsumptionLease() {
+        var projections = mock(CultivationExecutionService.class);
+        var mapper = mock(CultivationExecutionActionMapper.class);
+        when(projections.projection("102550550")).thenReturn(projection());
+        var service = new CultivationPlanDrivenExecutionService(projections, mapper,
+                new ObjectMapper().findAndRegisterModules(), MONDAY);
+        var result = service.claim("102550550", "executor-a", new CultivationNextActionRequest(null, true));
+        assertThat(result.status()).isEqualTo("NEEDS_RESIN_SNAPSHOT");
+        assertThat(result.actionId()).isNull();
+        verify(mapper, never()).insert(any(CultivationExecutionActionEntity.class));
+    }
+
+    @Test
+    void expiredConsumptionLeaseBecomesReconciliationInsteadOfAnotherConsumption() {
+        var projections = mock(CultivationExecutionService.class);
+        var mapper = mock(CultivationExecutionActionMapper.class);
+        var expired = leasedAction("uncertain-consumption");
+        expired.setActionType("WORLD_BOSS");
+        expired.setLeaseKey("102550550:3");
+        expired.setLeaseExpiresAt(LocalDateTime.now(MONDAY).minusSeconds(1));
+        when(projections.projection("102550550")).thenReturn(projection());
+        when(mapper.findLeased("102550550", 3)).thenReturn(expired);
+        when(mapper.selectById("uncertain-consumption")).thenReturn(expired);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        var service = new CultivationPlanDrivenExecutionService(projections, mapper,
+                new ObjectMapper().findAndRegisterModules(), MONDAY);
+        var claimed = service.claim("102550550", "executor-new");
+        assertThat(claimed.status()).isEqualTo("NEEDS_RECONCILE");
+        assertThat(claimed.actionId()).isEqualTo("uncertain-consumption");
+        assertThat(expired.getStatus()).isEqualTo("AWAITING_RECONCILE");
+        assertThat(expired.getLeaseKey()).isEqualTo("102550550:3");
+        verify(mapper, never()).insert(any(CultivationExecutionActionEntity.class));
+        assertThatThrownBy(() -> service.complete("uncertain-consumption", new CultivationActionResultRequest(
+                "executor-new", 3, "uncertain-consumption:result", true, 12L, Map.of(), "COMPLETED")))
+                .isInstanceOf(IllegalStateException.class);
+        var reconciled = service.complete("uncertain-consumption", new CultivationActionResultRequest(
+                "executor-new", 3, "uncertain-consumption:result", false, 12L, Map.of(), "RECONCILE_ONLY"));
+        assertThat(reconciled.status()).isEqualTo("REPLANNING");
+        assertThat(expired.getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void uncertainExpiredLeaseTransfersAndCompletesThroughTheRealSqliteCompareAndSet() throws Exception {
+        var configuration = new com.baomidou.mybatisplus.core.MybatisConfiguration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        configuration.setEnvironment(new org.apache.ibatis.mapping.Environment("test",
+                new org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory(),
+                new org.apache.ibatis.datasource.unpooled.UnpooledDataSource(
+                        "org.sqlite.JDBC", "jdbc:sqlite::memory:", null, null)));
+        configuration.addMapper(CultivationExecutionActionMapper.class);
+        var factory = new com.baomidou.mybatisplus.core.MybatisSqlSessionFactoryBuilder().build(configuration);
+        try (var session = factory.openSession(true)) {
+            org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(session.getConnection(),
+                    new org.springframework.core.io.ClassPathResource("sql/sqlite.sql"));
+            var mapper = session.getMapper(CultivationExecutionActionMapper.class);
+            var old = leasedAction("expired-real");
+            old.setActionType("WORLD_BOSS");
+            old.setLeaseKey("102550550:3");
+            old.setRemainingBefore(18L);
+            old.setPlanJson("{\"runType\":\"Boss\"}");
+            old.setLeaseExpiresAt(LocalDateTime.now(MONDAY).minusSeconds(1));
+            mapper.insert(old);
+            var projections = mock(CultivationExecutionService.class);
+            when(projections.projection("102550550")).thenReturn(projection());
+            var service = new CultivationPlanDrivenExecutionService(projections, mapper,
+                    new ObjectMapper().findAndRegisterModules(), MONDAY);
+            assertThat(service.claim("102550550", "new-a").status()).isEqualTo("NEEDS_RECONCILE");
+            // 尚未形成回执key时，NULL必须使用IS NULL才能安全交接。
+            assertThat(service.claim("102550550", "new-b").status()).isEqualTo("NEEDS_RECONCILE");
+            assertThatThrownBy(() -> service.complete("expired-real", new CultivationActionResultRequest(
+                    "new-a", 3, "expired-real:result", false, 12L, Map.of(), "RECONCILE_ONLY")))
+                    .isInstanceOf(IllegalStateException.class);
+            assertThat(service.complete("expired-real", new CultivationActionResultRequest(
+                    "new-b", 3, "expired-real:result", false, 12L, Map.of(), "RECONCILE_ONLY")).status())
+                    .isEqualTo("REPLANNING");
+            assertThat(mapper.findLeased("102550550", 3)).isNull();
+            assertThat(mapper.selectById("expired-real").getStatus()).isEqualTo("COMPLETED");
+            assertThat(mapper.selectById("expired-real").getLeaseKey()).isNull();
+        }
+    }
+
+    @Test
+    void uncertainCraftBatchUsesFullInventoryReconciliationAndPreservesItsOriginalPlan() {
+        var projections = mock(CultivationExecutionService.class);
+        var mapper = mock(CultivationExecutionActionMapper.class);
+        var old = leasedAction("uncertain-batch");
+        old.setActionType("CRAFT_BATCH");
+        old.setMaterialName("__craft_batch__");
+        old.setPlanJson("{\"country\":\"璃月\",\"actions\":[]}");
+        old.setLeaseKey("102550550:3");
+        old.setLeaseExpiresAt(LocalDateTime.now(MONDAY).minusSeconds(1));
+        var originalPlan = old.getPlanJson();
+        when(projections.projection("102550550")).thenReturn(projection());
+        when(projections.inventoryReconcileTargets("102550550"))
+                .thenReturn(Map.of("CharacterDevelopmentItems", List.of("低级材料", "高级材料")));
+        when(mapper.findLeased("102550550", 3)).thenReturn(old);
+        when(mapper.update(any(CultivationExecutionActionEntity.class), any())).thenReturn(1);
+        var service = new CultivationPlanDrivenExecutionService(projections, mapper,
+                new ObjectMapper().findAndRegisterModules(), MONDAY);
+        assertThat(service.claim("102550550", "next").status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+        var inventory = service.claimInventoryReconcile("102550550", "inventory");
+        assertThat(inventory.status()).isEqualTo("ACTION");
+        assertThat(inventory.materialNames()).containsExactly("低级材料", "高级材料");
+        assertThat(old.getStatus()).isEqualTo("EXPIRED");
+        assertThat(old.getPlanJson()).isEqualTo(originalPlan);
+        assertThat(old.getObservedOwned()).isNull();
+    }
+
+    @Test
     void nullInventoryRetryLeaseCanBeReclaimedThroughTheRealSqliteMapper() throws Exception {
         var configuration = new com.baomidou.mybatisplus.core.MybatisConfiguration();
         configuration.setMapUnderscoreToCamelCase(true);

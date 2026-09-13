@@ -108,18 +108,26 @@ public class CultivationPlanController {
             @RequestParam(required = false) Integer originalResinCount,
             @RequestParam(required = false) Integer condensedResinCount,
             @RequestParam(required = false) Integer transientResinCount,
-            @RequestParam(required = false) Integer fragileResinCount) {
+            @RequestParam(required = false) Integer fragileResinCount,
+            @RequestParam(defaultValue = "false") boolean prepareOnly) {
         CultivationNextActionRequest request = originalResinCount == null
                 && condensedResinCount == null
                 && transientResinCount == null
                 && fragileResinCount == null
-                ? null
+                ? new CultivationNextActionRequest(null, prepareOnly)
                 : new CultivationNextActionRequest(new CultivationResinSnapshot(
                         Math.max(originalResinCount == null ? 0 : originalResinCount, 0),
                         Math.max(condensedResinCount == null ? 0 : condensedResinCount, 0),
                         Math.max(transientResinCount == null ? 0 : transientResinCount, 0),
-                        Math.max(fragileResinCount == null ? 0 : fragileResinCount, 0)));
+                        Math.max(fragileResinCount == null ? 0 : fragileResinCount, 0)), prepareOnly);
         return ok(planDrivenExecutionService.claim(uid, executorId, request));
+    }
+
+    public Result<CultivationNextActionResponse> nextAction(String uid, String executorId,
+            Integer originalResinCount, Integer condensedResinCount, Integer transientResinCount,
+            Integer fragileResinCount) {
+        return nextAction(uid, executorId, originalResinCount, condensedResinCount,
+                transientResinCount, fragileResinCount, false);
     }
 
     @PostMapping("execution/actions/{actionId}/result")
