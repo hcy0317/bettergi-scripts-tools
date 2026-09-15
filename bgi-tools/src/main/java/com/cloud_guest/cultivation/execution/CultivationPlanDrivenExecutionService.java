@@ -82,19 +82,21 @@ public class CultivationPlanDrivenExecutionService {
                 && (existing.getLeaseExpiresAt() == null
                     || !existing.getLeaseExpiresAt().isAfter(LocalDateTime.now(clock)));
         if (existing != null && (AWAITING_RECONCILE.equals(existing.getStatus()) || expiredInventoryRetry)) {
-            if (INVENTORY_RECONCILE_BATCH.equals(existing.getActionType())) {
+            if (INVENTORY_RECONCILE_BATCH.equals(existing.getActionType()) || CRAFT_BATCH.equals(existing.getActionType())) {
                 return status("PLAN_NEEDS_RECONCILE", "组末库存存在未知值，需先重新完整清点",
                         normalizedUid, projection.revision());
             }
             String previousExecutor = existing.getExecutorId();
             existing.setExecutorId(normalizedExecutor);
             existing.setLeaseExpiresAt(LocalDateTime.now(clock).plus(LEASE_DURATION));
-            int transferred = actionMapper.update(existing, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+            var transfer = Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
                     .eq(CultivationExecutionActionEntity::getId, existing.getId())
                     .eq(CultivationExecutionActionEntity::getStatus, AWAITING_RECONCILE)
-                    .eq(CultivationExecutionActionEntity::getExecutorId, previousExecutor)
-                    .eq(CultivationExecutionActionEntity::getResultIdempotencyKey,
-                            existing.getResultIdempotencyKey()));
+                    .eq(CultivationExecutionActionEntity::getExecutorId, previousExecutor);
+            if (existing.getResultIdempotencyKey() == null)
+                transfer.isNull(CultivationExecutionActionEntity::getResultIdempotencyKey);
+            else transfer.eq(CultivationExecutionActionEntity::getResultIdempotencyKey, existing.getResultIdempotencyKey());
+            int transferred = actionMapper.update(existing, transfer);
             if (transferred != 1) {
                 return status("BUSY", "行动对账租约刚被其他执行器接管或完成，请重新领取",
                         normalizedUid, projection.revision());
@@ -124,6 +126,29 @@ public class CultivationPlanDrivenExecutionService {
                     return fromEntity(existing, "BUSY", "该 UID 已有其他执行器持有行动租约");
                 }
                 return fromEntity(existing, "ACTION", "恢复尚未到期的当前行动");
+            }
+            if (CRAFT_BATCH.equals(existing.getActionType()))
+                return status("PLAN_NEEDS_RECONCILE", "过期合成批次必须完整清点库存，不重新合成",
+                        normalizedUid, projection.revision());
+            if (!INVENTORY_RECONCILE_BATCH.equals(existing.getActionType()) && LEASED.equals(existing.getStatus())) {
+                // 租约到期只证明执行器失联，不证明游戏侧没有消费。
+                var now = LocalDateTime.now(clock);
+                var expired = Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                        .eq(CultivationExecutionActionEntity::getId, existing.getId())
+                        .eq(CultivationExecutionActionEntity::getStatus, LEASED)
+                        .eq(CultivationExecutionActionEntity::getExecutorId, existing.getExecutorId())
+                        .isNull(CultivationExecutionActionEntity::getResultIdempotencyKey);
+                if (existing.getLeaseExpiresAt() == null)
+                    expired.isNull(CultivationExecutionActionEntity::getLeaseExpiresAt);
+                else expired.le(CultivationExecutionActionEntity::getLeaseExpiresAt, now);
+                existing.setStatus(AWAITING_RECONCILE);
+                existing.setExecutorId(normalizedExecutor);
+                existing.setLeaseExpiresAt(now.plus(LEASE_DURATION));
+                existing.setLeaseKey(normalizedUid + ":" + projection.revision());
+                existing.setTerminationReason("LEASE_EXPIRED_UNCERTAIN");
+                if (actionMapper.update(existing, expired) != 1)
+                    return status("BUSY", "过期行动已被另一执行器完成或接管，请重新领取", normalizedUid, projection.revision());
+                return fromEntity(existing, "NEEDS_RECONCILE", "过期行动消费状态未知，仅复核库存，不重复消耗资源");
             }
             existing.setStatus("EXPIRED");
             existing.setLeaseKey(null);
@@ -167,6 +192,13 @@ public class CultivationPlanDrivenExecutionService {
                         projection.revision());
             }
             candidate = craftFallback;
+        }
+
+        if (request != null && request.prepareOnly()) {
+            boolean needsResin = isResinAction(candidate) && resinSnapshot == null;
+            return status(needsResin ? "NEEDS_RESIN_SNAPSHOT" : "READY_FOR_ACTION",
+                    needsResin ? "新行动需要实时树脂快照，尚未创建消费租约" : "行动准备完成，尚未创建消费租约",
+                    normalizedUid, projection.revision());
         }
 
         String actionId = UUID.randomUUID().toString();
@@ -243,9 +275,16 @@ public class CultivationPlanDrivenExecutionService {
             return result(entity);
         }
 
-        if (!LEASED.equals(entity.getStatus())) {
+        String previousStatus = entity.getStatus();
+        boolean expiredConsumptionReconcile = AWAITING_RECONCILE.equals(previousStatus)
+                && "LEASE_EXPIRED_UNCERTAIN".equals(entity.getTerminationReason());
+        if (!LEASED.equals(previousStatus) && !expiredConsumptionReconcile) {
             throw new IllegalStateException("行动不再处于可提交的租约状态");
         }
+        if (expiredConsumptionReconcile && (request.succeeded()
+                || !"RECONCILE_ONLY".equals(request.terminationReason())
+                || request.rewards() != null && !request.rewards().isEmpty()))
+            throw new IllegalStateException("过期消费行动只允许库存复核，不能重新执行或补报消费成功");
         LocalDateTime now = LocalDateTime.now(clock);
         if (entity.getLeaseExpiresAt() == null || !entity.getLeaseExpiresAt().isAfter(now)) {
             throw new IllegalStateException("行动租约已过期");
@@ -263,7 +302,7 @@ public class CultivationPlanDrivenExecutionService {
         }
         int updated = actionMapper.update(entity, Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
                 .eq(CultivationExecutionActionEntity::getId, normalizedActionId)
-                .eq(CultivationExecutionActionEntity::getStatus, LEASED)
+                .eq(CultivationExecutionActionEntity::getStatus, previousStatus)
                 .eq(CultivationExecutionActionEntity::getExecutorId, executorId)
                 .isNull(CultivationExecutionActionEntity::getResultIdempotencyKey)
                 .gt(CultivationExecutionActionEntity::getLeaseExpiresAt, now));
@@ -279,6 +318,7 @@ public class CultivationPlanDrivenExecutionService {
         throw new IllegalStateException("行动已由另一个幂等结果完成");
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public CultivationInventoryReconcileTargetsResponse claimInventoryReconcile(
             String uid, String executorId) {
         String normalizedUid = CultivationUid.normalize(uid);
@@ -298,12 +338,14 @@ public class CultivationPlanDrivenExecutionService {
                     normalizedUid, projection.revision(), materialNames);
         }
 
+        String replacedActionId = null;
         CultivationExecutionActionEntity existing = actionMapper.findLeased(normalizedUid, projection.revision());
         if (existing != null) {
             boolean inventoryBatch = INVENTORY_RECONCILE_BATCH.equals(existing.getActionType());
+            boolean reconcileCraftBatch = CRAFT_BATCH.equals(existing.getActionType()) && AWAITING_RECONCILE.equals(existing.getStatus());
             boolean activeLease = existing.getLeaseExpiresAt() != null
                     && existing.getLeaseExpiresAt().isAfter(LocalDateTime.now(clock));
-            if (!inventoryBatch && (AWAITING_RECONCILE.equals(existing.getStatus()) || activeLease)) {
+            if (!inventoryBatch && !reconcileCraftBatch && (AWAITING_RECONCILE.equals(existing.getStatus()) || activeLease)) {
                 return new CultivationInventoryReconcileTargetsResponse(
                         "BUSY", "该 UID 仍有未完成的养成行动",
                         normalizedUid, projection.revision(), existing.getId(),
@@ -359,7 +401,7 @@ public class CultivationPlanDrivenExecutionService {
                 return inventoryResponse(existing, "NEEDS_RECONCILE", "已接管过期的组末库存重试",
                         materialNamesByGrid);
             }
-            if (activeLease) {
+            if (activeLease && !reconcileCraftBatch) {
                 if (!normalizedExecutor.equals(existing.getExecutorId())) {
                     return inventoryResponse(existing, "BUSY", "该 UID 已有其他执行器持有行动租约",
                             materialNamesByGrid);
@@ -367,9 +409,20 @@ public class CultivationPlanDrivenExecutionService {
                 return inventoryResponse(existing, "ACTION", "恢复尚未到期的组末库存复核",
                         materialNamesByGrid);
             }
+            var retire = Wrappers.<CultivationExecutionActionEntity>lambdaUpdate()
+                    .eq(CultivationExecutionActionEntity::getId, existing.getId())
+                    .eq(CultivationExecutionActionEntity::getStatus, existing.getStatus())
+                    .eq(CultivationExecutionActionEntity::getExecutorId, existing.getExecutorId());
+            if (existing.getResultIdempotencyKey() == null) retire.isNull(CultivationExecutionActionEntity::getResultIdempotencyKey);
+            else retire.eq(CultivationExecutionActionEntity::getResultIdempotencyKey, existing.getResultIdempotencyKey());
+            if (!reconcileCraftBatch) retire.and(lease -> lease.isNull(CultivationExecutionActionEntity::getLeaseExpiresAt)
+                    .or().le(CultivationExecutionActionEntity::getLeaseExpiresAt, LocalDateTime.now(clock)));
             existing.setStatus("EXPIRED");
             existing.setLeaseKey(null);
-            actionMapper.updateById(existing);
+            if (actionMapper.update(existing, retire) != 1)
+                return inventoryStatus("BUSY", "原行动刚被其他执行器完成或接管，请重新复核",
+                        normalizedUid, projection.revision(), materialNames);
+            replacedActionId = existing.getId();
         }
 
         CultivationExecutionActionEntity entity = new CultivationExecutionActionEntity();
@@ -384,6 +437,7 @@ public class CultivationPlanDrivenExecutionService {
         entity.setMaterialName("__inventory_reconcile__");
         entity.setRemainingBefore(reconcileRemaining(projection).values().stream().mapToLong(Long::longValue).sum());
         entity.setPlanJson(write(materialNamesByGrid));
+        if (replacedActionId != null) entity.setRemark("Reconciles expired action: " + replacedActionId);
         try {
             actionMapper.insert(entity);
             return inventoryResponse(entity, "ACTION", "已领取组末权威库存复核租约", materialNamesByGrid);
