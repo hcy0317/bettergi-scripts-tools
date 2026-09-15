@@ -203,7 +203,7 @@ public class UidController implements AbsPage {
     }
 
 
-    @SysLog
+    @SysLog @Token
     @Operation(summary = "[Team]-查询分页-uid映射队伍配置")
     @GetMapping("team/page")
     public Result<ResultPage<UidTeam>> teamList(
@@ -218,7 +218,7 @@ public class UidController implements AbsPage {
                 info -> ClassConvert.convert(UidTeamConfig.class, UidTeam.class, info)));
     }
 
-    @SysLog
+    @SysLog @Token
     @Operation(summary = "[Team]-查询指定-uid映射队伍配置")
     @GetMapping("team")
     public Result<UidTeam> team(@Schema(description = "UID") @Validated @NotBlank @RequestParam String uid,
@@ -228,7 +228,7 @@ public class UidController implements AbsPage {
                 .orElse(null));
     }
 
-    @SysLog
+    @SysLog @Token
     @Operation(summary = "[Team]-查询指定-uid映射队伍配置")
     @GetMapping("team/info")
     public Result<UidTeam> teamInfo(@Schema(description = "ID") @Validated @NotBlank @RequestParam String id) {

@@ -548,14 +548,12 @@ export class BgiTools {
         "count": 0,
         "country": "",
         "leyLineOutcropType": "",
-        "useAdventurerHandbook": true,
         "friendshipTeam": "",
         "team": "",
         "timeout": 0,
         "useFragileResin": true,
         "useTransientResin": true,
-        "isGoToSynthesizer": true,
-        "isNotification": true
+        "isGoToSynthesizer": true
       },
       "autoStygianOnslaught": {
         "physical": [
