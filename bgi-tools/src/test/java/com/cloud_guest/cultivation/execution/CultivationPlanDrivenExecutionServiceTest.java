@@ -24,8 +24,120 @@ import static org.mockito.Mockito.when;
 
 class CultivationPlanDrivenExecutionServiceTest {
 
+    @Test
+    void aCraftProjectionDoesNotBlockTheSelectedDomainOnCraftInventoryFreshness() {
+        var projections = mock(CultivationExecutionService.class);
+        var mapper = mock(CultivationExecutionActionMapper.class);
+        var current = projection();
+        var withCraft = new CultivationExecutionProjection(current.uid(), current.revision(), "ACTIVE", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的指引", 3, "角色天赋素材")),
+                current.resinActions(), current.bossActions(), current.weeklyBossActions(), current.gatherAction(),
+                current.monsterAction(), current.pendingMaterials(), current.preferences(), current.partyOptions());
+        when(projections.projection(current.uid())).thenReturn(withCraft);
+        when(mapper.insert(any())).thenReturn(1);
+        var service = new CultivationPlanDrivenExecutionService(projections, mapper,
+                new ObjectMapper().findAndRegisterModules(), MONDAY);
+        var result = service.claim(current.uid(), "executor-domain");
+        assertThat(result.status()).isEqualTo("ACTION");
+        assertThat(result.actionType()).isEqualTo("DOMAIN");
+        verify(mapper).insert(any(CultivationExecutionActionEntity.class));
+    }
+
     private static final Clock MONDAY = Clock.fixed(
             Instant.parse("2026-08-24T04:00:00Z"), ZoneId.of("Asia/Shanghai"));
+
+    @Test
+    void noProgressCraftFallbackStillRequiresFreshInventoryBeforePreparingOrLeasing() {
+        var projections = mock(CultivationExecutionService.class);
+        var mapper = mock(CultivationExecutionActionMapper.class);
+        var current = projection();
+        var withCraft = new CultivationExecutionProjection(current.uid(), current.revision(), "ACTIVE", current.executionMode(),
+                List.of(new CultivationCraftingAction("「笃行」的指引", 3, "角色天赋素材")),
+                current.resinActions(), current.bossActions(), current.weeklyBossActions(), current.gatherAction(),
+                current.monsterAction(), current.pendingMaterials(), current.preferences(), current.partyOptions());
+        when(projections.projection(current.uid())).thenReturn(withCraft);
+        when(projections.inventoryReconcileTargets(current.uid())).thenReturn(Map.of(
+                "CharacterDevelopmentItems", List.of("「笃行」的教导", "「笃行」的指引")));
+        var noProgress = completedBusiness("domain-no-progress", "DOMAIN", 0);
+        noProgress.setMaterialName("「公平」的哲学");
+        noProgress.setRemainingBefore(5L);
+        noProgress.setRewardsJson("{}");
+        when(mapper.findCompletedObservations(current.uid(), 3)).thenReturn(List.of(noProgress));
+        var service = new CultivationPlanDrivenExecutionService(projections, mapper,
+                new ObjectMapper().findAndRegisterModules(), MONDAY);
+        for (boolean prepareOnly : new boolean[]{false, true}) {
+            var result = service.claim(current.uid(), "fallback",
+                    new CultivationNextActionRequest(new CultivationResinSnapshot(10, 0, 1, 0), prepareOnly));
+            assertThat(result.status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+            assertThat(result.inventoryReconcileCause()).isEqualTo("ACTION:domain-no-progress");
+        }
+        verify(mapper, never()).insert(any());
+    }
+
+    @Test
+    void reconcileCauseUsesRealSqlOrderingAndOnlyCompletedBusinessResults() throws Exception {
+        var configuration = new com.baomidou.mybatisplus.core.MybatisConfiguration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        configuration.setEnvironment(new org.apache.ibatis.mapping.Environment("test",
+                new org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory(),
+                new org.apache.ibatis.datasource.unpooled.UnpooledDataSource(
+                        "org.sqlite.JDBC", "jdbc:sqlite::memory:", null, null)));
+        configuration.addMapper(CultivationExecutionActionMapper.class);
+        var factory = new com.baomidou.mybatisplus.core.MybatisSqlSessionFactoryBuilder().build(configuration);
+        try (var session = factory.openSession(true)) {
+            org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(session.getConnection(),
+                    new org.springframework.core.io.ClassPathResource("sql/sqlite.sql"));
+            var mapper = session.getMapper(CultivationExecutionActionMapper.class);
+            var projections = mock(CultivationExecutionService.class);
+            var current = projection();
+            when(projections.projection(current.uid())).thenReturn(new CultivationExecutionProjection(
+                    current.uid(), current.revision(), "NEEDS_RECONCILE", current.executionMode(),
+                    List.of(), List.of(), List.of(), current.gatherAction(), current.monsterAction(),
+                    current.pendingMaterials(), current.preferences(), current.partyOptions()));
+            var json = new ObjectMapper().findAndRegisterModules();
+            var service = new CultivationPlanDrivenExecutionService(projections, mapper, json, MONDAY);
+            assertThat(json.valueToTree(service.claim(current.uid(), "cause-test")).path("inventoryReconcileCause").asText())
+                    .isEqualTo("INITIAL");
+            for (String id : List.of("a", "z")) mapper.insert(completedBusiness(id, "DOMAIN", 0));
+            assertThat(mapper.findCompletedObservations(current.uid(), 3))
+                    .extracting(CultivationExecutionActionEntity::getId).containsExactly("z", "a");
+            assertThat(json.valueToTree(service.claim(current.uid(), "cause-test")).path("inventoryReconcileCause").asText())
+                    .isEqualTo("ACTION:z");
+            var scan = completedBusiness("scan", "INVENTORY_RECONCILE_BATCH", 1);
+            mapper.insert(scan);
+            var missingResult = completedBusiness("missing-result", "WORLD_BOSS", 2);
+            missingResult.setResultIdempotencyKey(" ");
+            mapper.insert(missingResult);
+            var unfinished = completedBusiness("unfinished", "CRAFT", 2);
+            unfinished.setStatus("EXPIRED");
+            mapper.insert(unfinished);
+            var otherUid = completedBusiness("other-uid", "DOMAIN", 2);
+            otherUid.setUid("100000001");
+            mapper.insert(otherUid);
+            var otherRevision = completedBusiness("other-revision", "CRAFT_BATCH", 2);
+            otherRevision.setPlanRevision(4);
+            mapper.insert(otherRevision);
+            mapper.insert(completedBusiness("other-type", "UNKNOWN", 2));
+            assertThat(json.valueToTree(service.claim(current.uid(), "cause-test")).path("inventoryReconcileCause").asText())
+                    .isEqualTo("ACTION:z");
+            mapper.insert(completedBusiness("new-business", "CRAFT_BATCH", 3));
+            assertThat(json.valueToTree(service.claim(current.uid(), "cause-test")).path("inventoryReconcileCause").asText())
+                    .isEqualTo("ACTION:new-business");
+        }
+    }
+
+    private static CultivationExecutionActionEntity completedBusiness(String id, String type, int seconds) {
+        var entity = leasedAction(id);
+        entity.setActionType(type);
+        entity.setStatus("COMPLETED");
+        entity.setObservedOwned(10L);
+        entity.setRemainingBefore(20L);
+        entity.setPlanJson("{}");
+        entity.setResultIdempotencyKey(id + ":result");
+        entity.setCreateTime(LocalDateTime.now(MONDAY).plusSeconds(seconds));
+        entity.setUpdateTime(LocalDateTime.now(MONDAY).plusSeconds(seconds));
+        return entity;
+    }
 
     @Test
     void preparationProbeRequestsResinWithoutCreatingAConsumptionLease() {
@@ -531,7 +643,8 @@ class CultivationPlanDrivenExecutionServiceTest {
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
 
-        CultivationNextActionResponse response = service.claim("102550550", "craft-executor");
+        CultivationNextActionResponse response = service.claim("102550550", "craft-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(0, 0, 0, 0)));
 
         assertThat(response.status()).isEqualTo("PLAN_NEEDS_RECONCILE");
         verify(mapper, never()).insert(any());
@@ -561,7 +674,8 @@ class CultivationPlanDrivenExecutionServiceTest {
         CultivationPlanDrivenExecutionService service = new CultivationPlanDrivenExecutionService(
                 projectionService, mapper, new ObjectMapper().findAndRegisterModules(), MONDAY);
 
-        assertThat(service.claim("102550550", "craft-executor").status())
+        assertThat(service.claim("102550550", "craft-executor",
+                new CultivationNextActionRequest(new CultivationResinSnapshot(0, 0, 0, 0))).status())
                 .isEqualTo("PLAN_NEEDS_RECONCILE");
         verify(mapper, never()).insert(any());
     }
