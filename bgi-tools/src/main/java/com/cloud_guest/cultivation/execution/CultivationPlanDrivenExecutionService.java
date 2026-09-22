@@ -155,16 +155,6 @@ public class CultivationPlanDrivenExecutionService {
             actionMapper.updateById(existing);
         }
 
-        if (!planNeedsReconcile
-                && !projection.craftingActions().isEmpty()
-                && !hasFreshCraftInventoryEvidence(projection)) {
-            return status(
-                    "PLAN_NEEDS_RECONCILE",
-                    "材料合成前必须重新清点同族全部层级库存",
-                    normalizedUid,
-                    projection.revision());
-        }
-
         CultivationResinSnapshot resinSnapshot = request == null ? null : request.resinSnapshot();
         Candidate candidate = choose(projection, resinSnapshot);
         if (candidate == null) {
@@ -192,6 +182,12 @@ public class CultivationPlanDrivenExecutionService {
                         projection.revision());
             }
             candidate = craftFallback;
+        }
+
+        if ((CRAFT.equals(candidate.actionType()) || CRAFT_BATCH.equals(candidate.actionType()))
+                && !hasFreshCraftInventoryEvidence(projection)) {
+            return status("PLAN_NEEDS_RECONCILE", "材料合成前必须重新清点同族全部层级库存",
+                    normalizedUid, projection.revision());
         }
 
         if (request != null && request.prepareOnly()) {
@@ -892,11 +888,25 @@ public class CultivationPlanDrivenExecutionService {
                 plan);
     }
 
-    private static CultivationNextActionResponse status(String status, String message,
+    private CultivationNextActionResponse status(String status, String message,
                                                         String uid, int revision) {
         return new CultivationNextActionResponse(
                 status, message, "PLAN_DRIVEN", uid, revision, null, null,
-                null, null, 0, 0, null, null, null, List.of(), null);
+                null, null, 0, 0, null, null, null, List.of(), null,
+                "PLAN_NEEDS_RECONCILE".equals(status) ? inventoryReconcileCause(uid, revision) : null);
+    }
+
+    private String inventoryReconcileCause(String uid, int revision) {
+        var observations = actionMapper.findCompletedObservations(uid, revision);
+        if (observations == null) return "INITIAL";
+        return observations.stream()
+                .filter(action -> COMPLETED.equals(action.getStatus()))
+                .filter(action -> uid.equals(action.getUid()) && Integer.valueOf(revision).equals(action.getPlanRevision()))
+                .filter(action -> action.getResultIdempotencyKey() != null && !action.getResultIdempotencyKey().isBlank())
+                .filter(action -> action.getId() != null && !action.getId().isBlank())
+                .filter(action -> "DOMAIN".equals(action.getActionType()) || "WORLD_BOSS".equals(action.getActionType())
+                        || CRAFT.equals(action.getActionType()) || CRAFT_BATCH.equals(action.getActionType()))
+                .map(action -> "ACTION:" + action.getId()).findFirst().orElse("INITIAL");
     }
 
     private static AutoPlan basePlan(List<Integer> days, String selectedType, String runType) {

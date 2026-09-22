@@ -23,7 +23,7 @@ public interface CultivationExecutionActionMapper extends BaseMapper<Cultivation
             WHERE uid = #{uid} AND plan_revision = #{revision}
               AND status = 'COMPLETED'
               AND (observed_owned >= 0 OR action_type = 'INVENTORY_RECONCILE_BATCH')
-            ORDER BY update_time DESC, create_time DESC
+            ORDER BY update_time DESC, create_time DESC, id DESC
             """)
     List<CultivationExecutionActionEntity> findCompletedObservations(
             @Param("uid") String uid, @Param("revision") int revision);
