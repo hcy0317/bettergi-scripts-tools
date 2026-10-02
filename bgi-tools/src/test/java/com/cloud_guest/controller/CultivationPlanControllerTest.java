@@ -40,7 +40,7 @@ class CultivationPlanControllerTest {
 
         controller.nextAction("102550550", "legacy-executor", null, null, null, null);
 
-        verify(planDrivenService).claim("102550550", "legacy-executor", null);
+        verify(planDrivenService).claim("102550550", "legacy-executor", new CultivationNextActionRequest(null, false));
     }
 
     @Test
