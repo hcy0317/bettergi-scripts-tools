@@ -243,6 +243,11 @@ public class CultivationExecutionService {
         Set<String> materialNames = new LinkedHashSet<>();
         ledger.requirements().stream().filter(entry -> entry.remaining() > 0)
                 .map(CultivationLedgerEntry::materialName).forEach(materialNames::add);
+        // 合成后的预计缺口为零，也必须先复核本次合成会使用的整族库存。
+        if (evaluation.craftingPlan() != null) {
+            evaluation.craftingPlan().actions().stream()
+                    .map(CultivationCraftingAction::materialName).forEach(materialNames::add);
+        }
         evaluation.reconciliationMaterials().stream().sorted().forEach(materialNames::add);
         if (!evaluation.reconciliationMaterials().isEmpty()) {
             log.info("养成库存复核：保留库存下降待确认材料（包括零缺口项）：{}",
