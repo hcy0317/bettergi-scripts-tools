@@ -66,6 +66,72 @@ class CultivationInventoryClosureTest {
     void closeDatabase() { if (database != null) database.close(); }
 
     @Test
+    void plannedCraftsStillRequireEveryFamilyTierWhenTheyCoverTheWholeDeficit() throws Exception {
+        var service = service();
+        actions.insert(batch("craftable-stock", Map.of(
+                "哀叙冰玉碎屑", 0L, "哀叙冰玉断片", 0L, "哀叙冰玉块", 27L, "哀叙冰玉", 9L)));
+        actions.insert(batch("unrelated-latest-stock", Map.of("燃愿玛瑙", 6L)));
+
+        assertThat(service.latestLedger("102550550").requirements())
+                .allSatisfy(entry -> assertThat(entry.remaining()).isZero());
+        assertThat(service.projection("102550550").craftingActions())
+                .containsExactly(new CultivationCraftingAction("哀叙冰玉", 3, "角色突破素材"));
+        assertThat(service.inventoryReconcileTargets("102550550"))
+                .containsOnlyKeys("CharacterDevelopmentItems")
+                .containsEntry("CharacterDevelopmentItems", List.of(
+                        "哀叙冰玉碎屑", "哀叙冰玉断片", "哀叙冰玉块", "哀叙冰玉"));
+
+        var driver = new CultivationPlanDrivenExecutionService(service, actions, json, CLOCK);
+        assertThat(driver.claim("102550550", "craft").status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+        assertThat(driver.claimInventoryReconcile("102550550", "inventory").materialNames())
+                .containsExactly("哀叙冰玉碎屑", "哀叙冰玉断片", "哀叙冰玉块", "哀叙冰玉");
+    }
+
+    @Test
+    void freshLowerStockLimitsCraftQuantityAndPreservesTheUnmetDeficit() throws Exception {
+        var service = service();
+        actions.insert(batch("cached-craft-stock", Map.of(
+                "哀叙冰玉碎屑", 0L, "哀叙冰玉断片", 0L, "哀叙冰玉块", 27L, "哀叙冰玉", 9L)));
+        var driver = new CultivationPlanDrivenExecutionService(service, actions, json, CLOCK);
+        var actualStock = Map.of(
+                "哀叙冰玉碎屑", 0L, "哀叙冰玉断片", 0L, "哀叙冰玉块", 21L, "哀叙冰玉", 9L);
+        var recount = driver.claimInventoryReconcile("102550550", "inventory");
+        driver.recordInventoryObservations("102550550", new CultivationInventoryObservationRequest(
+                recount.actionId(), "inventory", 2, recount.actionId() + ":result", actualStock));
+        assertThat(driver.claim("102550550", "craft").status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+
+        var confirmation = driver.claimInventoryReconcile("102550550", "inventory");
+        driver.recordInventoryObservations("102550550", new CultivationInventoryObservationRequest(
+                confirmation.actionId(), "inventory", 2, confirmation.actionId() + ":result", actualStock));
+        var action = driver.claim("102550550", "craft");
+        assertThat(action.status()).isEqualTo("ACTION");
+        assertThat(action.craftActions())
+                .containsExactly(new CultivationCraftingAction("哀叙冰玉", 1, "角色突破素材"));
+        assertThat(service.latestLedger("102550550").requirements())
+                .filteredOn(entry -> "哀叙冰玉".equals(entry.materialName()))
+                .singleElement().satisfies(entry -> assertThat(entry.remaining()).isEqualTo(2));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void unknownOrOmittedCraftStockCannotBecomeFreshEvidenceByReusingCachedCounts(boolean explicitlyUnknown) throws Exception {
+        var service = service();
+        actions.insert(batch("cached-craft-stock", Map.of(
+                "哀叙冰玉碎屑", 0L, "哀叙冰玉断片", 0L, "哀叙冰玉块", 27L, "哀叙冰玉", 9L)));
+        var driver = new CultivationPlanDrivenExecutionService(service, actions, json, CLOCK);
+        var recount = driver.claimInventoryReconcile("102550550", "inventory");
+        var observed = new LinkedHashMap<>(Map.of("哀叙冰玉", 9L));
+        if (explicitlyUnknown) observed.put("哀叙冰玉块", -1L);
+        driver.recordInventoryObservations("102550550", new CultivationInventoryObservationRequest(
+                recount.actionId(), "inventory", 2, recount.actionId() + ":result", observed));
+
+        for (boolean prepareOnly : new boolean[]{false, true}) {
+            assertThat(driver.claim("102550550", "craft",
+                    new CultivationNextActionRequest(null, prepareOnly)).status()).isEqualTo("PLAN_NEEDS_RECONCILE");
+        }
+    }
+
+    @Test
     void completedMaterialThatLaterDecreasedRemainsReachableByInventoryReconciliation() throws Exception {
         var service = service();
         var before = batch("before", Map.of("哀叙冰玉", 12L, "哀叙冰玉块", 18L));

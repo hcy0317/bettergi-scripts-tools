@@ -594,7 +594,8 @@ public class CultivationPlanDrivenExecutionService {
                 projection.uid(), projection.revision());
         if (observations == null || observations.isEmpty()) return false;
         CultivationExecutionActionEntity latest = observations.getFirst();
-        if (!INVENTORY_RECONCILE_BATCH.equals(latest.getActionType())) return false;
+        if (!INVENTORY_RECONCILE_BATCH.equals(latest.getActionType())
+                || "INVENTORY_RECONCILE_PARTIAL_WITH_PREVIOUS".equals(latest.getTerminationReason())) return false;
         Map<String, Long> inventory = readInventoryObservations(latest);
         return craftingTargets.stream().allMatch(name -> inventory.getOrDefault(name, -1L) >= 0);
     }
