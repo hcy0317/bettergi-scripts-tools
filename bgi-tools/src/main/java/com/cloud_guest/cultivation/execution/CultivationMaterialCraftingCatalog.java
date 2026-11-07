@@ -121,7 +121,7 @@ public class CultivationMaterialCraftingCatalog {
     private static int maxCraftableQuality(String materialType) {
         return switch (materialType) {
             case "角色天赋素材" -> 4;
-            case "角色与武器培养素材" -> 3;
+            case "角色与武器培养素材" -> 4;
             case "角色突破素材", "武器突破素材" -> 5;
             default -> 0;
         };
